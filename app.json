@@ -1,4 +1,9 @@
 {
   "name": "TwoHops",
-  "displayName": "TwoHops"
+  "displayName": "TwoHops",
+  "extra": {
+    "eas": {
+      "projectId": "28969537-6d90-4cf1-ab58-bf25b5f929a9"
+    }
+  }
 }
