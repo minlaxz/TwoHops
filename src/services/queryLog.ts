@@ -15,6 +15,7 @@ export function parseQueryLogRow(raw: string): QueryLogRow {
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
+    console.error('Failed to parse query log entry:', err);
     throw new Error('Query log entry is not valid JSON');
   }
 

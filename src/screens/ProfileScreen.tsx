@@ -114,7 +114,7 @@ export default function ServerScreen() {
                 <Text style={styles.inputDescription}>
                     In most cases, "Selective" mode is recommended for better performance and battery life.
                 </Text>
-                <View style={{ height: 1, backgroundColor: '#d9d9d9', marginVertical: 12 }} />
+                <View style={styles.line} />
                 <Text style={styles.inputLabel}>Remote Rules URL:</Text>
                 <TextInput
                     style={{ ...styles.input }}
@@ -126,7 +126,7 @@ export default function ServerScreen() {
                 <Text style={styles.inputDescription}>
                     * URL should point to a plain text file containing domain rules, separated by new lines.
                 </Text>
-                <View style={{ height: 1, backgroundColor: '#d9d9d9', marginVertical: 12 }} />
+                <View style={styles.line} />
                 <Text style={styles.inputLabel}>Local Rules (one per line):</Text>
                 <TextInput
                     style={styles.multilineInput}
@@ -140,7 +140,7 @@ export default function ServerScreen() {
                 <Text style={styles.inputDescription}>
                     * Domains listed here will be merged with the remote rules (if URL is provided) when you save.
                 </Text>
-                <View style={{ height: 1, backgroundColor: '#d9d9d9', marginVertical: 12 }} />
+                <View style={styles.line} />
 
                 <View style={styles.row}>
                     <Text style={styles.rowLabel}>* Current rules: {rulesText.length ? rulesText.split("\n").length : 0}</Text>
@@ -217,6 +217,7 @@ const styles = StyleSheet.create({
     rowLabel: { flex: 1, fontSize: 14, fontWeight: '500' },
     rowButtons: { flexDirection: 'row', alignItems: 'center', borderRadius: 8, overflow: 'hidden' },
     rowSpacer: { width: 8 },
+    line: { height: 1, backgroundColor: '#d9d9d9', marginVertical: 12 },
     modeButton: {
         width: 70,
         height: 40,
