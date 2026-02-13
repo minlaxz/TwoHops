@@ -1,34 +1,30 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Text, StyleSheet, View, TextInput } from 'react-native';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useSetupConfig } from '../context/SetupConfigContext';
+import { splitList, fetchRemoteURL } from '../services/utils';
 
 export default function ServerScreen() {
     const {
         server,
         setServer,
-        dnsServersText,
-        setDnsServersText,
         routingMode,
         setRoutingMode,
-        localRoutingRulesText,
-        setLocalRoutingRulesText,
-        remoteRoutingURL,
-        setRemoteRoutingURL,
+        rulesText,
+        setRulesText,
+        dnsServersText,
+        setDnsServersText,
     } = useSetupConfig();
+
+    const [localRoutingRulesText, setLocalRoutingRulesText] = useState<string>('myip.wtf');
+    const [remoteRoutingURL, setRemoteRoutingURL] = useState<string>('https://gist.githubusercontent.com/minlaxz/df715284c12c97d217f5a14f6e643ba4/raw/rules.txt');
 
     return (
         <MainScreen>
-            <Text style={styles.title}>Setup Configuration</Text>
+            <Text style={styles.title}>Configurations</Text>
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Server</Text>
-                {/* <TextInput
-                    style={styles.input}
-                    placeholder="Server Name (any)"
-                    value={server.name}
-                    onChangeText={(value) => setServer((prev) => ({ ...prev, name: value }))}
-                  /> */}
                 <TextInput
                     style={styles.input}
                     placeholder="Server IP Address"
@@ -65,6 +61,30 @@ export default function ServerScreen() {
                     onChangeText={setDnsServersText}
                     autoCapitalize="none"
                 />
+                <View style={styles.row}>
+                    <Text style={styles.rowLabel}>Mode: {server.vpnProtocol.toLowerCase()}</Text>
+                    <View style={styles.rowButtons}>
+                        <TouchableOpacityButton
+                            touchableOpacityStyles={[
+                                styles.protocolButton,
+                                server.vpnProtocol === 'Http/2' ? styles.modeButtonActive : styles.modeButtonInactive,
+                            ]}
+                            textStyles={styles.modeButtonText}
+                            title="Http/2"
+                            onPress={() => setServer((prev) => ({ ...prev, vpnProtocol: 'Http/2' }))}
+                        />
+                        <View style={styles.rowSpacer} />
+                        <TouchableOpacityButton
+                            touchableOpacityStyles={[
+                                styles.protocolButton,
+                                server.vpnProtocol === 'QUIC' ? styles.modeButtonActive : styles.modeButtonInactive,
+                            ]}
+                            textStyles={styles.modeButtonText}
+                            title="QUIC"
+                            onPress={() => setServer((prev) => ({ ...prev, vpnProtocol: 'QUIC' }))}
+                        />
+                    </View>
+                </View>
                 <Text style={styles.sectionTitle}>Routing</Text>
                 <View style={styles.row}>
                     <Text style={styles.rowLabel}>Mode: {routingMode}</Text>
@@ -91,47 +111,67 @@ export default function ServerScreen() {
                         />
                     </View>
                 </View>
-                <Text style={styles.inputLabel}>Local Rules (comma/new line):</Text>
+                <Text style={styles.inputDescription}>
+                    In most cases, "Selective" mode is recommended for better performance and battery life.
+                </Text>
+                <View style={{ height: 1, backgroundColor: '#d9d9d9', marginVertical: 12 }} />
+                <Text style={styles.inputLabel}>Remote Rules URL:</Text>
+                <TextInput
+                    style={{ ...styles.input }}
+                    placeholder="https://..."
+                    value={remoteRoutingURL}
+                    onChangeText={setRemoteRoutingURL}
+                    autoCapitalize="none"
+                />
+                <Text style={styles.inputDescription}>
+                    * URL should point to a plain text file containing domain rules, separated by new lines.
+                </Text>
+                <View style={{ height: 1, backgroundColor: '#d9d9d9', marginVertical: 12 }} />
+                <Text style={styles.inputLabel}>Local Rules (one per line):</Text>
                 <TextInput
                     style={styles.multilineInput}
-                    placeholder="example.com, myip.wtf"
+                    placeholder="example.com, facebook.com"
                     value={localRoutingRulesText}
                     onChangeText={setLocalRoutingRulesText}
                     autoCapitalize="none"
                     multiline
                     textAlignVertical="top"
                 />
-                <Text style={styles.inputLabel}>Remote Rules URL:</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="https://..."
-                    value={remoteRoutingURL}
-                    onChangeText={setRemoteRoutingURL}
-                    autoCapitalize="none"
-                />
+                <Text style={styles.inputDescription}>
+                    * Domains listed here will be merged with the remote rules (if URL is provided) when you save.
+                </Text>
+                <View style={{ height: 1, backgroundColor: '#d9d9d9', marginVertical: 12 }} />
+
                 <View style={styles.row}>
-                    <Text style={styles.rowLabel}>Protocol: {server.vpnProtocol}</Text>
-                    <View style={styles.rowButtons}>
-                        <TouchableOpacityButton
-                            touchableOpacityStyles={[
-                                styles.protocolButton,
-                                server.vpnProtocol === 'Http/2' ? styles.modeButtonActive : styles.modeButtonInactive,
-                            ]}
-                            textStyles={styles.modeButtonText}
-                            title="Http/2"
-                            onPress={() => setServer((prev) => ({ ...prev, vpnProtocol: 'Http/2' }))}
-                        />
-                        <View style={styles.rowSpacer} />
-                        <TouchableOpacityButton
-                            touchableOpacityStyles={[
-                                styles.protocolButton,
-                                server.vpnProtocol === 'QUIC' ? styles.modeButtonActive : styles.modeButtonInactive,
-                            ]}
-                            textStyles={styles.modeButtonText}
-                            title="QUIC"
-                            onPress={() => setServer((prev) => ({ ...prev, vpnProtocol: 'QUIC' }))}
-                        />
-                    </View>
+                    <Text style={styles.rowLabel}>* Current rules: {rulesText.length ? rulesText.split("\n").length : 0}</Text>
+                    <TouchableOpacityButton
+                        touchableOpacityStyles={[
+                            styles.modeButton,
+                            styles.modeButtonWide,
+                        ]}
+                        textStyles={styles.modeButtonText}
+                        title="Reset"
+                        onPress={() => setRulesText("")}
+                    />
+                    <View style={styles.rowSpacer} />
+                    <TouchableOpacityButton
+                        touchableOpacityStyles={[
+                            styles.modeButton,
+                            styles.modeButtonWide,
+                        ]}
+                        textStyles={styles.modeButtonText}
+                        title="Save"
+                        onPress={async () => {
+                            const localRules = splitList(localRoutingRulesText);
+                            let remoteRules: string[] = [];
+                            if (remoteRoutingURL) {
+                                const remoteRoutingRulesText = await fetchRemoteURL(remoteRoutingURL);
+                                remoteRules = splitList(remoteRoutingRulesText);
+                            }
+                            const mergedRules = Array.from(new Set([...localRules, ...remoteRules]));
+                            setRulesText(mergedRules.join('\n'));
+                        }}
+                    />
                 </View>
             </View>
         </MainScreen>
@@ -158,6 +198,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         backgroundColor: '#ededed',
     },
+    inputDescription: { fontSize: 12, color: '#666', marginBottom: 12 },
     passwordInput: {
         backgroundColor: '#f5f5f5',
         color: '#333',

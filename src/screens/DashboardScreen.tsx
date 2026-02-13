@@ -1,54 +1,62 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { TouchableOpacityButton } from '../components/buttons';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { VpnClient, type RoutingConfig, type QueryLogRow, type ServerConfig, type VpnManagerState } from '../services';
-import { splitList, fetchRemoteURL } from '../services/utils';
+import { View, Text, StyleSheet, ScrollView, Switch } from 'react-native';
+import { VpnClient } from '../services/vpn';
+import { splitList } from '../services/utils';
 import { useSetupConfig } from '../context/SetupConfigContext';
+import type { RoutingConfig, QueryLogRow, VpnManagerState, ServerConfig } from '../types';
 
 type RootStackParamList = {
-    Server: undefined;
+    Profile: undefined;
     About: { name: string };
 };
 
-type State = {
-    emoji: string;
-    action: () => Promise<void>;
-    actionText?: string;
-}
 
 type DebugLogEntry = {
     stamp: Date;
     message: string;
 };
 
+type VpnUiStateDescriptor = {
+    statusText: string;
+    statusEmoji: string;
+    switchValue: boolean;
+    switchHint: string;
+};
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
 const smallButtonTouchableStyle = { width: "100%", height: 56 } as const;
 const smallButtonTextStyle = { fontWeight: "600" as const, fontSize: 16 };
-const connectButtonTouchableStyle = { height: 124, width: "100%" } as const;
-const connectButtonTextStyle = { fontSize: 24, fontWeight: "700" as const };
 
-export default function MainScreen() {
+export default function DashboardScreen() {
     const [state, setState] = useState<VpnManagerState>('disconnected');
     const [queryLogs, setQueryLogs] = useState<QueryLogRow[]>([]);
     const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
+    const [isSwitchActionInFlight, setIsSwitchActionInFlight] = useState(false);
 
     const {
         server,
         routingMode,
-        localRoutingRulesText,
-        remoteRoutingURL,
+        rulesText,
         dnsServersText,
     } = useSetupConfig();
 
     const navigation = useNavigation<NavigationProp<RootStackParamList>>();
     const didLogSetupChangeRef = useRef(false);
+    const switchActionInFlightRef = useRef(false);
 
     const setupSummary = useMemo(() => {
         const dnsServers = splitList(dnsServersText);
-        const localRules = splitList(localRoutingRulesText);
+        const rules = splitList(rulesText);
 
-        return `server=${server.ipAddress} domain=${server.domain} user=${server.login} protocol=${server.vpnProtocol}; dns=${dnsServers.join(', ') || '-'}; routeMode=${routingMode}; localRules=${localRules.length}; remoteURL=${remoteRoutingURL || '-'};`;
-    }, [dnsServersText, localRoutingRulesText, remoteRoutingURL, routingMode, server.domain, server.ipAddress, server.login, server.vpnProtocol]);
+        return `server=${server.ipAddress} domain=${server.domain} user=${server.login} protocol=${server.vpnProtocol}; dns=${dnsServers.join(', ') || '-'}; routeMode=${routingMode}; rules=${rules.length};`;
+    }, [dnsServersText, rulesText, routingMode, server.domain, server.ipAddress, server.login, server.vpnProtocol]);
 
     const appendDebugLog = useCallback((message: string) => {
         setDebugLogs((prev) => [{ stamp: new Date(), message }, ...prev].slice(0, 200));
@@ -61,26 +69,35 @@ export default function MainScreen() {
         return String(error);
     };
 
+    const syncStateWithNative = useCallback(async (reason: string) => {
+        const probeDelays = [300, 900, 1800];
+
+        for (const probeDelay of probeDelays) {
+            await delay(probeDelay);
+            try {
+                const nativeState = await VpnClient.getCurrentState();
+                setState(nativeState);
+                appendDebugLog(`State probe (${reason}): ${nativeState}.`);
+
+                if (nativeState === 'connected' || nativeState === 'disconnected') {
+                    break;
+                }
+            } catch (error) {
+                appendDebugLog(`State probe failed (${reason}): ${formatError(error)}`);
+                break;
+            }
+        }
+    }, [appendDebugLog]);
+
     const handleConnect = async () => {
         appendDebugLog('Connect button pressed.');
         appendDebugLog(`Setup config: ${setupSummary}`);
         setState('connecting');
 
         try {
-            const localRules = splitList(localRoutingRulesText);
-            let remoteRules: string[] = [];
-
-            if (remoteRoutingURL) {
-                appendDebugLog(`Fetching remote rules from ${remoteRoutingURL}.`);
-                const remoteRoutingRulesText = await fetchRemoteURL(remoteRoutingURL);
-                remoteRules = splitList(remoteRoutingRulesText);
-                appendDebugLog(`Remote rules loaded (${remoteRules.length} entries).`);
-            }
-
-            const mergedRules = Array.from(new Set([...localRules, ...remoteRules]));
             const routing: RoutingConfig = {
                 mode: routingMode,
-                rules: mergedRules,
+                rules: splitList(rulesText),
             };
 
             const updatedServer: ServerConfig = {
@@ -92,10 +109,9 @@ export default function MainScreen() {
                 server: updatedServer, routing, excludedRoutes: []
             });
             appendDebugLog('Connect request sent to VPN client.');
-
-            const currentState = await VpnClient.getCurrentState();
-            setState(currentState);
-            appendDebugLog(`State after connect: ${currentState}.`);
+            syncStateWithNative('after connect').catch((error) => {
+                appendDebugLog(`State sync failed after connect: ${formatError(error)}`);
+            });
         } catch (error) {
             setState('disconnected');
             appendDebugLog(`Connect failed: ${formatError(error)}`);
@@ -108,22 +124,89 @@ export default function MainScreen() {
             await VpnClient.stop();
             setQueryLogs([]);
             appendDebugLog('Disconnect request sent to VPN client.');
-
-            const currentState = await VpnClient.getCurrentState();
-            setState(currentState);
-            appendDebugLog(`State after disconnect: ${currentState}.`);
+            syncStateWithNative('after disconnect').catch((error) => {
+                appendDebugLog(`State sync failed after disconnect: ${formatError(error)}`);
+            });
         } catch (error) {
             appendDebugLog(`Disconnect failed: ${formatError(error)}`);
         }
     };
 
-    const states: Record<VpnManagerState, State> = {
-        "connected": { emoji: "🔗", action: handleDisconnect, actionText: "Disconnect" },
-        "connecting": { emoji: "⏳", action: async () => { }, actionText: "Connecting..." },
-        "disconnected": { emoji: "⛓️‍💥", action: handleConnect, actionText: "Connect" },
-        "waitingForRecovery": { emoji: "🛟", action: async () => { } },
-        "waitingForNetwork": { emoji: "📡", action: async () => { } },
-        "recovering": { emoji: "🔄", action: async () => { } },
+    const states: Record<VpnManagerState, VpnUiStateDescriptor> = {
+        "connected": {
+            statusText: "Connected",
+            statusEmoji: "🔗",
+            switchValue: true,
+            switchHint: "Turn off to disconnect"
+        },
+        "connecting": {
+            statusText: "Connecting",
+            statusEmoji: "⏳",
+            switchValue: true,
+            switchHint: "Connecting in progress..."
+        },
+        "disconnected": {
+            statusText: "Disconnected",
+            statusEmoji: "⛓️‍💥",
+            switchValue: false,
+            switchHint: "Turn on to connect"
+        },
+        "waitingForRecovery": {
+            statusText: "Waiting for Recovery",
+            statusEmoji: "🛟",
+            switchValue: true,
+            switchHint: "Waiting for tunnel recovery..."
+        },
+        "waitingForNetwork": {
+            statusText: "Waiting for Network",
+            statusEmoji: "📡",
+            switchValue: true,
+            switchHint: "Waiting for network connectivity..."
+        },
+        "recovering": {
+            statusEmoji: "🔄",
+            statusText: "Recovering",
+            switchValue: true,
+            switchHint: "Recovering tunnel state..."
+        },
+    };
+
+    const handleSwitchChange = async (nextValue: boolean) => {
+        if (switchActionInFlightRef.current) {
+            appendDebugLog('Ignored switch toggle: previous action still in progress.');
+            return;
+        }
+
+        switchActionInFlightRef.current = true;
+        setIsSwitchActionInFlight(true);
+        appendDebugLog(`Switch toggled to ${nextValue ? 'ON' : 'OFF'} while state=${state}.`);
+
+        try {
+            if (nextValue) {
+                if (state === 'disconnected') {
+                    await handleConnect();
+                } else {
+                    appendDebugLog(`Ignored ON toggle because VPN state is already ${state}.`);
+                }
+                return;
+            }
+
+            if (state === 'disconnected') {
+                appendDebugLog('Ignored OFF toggle because VPN is already disconnected.');
+                return;
+            }
+
+            await handleDisconnect();
+        } finally {
+            switchActionInFlightRef.current = false;
+            setIsSwitchActionInFlight(false);
+        }
+    };
+
+    const onSwitchValueChange = (value: boolean) => {
+        handleSwitchChange(value).catch((error) => {
+            appendDebugLog(`Switch action failed: ${formatError(error)}`);
+        });
     };
 
     useEffect(() => {
@@ -169,18 +252,16 @@ export default function MainScreen() {
         appendDebugLog(`Setup updated: ${setupSummary}`);
     }, [appendDebugLog, setupSummary]);
 
-    const isBusy = state === "connecting" || state === "waitingForRecovery" || state === "waitingForNetwork" || state === "recovering";
-
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>{states[state].emoji}</Text>
+            <Text style={styles.title}>{states[state].statusText}</Text>
             <View style={styles.controlsRow}>
                 <View style={styles.leftButtons}>
                     <TouchableOpacityButton
                         touchableOpacityStyles={smallButtonTouchableStyle}
-                        title="Settings"
+                        title="Profile"
                         textStyles={smallButtonTextStyle}
-                        onPress={() => navigation.navigate('Server')}
+                        onPress={() => navigation.navigate('Profile')}
                     />
                     <View style={styles.leftButtonsSpacer} />
                     <TouchableOpacityButton
@@ -191,13 +272,16 @@ export default function MainScreen() {
                     />
                 </View>
                 <View style={styles.rightButton}>
-                    <TouchableOpacityButton
-                        touchableOpacityStyles={connectButtonTouchableStyle}
-                        textStyles={connectButtonTextStyle}
-                        disabled={isBusy}
-                        title={states[state].actionText || ""}
-                        onPress={states[state].action}
+                    <Switch
+                        trackColor={{ false: "#767577", true: "#81b0ff" }}
+                        thumbColor={states[state].switchValue ? "#f5dd4b" : "#f4f3f4"}
+                        ios_backgroundColor="#3e3e3e"
+                        onValueChange={onSwitchValueChange}
+                        value={states[state].switchValue}
+                        disabled={isSwitchActionInFlight}
                     />
+                    <Text style={styles.switchEmoji}>{states[state].statusEmoji}</Text>
+                    <Text style={styles.switchHint}>{states[state].switchHint}</Text>
                 </View>
             </View>
             <View style={styles.logsContainer}>
@@ -244,6 +328,19 @@ type TrafficLogsScreenProps = {
     logs: QueryLogRow[];
 };
 
+function toWildcardDomain(domain: string): string {
+    const parts = domain.split('.');
+
+    if (parts.length <= 2) {
+        // example.com → *.example.com
+        return `*.${domain}`;
+    }
+    // Or take last two parts
+    const baseDomain = parts.slice(-2).join('.');
+    return `*.${baseDomain}`;
+}
+
+
 function TrafficLogsScreen({ logs }: TrafficLogsScreenProps) {
     return (
         <View style={styles.section}>
@@ -257,7 +354,7 @@ function TrafficLogsScreen({ logs }: TrafficLogsScreenProps) {
                     {logs.length === 0 ? <Text style={styles.logEmpty}>No traffic logs yet.</Text> : null}
                     {logs.map((log, index) => (
                         <View style={styles.debugRow} key={`${log.stamp.toISOString()}-${log.source}-${index}`}>
-                            <Text style={styles.logTitle}>{log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain: {log.domain ?? '-'}</Text>
+                            <Text style={styles.logTitle}>{log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain: {toWildcardDomain(log.domain ?? '-')}</Text>
                             <Text style={styles.logLine}>{log.source} → {log.destination ?? 'unknown'}</Text>
                             <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
                         </View>
@@ -284,6 +381,19 @@ const styles = StyleSheet.create({
     rightButton: {
         flex: 1.2,
         marginLeft: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    switchEmoji: {
+        marginTop: 8,
+        fontSize: 20,
+    },
+    switchHint: {
+        marginTop: 6,
+        fontSize: 12,
+        color: '#444',
+        textAlign: 'center',
+        paddingHorizontal: 8,
     },
     logsContainer: {
         flex: 1,

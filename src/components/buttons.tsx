@@ -1,12 +1,6 @@
-import { StyleSheet, TouchableOpacity, Text, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { CustomButtonProps } from '../types';
 
-type CustomButtonProps = {
-    title?: string;
-    disabled?: boolean;
-    onPress?: () => void;
-    touchableOpacityStyles?: StyleProp<ViewStyle>;
-    textStyles?: StyleProp<TextStyle>;
-};
 
 export const TouchableOpacityButton: React.FC<CustomButtonProps> = ({ title, onPress, disabled, touchableOpacityStyles, textStyles }) => {
     return (

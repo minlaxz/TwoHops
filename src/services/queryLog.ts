@@ -1,14 +1,4 @@
-export type QueryLogAction = 'bypass' | 'tunnel' | 'reject';
-export type ConnectionProtocol = 'tcp' | 'udp';
-
-export interface QueryLogRow {
-  action: QueryLogAction;
-  protocol: ConnectionProtocol;
-  source: string;
-  destination?: string | null;
-  domain?: string | null;
-  stamp: Date;
-}
+import type { QueryLogAction, ConnectionProtocol, QueryLogRow } from '../types';
 
 const ACTION_KEY = 'action';
 const DOMAIN_KEY = 'domain';

@@ -1,16 +1,10 @@
-import type { RoutingConfig, ServerConfig } from '../types';
+import type { RoutingConfig, ServerConfig, ConfigInput } from '../types';
 
 const DEFAULT_INCLUDED_ROUTES = ['0.0.0.0/0', '2000::/3'];
 const DEFAULT_EXCLUDED_ROUTES = ["10.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.168.0.0/16", "255.255.255.255/32"]
 const DEFAULT_TUN_MTU = 1500;
 
 const WILDCARD_PREFIX = '*.';
-
-type ConfigInput = {
-  server: ServerConfig;
-  routing: RoutingConfig;
-  excludedRoutes: string[];
-};
 
 export function encodeConfig(input: ConfigInput): string {
   const { server, routing, excludedRoutes } = input;
@@ -182,6 +176,7 @@ type TemplateInput = {
   socksPassword: string;
 };
 
+// More info on config format can be found in the official documentation of the TrustTunnelClient library
 // https://github.com/TrustTunnel/TrustTunnelClient/blob/master/trusttunnel/README.md
 function buildConfigTemplate(input: TemplateInput): string {
   return `# Logging level [info, debug, trace]

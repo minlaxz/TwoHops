@@ -1,4 +1,5 @@
-export function splitList(raw: string, splitter: string = ","): string[] {
+export function splitList(raw: string): string[] {
+    const splitter = raw.includes(",") ? "," : "\n";
     return raw
         .split(splitter)
         .map((entry) => entry.trim())
