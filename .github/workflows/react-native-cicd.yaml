@@ -4,16 +4,16 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - "**.md"
-      - "LICENSE"
-      - "docs/**"
+      - '**.md'
+      - 'LICENSE'
+      - 'docs/**'
   pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
       buildType:
         type: choice
-        description: "Build type to run"
+        description: 'Build type to run'
         options:
           - dev
           - prod-apk
@@ -42,8 +42,8 @@ jobs:
       - name: 🏗 Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "yarn"
+          node-version: '20'
+          cache: 'yarn'
 
       - name: 📦 Get yarn cache directory path
         id: yarn-cache-dir-path
@@ -80,8 +80,8 @@ jobs:
       - name: 🏗 Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "yarn"
+          node-version: '20'
+          cache: 'yarn'
 
       - name: 📦 Get yarn cache directory path
         id: yarn-cache-dir-path
@@ -210,8 +210,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          name: "Release v${{ steps.build-info.outputs.version }}-${{ steps.build-info.outputs.build_number }}"
-          tag_name: "v${{ steps.build-info.outputs.version }}-${{ steps.build-info.outputs.build_number }}"
+          name: 'Release v${{ steps.build-info.outputs.version }}-${{ steps.build-info.outputs.build_number }}'
+          tag_name: 'v${{ steps.build-info.outputs.version }}-${{ steps.build-info.outputs.build_number }}'
           files: |
             ./app-dev.apk
             ./app-prod.apk
