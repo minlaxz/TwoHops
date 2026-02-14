@@ -9,7 +9,7 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: read
     env:
       GPR_KEY: ${{ secrets.GITHUB_TOKEN }}
@@ -41,30 +41,49 @@ jobs:
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
 
+      - name: ♻️ Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: 🏗 Build APK & AAB
         run: |
           cd android
-          ./gradlew clean bundleRelease assembleRelease \
+          ./gradlew  bundleRelease assembleRelease \
             -PVERSION_NAME=${{ steps.version.outputs.version_name }} \
             -PVERSION_CODE=${{ steps.version.outputs.version_code }}
 
-      - name: 📦 Collect artifacts
+      - name: 🏷 Rename APKs per ABI
         run: |
           mkdir -p artifacts
-          cp android/app/build/outputs/apk/release/*.apk artifacts/
-          cp android/app/build/outputs/bundle/release/*.aab artifacts/
+
+          for apk in android/app/build/outputs/apk/release/*.apk; do
+            if [[ "$apk" == *"arm64-v8a"* ]]; then
+              mv "$apk" artifacts/app-arm64-v8a.apk
+            elif [[ "$apk" == *"armeabi-v7a"* ]]; then
+              mv "$apk" artifacts/app-armeabi-v7a.apk
+            elif [[ "$apk" == *"x86_64"* ]]; then
+              mv "$apk" artifacts/app-x86_64.apk
+            fi
+          done
 
       - name: ⬆ Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: android-builds
-          path: artifacts/
+          name: android-apks-${{ steps.version.outputs.version_name }}
+          path: artifacts/*.apk
 
-      - name: 🏷 Create GitHub Release
+      - name: 🏷 GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version_name }}+${{ steps.version.outputs.version_code }}
           name: Release v${{ steps.version.outputs.version_name }}
-          files: artifacts/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            artifacts/app-arm64-v8a.apk
+            artifacts/app-armeabi-v7a.apk
+            artifacts/app-x86_64.apk
