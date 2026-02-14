@@ -108,12 +108,14 @@ jobs:
             -PVERSION_NAME=${{ steps.version.outputs.version_name }} \
             -PVERSION_CODE=${{ steps.version.outputs.version_code }}
 
-      - name: 🏷 Rename APKs per ABI
+      - name: 🏷 Rename APKs
         run: |
           mkdir -p artifacts
 
           for apk in android/app/build/outputs/apk/release/*.apk; do
-            if [[ "$apk" == *"arm64-v8a"* ]]; then
+            if [[ "$apk" == *"universal"* ]]; then
+              mv "$apk" artifacts/app-universal.apk
+            elif [[ "$apk" == *"arm64-v8a"* ]]; then
               mv "$apk" artifacts/app-arm64-v8a.apk
             elif [[ "$apk" == *"armeabi-v7a"* ]]; then
               mv "$apk" artifacts/app-armeabi-v7a.apk
@@ -134,6 +136,7 @@ jobs:
           tag_name: v${{ steps.version.outputs.version_name }}+${{ steps.version.outputs.version_code }}
           name: Release v${{ steps.version.outputs.version_name }}
           files: |
+            artifacts/app-universal.apk
             artifacts/app-arm64-v8a.apk
             artifacts/app-armeabi-v7a.apk
             artifacts/app-x86_64.apk
