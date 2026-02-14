@@ -30,6 +30,15 @@ export default function ServerScreen() {
         <Text style={styles.sectionTitle}>Server</Text>
         <TextInput
           style={styles.input}
+          placeholder="Name"
+          value={server.name}
+          onChangeText={value =>
+            setServer(prev => ({ ...prev, name: value }))
+          }
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={styles.input}
           placeholder="Server IP Address"
           value={server.ipAddress}
           onChangeText={value =>

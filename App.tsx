@@ -13,7 +13,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { SetupConfigProvider } from './src/context/SetupConfigContext';
 import DashboardScreen from './src/screens/DashboardScreen';
-import AboutScreen from './src/screens/AboutScreen';
+import MigrateScreen from './src/screens/MigrateScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
 function App() {
@@ -28,9 +28,9 @@ function App() {
         screen: ProfileScreen,
         options: { title: 'Profile' },
       },
-      About: {
-        screen: AboutScreen,
-        options: { title: 'About' },
+      Migrate: {
+        screen: MigrateScreen,
+        options: { title: 'Migrate from sing-box' },
       },
     },
   });
