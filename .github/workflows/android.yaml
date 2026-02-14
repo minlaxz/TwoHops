@@ -8,6 +8,11 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GPR_KEY: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: 🧾 Checkout
@@ -61,5 +66,3 @@ jobs:
           tag_name: v${{ steps.version.outputs.version_name }}+${{ steps.version.outputs.version_code }}
           name: Release v${{ steps.version.outputs.version_name }}
           files: artifacts/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
