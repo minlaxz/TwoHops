@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
+import Config from "react-native-config";
 import type { RoutingConfig, ServerConfig } from '../types';
 
 type RoutingMode = RoutingConfig['mode'];
@@ -14,23 +15,14 @@ type SetupConfigContextValue = {
   setDnsServersText: React.Dispatch<React.SetStateAction<string>>;
 };
 
-// const defaultServer: ServerConfig = {
-//     name: 'lssg',
-//     ipAddress: '13.251.208.16',
-//     domain: 'trusted-1.minlaxz.lol',
-//     login: 'minlaxz',
-//     password: '000111222.@gG',
-//     vpnProtocol: 'QUIC',
-//     dnsServers: [],
-// };
 const defaultServer: ServerConfig = {
-  name: '',
+  name: Config.ENV_SERVER_NAME || '',
   ipAddress: '',
   domain: '',
   login: '',
   password: '',
-  vpnProtocol: 'QUIC',
-  dnsServers: [],
+  vpnProtocol: Config.ENV_PROTOCOL || 'QUIC',
+  dnsServers: Config.ENV_DNS_SERVERS ? Config.ENV_DNS_SERVERS.split(",") : [],
 };
 
 const SetupConfigContext = createContext<SetupConfigContextValue | undefined>(
@@ -45,7 +37,11 @@ export function SetupConfigProvider({ children }: SetupConfigProviderProps) {
   const [server, setServer] = useState<ServerConfig>(defaultServer);
   const [routingMode, setRoutingMode] = useState<RoutingMode>('selective');
   const [rulesText, setRulesText] = useState<string>('');
-  const [dnsServersText, setDnsServersText] = useState<string>('');
+  const [dnsServersText, setDnsServersText] = useState<string>(
+    defaultServer.dnsServers
+      ? defaultServer.dnsServers.join(',')
+      : ''
+  );
 
   const value = useMemo<SetupConfigContextValue>(
     () => ({

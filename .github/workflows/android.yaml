@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - 'docs/**'
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
   workflow_dispatch:
 
 jobs:
@@ -107,6 +107,10 @@ jobs:
           ./gradlew assembleRelease \
             -PVERSION_NAME=${{ steps.version.outputs.version_name }} \
             -PVERSION_CODE=${{ steps.version.outputs.version_code }}
+        env:
+          ENV_SERVER_NAME: ${{ secrets.ENV_SERVER_NAME }}
+          ENV_PROTOCOL: ${{ secrets.ENV_PROTOCOL }}
+          ENV_DNS_SERVERS: ${{ secrets.ENV_DNS_SERVERS }}
 
       - name: 🏷 Rename APKs
         run: |
