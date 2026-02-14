@@ -8,7 +8,11 @@ type MigrateScreenRoute = {
   };
 };
 
-export default function MigrateScreen({ route }: { route: MigrateScreenRoute }) {
+export default function MigrateScreen({
+  route,
+}: {
+  route: MigrateScreenRoute;
+}) {
   return (
     <MainScreen>
       <Text>Migrate screen and params.param is {route.params.url}</Text>

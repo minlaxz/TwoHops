@@ -60,9 +60,11 @@ export default function DashboardScreen() {
     const dnsServers = splitList(dnsServersText);
     const rules = splitList(rulesText);
 
-    return `server=${server.ipAddress} domain=${server.domain} user=${server.login
-      } protocol=${server.vpnProtocol}; dns=${dnsServers.join(', ') || '-'
-      }; routeMode=${routingMode}; rules=${rules.length};`;
+    return `server=${server.ipAddress} domain=${server.domain} user=${
+      server.login
+    } protocol=${server.vpnProtocol}; dns=${
+      dnsServers.join(', ') || '-'
+    }; routeMode=${routingMode}; rules=${rules.length};`;
   }, [
     dnsServersText,
     rulesText,
@@ -304,7 +306,9 @@ export default function DashboardScreen() {
             touchableOpacityStyles={smallButtonTouchableStyle}
             textStyles={smallButtonTextStyle}
             title="Migrate"
-            onPress={() => navigation.navigate('Migrate', { url: 'https://example.com' })}
+            onPress={() =>
+              navigation.navigate('Migrate', { url: 'https://example.com' })
+            }
           />
         </View>
         <View style={styles.rightButton}>
@@ -314,7 +318,13 @@ export default function DashboardScreen() {
             ios_backgroundColor="#3e3e3e"
             onValueChange={onSwitchValueChange}
             value={states[state].switchValue}
-            disabled={isSwitchActionInFlight || server.ipAddress === '' || server.login === '' || server.password === '' || server.domain === ''}
+            disabled={
+              isSwitchActionInFlight ||
+              server.ipAddress === '' ||
+              server.login === '' ||
+              server.password === '' ||
+              server.domain === ''
+            }
           />
           <Text style={styles.switchEmoji}>{states[state].statusEmoji}</Text>
           <Text style={styles.switchHint}>{states[state].switchHint}</Text>

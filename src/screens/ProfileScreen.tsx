@@ -32,9 +32,7 @@ export default function ServerScreen() {
           style={styles.input}
           placeholder="Name"
           value={server.name}
-          onChangeText={value =>
-            setServer(prev => ({ ...prev, name: value }))
-          }
+          onChangeText={value => setServer(prev => ({ ...prev, name: value }))}
           autoCapitalize="none"
         />
         <TextInput

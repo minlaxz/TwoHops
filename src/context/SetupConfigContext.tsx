@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
-import Config from "react-native-config";
+import Config from 'react-native-config';
 import type { RoutingConfig, ServerConfig } from '../types';
 
 type RoutingMode = RoutingConfig['mode'];
@@ -22,7 +22,7 @@ const defaultServer: ServerConfig = {
   login: '',
   password: '',
   vpnProtocol: Config.ENV_PROTOCOL || 'QUIC',
-  dnsServers: Config.ENV_DNS_SERVERS ? Config.ENV_DNS_SERVERS.split(",") : [],
+  dnsServers: Config.ENV_DNS_SERVERS ? Config.ENV_DNS_SERVERS.split(',') : [],
 };
 
 const SetupConfigContext = createContext<SetupConfigContextValue | undefined>(
@@ -38,9 +38,7 @@ export function SetupConfigProvider({ children }: SetupConfigProviderProps) {
   const [routingMode, setRoutingMode] = useState<RoutingMode>('selective');
   const [rulesText, setRulesText] = useState<string>('');
   const [dnsServersText, setDnsServersText] = useState<string>(
-    defaultServer.dnsServers
-      ? defaultServer.dnsServers.join(',')
-      : ''
+    defaultServer.dnsServers ? defaultServer.dnsServers.join(',') : '',
   );
 
   const value = useMemo<SetupConfigContextValue>(
