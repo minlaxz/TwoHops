@@ -1,0 +1,65 @@
+name: Android CI (Bare RN)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧾 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: 📦 Install JS deps
+        run: yarn install --frozen-lockfile
+
+      - name: 🔢 Compute version
+        id: version
+        run: |
+          VERSION_NAME=$(node -p "require('./package.json').version")
+          VERSION_CODE=$(date +%Y%m%d%H)
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+
+      - name: 🏗 Build APK & AAB
+        run: |
+          cd android
+          ./gradlew clean bundleRelease assembleRelease \
+            -PVERSION_NAME=${{ steps.version.outputs.version_name }} \
+            -PVERSION_CODE=${{ steps.version.outputs.version_code }}
+
+      - name: 📦 Collect artifacts
+        run: |
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/release/*.apk artifacts/
+          cp android/app/build/outputs/bundle/release/*.aab artifacts/
+
+      - name: ⬆ Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-builds
+          path: artifacts/
+
+      - name: 🏷 Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version_name }}+${{ steps.version.outputs.version_code }}
+          name: Release v${{ steps.version.outputs.version_name }}
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
