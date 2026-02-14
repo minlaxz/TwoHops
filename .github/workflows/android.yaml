@@ -66,3 +66,5 @@ jobs:
           tag_name: v${{ steps.version.outputs.version_name }}+${{ steps.version.outputs.version_code }}
           name: Release v${{ steps.version.outputs.version_name }}
           files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
