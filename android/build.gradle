@@ -18,17 +18,6 @@ buildscript {
     }
 }
 
-def getGprProp = { String name ->
-    def v = project.findProperty(name)
-    if (v != null) return v.toString()
-
-    def envName = name.replace('.', '_').toUpperCase()
-    v = System.getenv(envName)
-    if (v != null && !v.toString().trim().isEmpty()) return v.toString()
-
-    return null
-}
-
 allprojects {
     repositories {
         google()
@@ -36,8 +25,8 @@ allprojects {
         maven {
             url = uri("https://maven.pkg.github.com/TrustTunnel/TrustTunnelClient")
             credentials {
-                username = ""
-                password = getGprProp("gpr.key")
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
             }
         }
     }

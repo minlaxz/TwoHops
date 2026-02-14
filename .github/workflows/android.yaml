@@ -12,7 +12,7 @@ jobs:
       contents: write
       packages: read
     env:
-      GPR_KEY: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: 🧾 Checkout
@@ -51,10 +51,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: 🏗 Build APK & AAB
+      - name: 🏗 Build APK # & AAB (add `bundleRelease` for AAB)
         run: |
           cd android
-          ./gradlew  bundleRelease assembleRelease \
+          ./gradlew assembleRelease \
             -PVERSION_NAME=${{ steps.version.outputs.version_name }} \
             -PVERSION_CODE=${{ steps.version.outputs.version_code }}
 
