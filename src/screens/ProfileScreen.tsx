@@ -17,17 +17,69 @@ export default function ServerScreen() {
     setDnsServersText,
   } = useSetupConfig();
 
-  const [localRoutingRulesText, setLocalRoutingRulesText] =
-    useState<string>('myip.wtf');
-  const [remoteRoutingURL, setRemoteRoutingURL] = useState<string>(
-    'https://gist.githubusercontent.com/minlaxz/df715284c12c97d217f5a14f6e643ba4/raw/rules.txt',
-  );
+  const [localRoutingRulesText, setLocalRoutingRulesText] = useState<string>('');
+  const [remoteRoutingURL, setRemoteRoutingURL] = useState<string>('');
+  const [url, setURL] = useState<string>('');
 
   return (
     <MainScreen>
       <Text style={styles.title}>Configurations</Text>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Server</Text>
+        <Text style={styles.sectionTitle}>Simple</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Single URL"
+          value={url}
+          onChangeText={setURL}
+          autoCapitalize="none"
+        />
+        <Text style={styles.inputDescription}>
+          This section is for users who want a quick setup without filling in individual fields.
+          You can paste a single URL containing all necessary information,
+          and the app will attempt to parse it to fill in the details automatically.
+        </Text>
+        <TouchableOpacityButton
+          touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
+          textStyles={styles.modeButtonText}
+          title="Auto Fill"
+          onPress={() => {
+            // Example URL format:
+            // twohops://import-profile?login=user&password=password==&ip=1.2.3.4&domain=tls-domain.example.com&dns=https://dns.nextdns.io&remoteRules=https://example.comrules.txt
+            try {
+              const urlObj: globalThis.URL = new URL(url);
+
+              if (urlObj.protocol !== 'twohops:') {
+                throw new Error('Invalid URL scheme');
+              }
+
+              const login = urlObj.searchParams.get('login') ?? '';
+              const parsedPassword = urlObj.searchParams.get('password') ?? '';
+              const ipAddress = urlObj.searchParams.get('ip') ?? '';
+              const domain = urlObj.searchParams.get('domain') ?? '';
+              const protocolParam = urlObj.searchParams.get('protocol');
+              const vpnProtocol = protocolParam === 'Http/2' ? 'Http/2' : 'QUIC';
+              const dns = urlObj.searchParams.get('dns') ?? '';
+              const remoteRulesURL = urlObj.searchParams.get('remoteRules') ?? '';
+
+              setServer(prev => ({
+                ...prev,
+                ipAddress,
+                domain,
+                login,
+                password: parsedPassword,
+                vpnProtocol,
+              }));
+
+              setDnsServersText(dns);
+              setRemoteRoutingURL(remoteRulesURL);
+            } catch (error) {
+              console.error('Failed to parse URL:', error);
+            }
+
+          }}
+        />
+        <View style={styles.line} />
+        <Text style={styles.sectionTitle}>Advance</Text>
         <TextInput
           style={styles.input}
           placeholder="Name"
@@ -236,7 +288,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: '#ededed',
   },
-  inputDescription: { fontSize: 12, color: '#666', marginBottom: 12 },
+  inputDescription: { fontSize: 12, color: '#666', marginBottom: 12, textAlign: 'justify' },
   passwordInput: {
     backgroundColor: '#f5f5f5',
     color: '#333',
