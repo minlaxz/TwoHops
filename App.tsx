@@ -30,7 +30,7 @@ function App() {
       },
       About: {
         screen: AboutScreen,
-        options: { title: 'About' }
+        options: { title: 'About' },
       },
     },
   });

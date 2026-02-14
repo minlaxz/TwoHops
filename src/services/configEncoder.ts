@@ -1,7 +1,15 @@
 import type { ServerConfig, ConfigInput } from '../types';
 
 const DEFAULT_INCLUDED_ROUTES = ['0.0.0.0/0', '2000::/3'];
-const DEFAULT_EXCLUDED_ROUTES = ["10.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.168.0.0/16", "255.255.255.255/32"]
+const DEFAULT_EXCLUDED_ROUTES = [
+  '10.0.0.0/8',
+  '100.64.0.0/10',
+  '169.254.0.0/16',
+  '172.16.0.0/12',
+  '192.0.0.0/24',
+  '192.168.0.0/16',
+  '255.255.255.255/32',
+];
 const DEFAULT_TUN_MTU = 1500;
 
 const WILDCARD_PREFIX = '*.';
@@ -10,7 +18,9 @@ export function encodeConfig(input: ConfigInput): string {
   const { server, routing, excludedRoutes } = input;
 
   const logLevel = parseToConfigString('debug');
-  const vpnMode = parseToConfigString(routing.mode === 'selective' ? 'selective' : 'general');
+  const vpnMode = parseToConfigString(
+    routing.mode === 'selective' ? 'selective' : 'general',
+  );
 
   const killSwitchEnabled = true;
   const postQuantumGroupEnabled = false;
@@ -35,7 +45,9 @@ export function encodeConfig(input: ConfigInput): string {
   const antiDpi = false;
 
   const tunIncludedRoutes = parseToConfigList(DEFAULT_INCLUDED_ROUTES);
-  const tunExcludedRoutes = parseToConfigList(excludedRoutes ?? DEFAULT_EXCLUDED_ROUTES);
+  const tunExcludedRoutes = parseToConfigList(
+    excludedRoutes ?? DEFAULT_EXCLUDED_ROUTES,
+  );
   const tunMtuSize = DEFAULT_TUN_MTU;
 
   const socksAddress = parseToConfigString('127.0.0.1:1080');
@@ -109,7 +121,7 @@ function isDomainLike(value: string): boolean {
 }
 
 function parseHostAddresses(addresses: string[]): string {
-  return parseToConfigList(addresses.map((address) => parseAddress(address)));
+  return parseToConfigList(addresses.map(address => parseAddress(address)));
 }
 
 function parseAddress(address: string, fallbackPort = 443): string {
@@ -128,10 +140,12 @@ function parseAddress(address: string, fallbackPort = 443): string {
   return address;
 }
 
-function parseToConfigList(list: Iterable<string | number | boolean | null | undefined>): string {
+function parseToConfigList(
+  list: Iterable<string | number | boolean | null | undefined>,
+): string {
   const values = Array.from(list)
-    .filter((value) => value !== null && value !== undefined)
-    .map((value) => parseToConfigString(value));
+    .filter(value => value !== null && value !== undefined)
+    .map(value => parseToConfigString(value));
   return `[${values.join(', ')}]`;
 }
 

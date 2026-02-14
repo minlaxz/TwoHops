@@ -51,7 +51,10 @@ function parseTimestamp(data: Record<string, unknown>, key: string): Date {
   return parsed;
 }
 
-function parseNullableString(data: Record<string, unknown>, key: string): string | null {
+function parseNullableString(
+  data: Record<string, unknown>,
+  key: string,
+): string | null {
   const raw = data[key];
   if (raw === undefined || raw === null) {
     return null;
@@ -62,7 +65,10 @@ function parseNullableString(data: Record<string, unknown>, key: string): string
   return raw;
 }
 
-function parseRequiredString(data: Record<string, unknown>, key: string): string {
+function parseRequiredString(
+  data: Record<string, unknown>,
+  key: string,
+): string {
   const raw = data[key];
   if (raw === undefined || raw === null) {
     throw new Error(`Expected ${key} to be defined`);
@@ -71,7 +77,9 @@ function parseRequiredString(data: Record<string, unknown>, key: string): string
 }
 
 function parseProtocol(data: Record<string, unknown>): ConnectionProtocol {
-  const raw = String(data[PROTOCOL_KEY] ?? '').toLowerCase().trim();
+  const raw = String(data[PROTOCOL_KEY] ?? '')
+    .toLowerCase()
+    .trim();
   if (!PROTOCOLS.includes(raw as ConnectionProtocol)) {
     throw new Error(`Invalid protocol ${raw}`);
   }
@@ -79,7 +87,9 @@ function parseProtocol(data: Record<string, unknown>): ConnectionProtocol {
 }
 
 function parseAction(data: Record<string, unknown>): QueryLogAction {
-  const raw = String(data[ACTION_KEY] ?? '').toLowerCase().trim();
+  const raw = String(data[ACTION_KEY] ?? '')
+    .toLowerCase()
+    .trim();
   if (!ACTIONS.includes(raw as QueryLogAction)) {
     throw new Error(`Invalid action ${raw}`);
   }

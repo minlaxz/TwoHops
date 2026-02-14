@@ -1,0 +1,8 @@
+node_modules
+android
+ios
+build
+dist
+coverage
+*.lock
+vendor

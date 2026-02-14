@@ -1,4 +1,4 @@
-import type { StyleProp, TextStyle, ViewStyle } from "react-native";
+import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 
 export type VpnProtocol = 'Http/2' | 'QUIC';
 
@@ -11,7 +11,6 @@ export type VpnManagerState =
   | 'waitingForNetwork';
 
 export type RoutingMode = 'general' | 'selective';
-
 
 export interface ServerConfig {
   name: string;
@@ -45,11 +44,10 @@ export type VpnManagerStateDescriptor = {
   statusEmoji: string;
   action: () => Promise<void>;
   actionText: string;
-}
+};
 
 export type QueryLogAction = 'bypass' | 'tunnel' | 'reject';
 export type ConnectionProtocol = 'tcp' | 'udp';
-
 
 export interface QueryLogRow {
   action: QueryLogAction;
