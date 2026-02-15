@@ -50,7 +50,8 @@ export default function DashboardScreen() {
   const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
   const [isSwitchActionInFlight, setIsSwitchActionInFlight] = useState(false);
 
-  const { server, routingMode, rulesText, dnsServersText } = useSetupConfig();
+  const { server, routingMode, rulesText, dnsServersText, isHydrated } =
+    useSetupConfig();
 
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const didLogSetupChangeRef = useRef(false);
@@ -74,6 +75,12 @@ export default function DashboardScreen() {
     server.login,
     server.vpnProtocol,
   ]);
+
+  const isProfileComplete =
+    server.ipAddress !== '' &&
+    server.login !== '' &&
+    server.password !== '' &&
+    server.domain !== '';
 
   const appendDebugLog = useCallback((message: string) => {
     setDebugLogs(prev =>
@@ -281,6 +288,10 @@ export default function DashboardScreen() {
   }, [appendDebugLog]);
 
   useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
     if (!didLogSetupChangeRef.current) {
       didLogSetupChangeRef.current = true;
       appendDebugLog(`Setup loaded: ${setupSummary}`);
@@ -288,7 +299,7 @@ export default function DashboardScreen() {
     }
 
     appendDebugLog(`Setup updated: ${setupSummary}`);
-  }, [appendDebugLog, setupSummary]);
+  }, [appendDebugLog, isHydrated, setupSummary]);
 
   return (
     <View style={styles.container}>
@@ -312,10 +323,9 @@ export default function DashboardScreen() {
           />
         </View>
         <View style={styles.rightButton}>
-          {server.ipAddress !== '' &&
-          server.login !== '' &&
-          server.password !== '' &&
-          server.domain !== '' ? (
+          {!isHydrated ? (
+            <Text style={styles.switchHint}>Loading saved profile...</Text>
+          ) : isProfileComplete ? (
             <>
               <Switch
                 trackColor={{ false: '#767577', true: '#31425e' }}
@@ -332,7 +342,8 @@ export default function DashboardScreen() {
             </>
           ) : (
             <Text style={styles.switchHint}>
-              Please complete the profile setup to enable the switch.
+              No saved profile found. Open Profile and complete setup to enable
+              connect.
             </Text>
           )}
         </View>

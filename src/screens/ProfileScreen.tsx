@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Text, StyleSheet, View, TextInput } from 'react-native';
+import { Alert, Text, StyleSheet, View, TextInput } from 'react-native';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useSetupConfig } from '../context/SetupConfigContext';
@@ -15,11 +15,12 @@ export default function ServerScreen() {
     setRulesText,
     dnsServersText,
     setDnsServersText,
+    localRoutingRulesText,
+    setLocalRoutingRulesText,
+    remoteRoutingURL,
+    setRemoteRoutingURL,
+    clearSetupConfig,
   } = useSetupConfig();
-
-  const [localRoutingRulesText, setLocalRoutingRulesText] =
-    useState<string>('');
-  const [remoteRoutingURL, setRemoteRoutingURL] = useState<string>('');
   const [url, setURL] = useState<string>('');
 
   return (
@@ -235,12 +236,12 @@ export default function ServerScreen() {
             * Current rules:{' '}
             {rulesText.length ? rulesText.split('\n').length : 0}
           </Text>
-          <TouchableOpacityButton
+          {/* <TouchableOpacityButton
             touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
             textStyles={styles.modeButtonText}
             title="Reset"
             onPress={() => setRulesText('')}
-          />
+          /> */}
           <View style={styles.rowSpacer} />
           <TouchableOpacityButton
             touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
@@ -262,6 +263,30 @@ export default function ServerScreen() {
             }}
           />
         </View>
+        <TouchableOpacityButton
+          touchableOpacityStyles={[styles.modeButton, styles.clearButton]}
+          textStyles={styles.modeButtonText}
+          title="Clear Profile"
+          onPress={() => {
+            Alert.alert(
+              'Clear profile?',
+              'This removes saved server, DNS, and routing data from this device.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Clear',
+                  style: 'destructive',
+                  onPress: () => {
+                    clearSetupConfig().catch(error => {
+                      console.error('Failed to clear setup config:', error);
+                    });
+                    setURL('');
+                  },
+                },
+              ],
+            );
+          }}
+        />
       </View>
     </MainScreen>
   );
@@ -328,6 +353,11 @@ const styles = StyleSheet.create({
   },
   modeButtonWide: {
     width: 80,
+  },
+  clearButton: {
+    width: '100%',
+    backgroundColor: '#8b1f1f',
+    marginTop: 8,
   },
   protocolButton: {
     width: 60,
