@@ -60,9 +60,11 @@ export default function DashboardScreen() {
     const dnsServers = splitList(dnsServersText);
     const rules = splitList(rulesText);
 
-    return `server=${server.ipAddress} domain=${server.domain} user=${server.login
-      } protocol=${server.vpnProtocol}; dns=${dnsServers.join(', ') || '-'
-      }; routeMode=${routingMode}; rules=${rules.length};`;
+    return `server=${server.ipAddress} domain=${server.domain} user=${
+      server.login
+    } protocol=${server.vpnProtocol}; dns=${
+      dnsServers.join(', ') || '-'
+    }; routeMode=${routingMode}; rules=${rules.length};`;
   }, [
     dnsServersText,
     rulesText,
@@ -310,24 +312,29 @@ export default function DashboardScreen() {
           />
         </View>
         <View style={styles.rightButton}>
-          {
-            (server.ipAddress !== '' &&
-              server.login !== '' &&
-              server.password !== '' &&
-              server.domain !== '') ?
-              <>
-                <Switch
-                  trackColor={{ false: '#767577', true: '#31425e' }}
-                  thumbColor={states[state].switchValue ? '#000000' : '#f4f3f4'}
-                  ios_backgroundColor="#3e3e3e"
-                  onValueChange={onSwitchValueChange}
-                  value={states[state].switchValue}
-                  disabled={isSwitchActionInFlight}
-                />
-                <Text style={styles.switchEmoji}>{states[state].statusEmoji}</Text>
-                <Text style={styles.switchHint}>{states[state].switchHint}</Text>
-              </> : <Text style={styles.switchHint}>Please complete the profile setup to enable the switch.</Text>
-          }
+          {server.ipAddress !== '' &&
+          server.login !== '' &&
+          server.password !== '' &&
+          server.domain !== '' ? (
+            <>
+              <Switch
+                trackColor={{ false: '#767577', true: '#31425e' }}
+                thumbColor={states[state].switchValue ? '#000000' : '#f4f3f4'}
+                ios_backgroundColor="#3e3e3e"
+                onValueChange={onSwitchValueChange}
+                value={states[state].switchValue}
+                disabled={isSwitchActionInFlight}
+              />
+              <Text style={styles.switchEmoji}>
+                {states[state].statusEmoji}
+              </Text>
+              <Text style={styles.switchHint}>{states[state].switchHint}</Text>
+            </>
+          ) : (
+            <Text style={styles.switchHint}>
+              Please complete the profile setup to enable the switch.
+            </Text>
+          )}
         </View>
       </View>
       <View style={styles.logsContainer}>

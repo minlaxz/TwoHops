@@ -17,7 +17,8 @@ export default function ServerScreen() {
     setDnsServersText,
   } = useSetupConfig();
 
-  const [localRoutingRulesText, setLocalRoutingRulesText] = useState<string>('');
+  const [localRoutingRulesText, setLocalRoutingRulesText] =
+    useState<string>('');
   const [remoteRoutingURL, setRemoteRoutingURL] = useState<string>('');
   const [url, setURL] = useState<string>('');
 
@@ -34,9 +35,10 @@ export default function ServerScreen() {
           autoCapitalize="none"
         />
         <Text style={styles.inputDescription}>
-          This section is for users who want a quick setup without filling in individual fields.
-          You can paste a single URL containing all necessary information,
-          and the app will attempt to parse it to fill in the details automatically.
+          This section is for users who want a quick setup without filling in
+          individual fields. You can paste a single URL containing all necessary
+          information, and the app will attempt to parse it to fill in the
+          details automatically.
         </Text>
         <TouchableOpacityButton
           touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
@@ -57,9 +59,11 @@ export default function ServerScreen() {
               const ipAddress = urlObj.searchParams.get('ip') ?? '';
               const domain = urlObj.searchParams.get('domain') ?? '';
               const protocolParam = urlObj.searchParams.get('protocol');
-              const vpnProtocol = protocolParam === 'Http/2' ? 'Http/2' : 'QUIC';
+              const vpnProtocol =
+                protocolParam === 'Http/2' ? 'Http/2' : 'QUIC';
               const dns = urlObj.searchParams.get('dns') ?? '';
-              const remoteRulesURL = urlObj.searchParams.get('remoteRules') ?? '';
+              const remoteRulesURL =
+                urlObj.searchParams.get('remoteRules') ?? '';
 
               setServer(prev => ({
                 ...prev,
@@ -75,7 +79,6 @@ export default function ServerScreen() {
             } catch (error) {
               console.error('Failed to parse URL:', error);
             }
-
           }}
         />
         <View style={styles.line} />
@@ -288,7 +291,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: '#ededed',
   },
-  inputDescription: { fontSize: 12, color: '#666', marginBottom: 12, textAlign: 'justify' },
+  inputDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+    textAlign: 'justify',
+  },
   passwordInput: {
     backgroundColor: '#f5f5f5',
     color: '#333',
