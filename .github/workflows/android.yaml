@@ -4,21 +4,28 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - 'docs/**'
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
   workflow_dispatch:
 
 jobs:
-  check-skip:
+  skip-ci:
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
       - name: Skip CI check
         run: echo "Proceeding with workflow"
 
+  check-release:
+    runs-on: ubuntu-latest
+    if: "contains(github.event.head_commit.message, '[release]')"
+    steps:
+      - name: Skip CI check
+        run: echo "Proceeding with workflow"
+
   test:
-    needs: check-skip
+    needs: skip-ci
     runs-on: ubuntu-latest
     steps:
       - name: 🧾 Checkout
@@ -55,8 +62,7 @@ jobs:
         run: yarn format:check
 
   build-android:
-    needs: test
-    if: "!contains(github.event.head_commit.message, '[release]')"
+    needs: [test, check-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
