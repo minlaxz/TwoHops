@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Alert, Text, StyleSheet, View, TextInput } from 'react-native';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useSetupConfig } from '../context/SetupConfigContext';
 import { splitList, fetchRemoteURL } from '../services/utils';
+import { useAppTheme } from '../context/ThemeContext';
+import type { AppTheme, ThemePreference } from '../theme/colors';
 
 export default function ServerScreen() {
   const {
@@ -22,15 +24,47 @@ export default function ServerScreen() {
     clearSetupConfig,
   } = useSetupConfig();
   const [url, setURL] = useState<string>('');
+  const { theme, themePreference, setThemePreference } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const placeholderTextColor = theme.colors.placeholder;
+
+  const themeOptions: ThemePreference[] = ['system', 'light', 'dark'];
 
   return (
     <MainScreen>
       <Text style={styles.title}>Configurations</Text>
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Theme: {themePreference}</Text>
+        </View>
+        <View style={styles.rowButtons}>
+          {themeOptions.map(option => (
+            <React.Fragment key={option}>
+              <TouchableOpacityButton
+                touchableOpacityStyles={[
+                  styles.themeButton,
+                  themePreference === option
+                    ? styles.modeButtonActive
+                    : styles.modeButtonInactive,
+                ]}
+                textStyles={styles.modeButtonText}
+                title={option[0].toUpperCase() + option.slice(1)}
+                onPress={() => setThemePreference(option)}
+              />
+              {option !== 'dark' ? <View style={styles.rowSpacer} /> : null}
+            </React.Fragment>
+          ))}
+        </View>
+        <Text style={styles.inputDescription}>
+          Use "System" to follow your phone appearance settings.
+        </Text>
+        <View style={styles.line} />
         <Text style={styles.sectionTitle}>Simple</Text>
         <TextInput
           style={styles.input}
           placeholder="Single URL"
+          placeholderTextColor={placeholderTextColor}
           value={url}
           onChangeText={setURL}
           autoCapitalize="none"
@@ -87,6 +121,7 @@ export default function ServerScreen() {
         <TextInput
           style={styles.input}
           placeholder="Name"
+          placeholderTextColor={placeholderTextColor}
           value={server.name}
           onChangeText={value => setServer(prev => ({ ...prev, name: value }))}
           autoCapitalize="none"
@@ -94,6 +129,7 @@ export default function ServerScreen() {
         <TextInput
           style={styles.input}
           placeholder="Server IP Address"
+          placeholderTextColor={placeholderTextColor}
           value={server.ipAddress}
           onChangeText={value =>
             setServer(prev => ({ ...prev, ipAddress: value }))
@@ -103,6 +139,7 @@ export default function ServerScreen() {
         <TextInput
           style={styles.input}
           placeholder="TLS Domain Name"
+          placeholderTextColor={placeholderTextColor}
           value={server.domain}
           onChangeText={value =>
             setServer(prev => ({ ...prev, domain: value }))
@@ -112,6 +149,7 @@ export default function ServerScreen() {
         <TextInput
           style={styles.input}
           placeholder="Username"
+          placeholderTextColor={placeholderTextColor}
           value={server.login}
           onChangeText={value => setServer(prev => ({ ...prev, login: value }))}
           autoCapitalize="none"
@@ -119,6 +157,7 @@ export default function ServerScreen() {
         <TextInput
           style={[styles.input, styles.passwordInput]}
           placeholder="Password"
+          placeholderTextColor={placeholderTextColor}
           value={server.password}
           onChangeText={value =>
             setServer(prev => ({ ...prev, password: value }))
@@ -129,6 +168,7 @@ export default function ServerScreen() {
         <TextInput
           style={styles.input}
           placeholder="DNS Servers (comma-separated)"
+          placeholderTextColor={placeholderTextColor}
           value={dnsServersText}
           onChangeText={setDnsServersText}
           autoCapitalize="none"
@@ -204,8 +244,9 @@ export default function ServerScreen() {
         <View style={styles.line} />
         <Text style={styles.inputLabel}>Remote Rules URL:</Text>
         <TextInput
-          style={{ ...styles.input }}
+          style={styles.input}
           placeholder="https://..."
+          placeholderTextColor={placeholderTextColor}
           value={remoteRoutingURL}
           onChangeText={setRemoteRoutingURL}
           autoCapitalize="none"
@@ -219,6 +260,7 @@ export default function ServerScreen() {
         <TextInput
           style={styles.multilineInput}
           placeholder="example.com, facebook.com"
+          placeholderTextColor={placeholderTextColor}
           value={localRoutingRulesText}
           onChangeText={setLocalRoutingRulesText}
           autoCapitalize="none"
@@ -292,86 +334,116 @@ export default function ServerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  section: {
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-  },
-  sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  inputLabel: { fontSize: 12, marginBottom: 4 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-    backgroundColor: '#ededed',
-  },
-  inputDescription: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 12,
-    textAlign: 'justify',
-  },
-  passwordInput: {
-    backgroundColor: '#f5f5f5',
-    color: '#333',
-  },
-  multilineInput: {
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-    backgroundColor: '#ededed',
-    minHeight: 100,
-  },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  rowLabel: { flex: 1, fontSize: 14, fontWeight: '500' },
-  rowButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  rowSpacer: { width: 8 },
-  line: { height: 1, backgroundColor: '#d9d9d9', marginVertical: 12 },
-  modeButton: {
-    width: 70,
-    height: 40,
-    padding: 4,
-  },
-  modeButtonWide: {
-    width: 80,
-  },
-  clearButton: {
-    width: '100%',
-    backgroundColor: '#8b1f1f',
-    marginTop: 8,
-  },
-  protocolButton: {
-    width: 60,
-    height: 40,
-    padding: 4,
-  },
-  modeButtonActive: {
-    backgroundColor: '#121212',
-  },
-  modeButtonInactive: {
-    backgroundColor: '#dedede',
-  },
-  modeButtonText: {
-    color: '#fff',
-    fontSize: 12,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    section: {
+      marginBottom: 16,
+      padding: 16,
+      borderRadius: 12,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+      borderWidth: 1,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: 12,
+      color: theme.colors.textPrimary,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      marginBottom: 8,
+      textAlign: 'center',
+      color: theme.colors.textPrimary,
+    },
+    inputLabel: {
+      fontSize: 12,
+      marginBottom: 4,
+      color: theme.colors.textSecondary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 12,
+      backgroundColor: theme.colors.inputBackground,
+      color: theme.colors.textPrimary,
+    },
+    inputDescription: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      marginBottom: 12,
+      textAlign: 'justify',
+    },
+    passwordInput: {
+      backgroundColor: theme.colors.inputBackgroundStrong,
+      color: theme.colors.textPrimary,
+    },
+    multilineInput: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 12,
+      backgroundColor: theme.colors.inputBackground,
+      color: theme.colors.textPrimary,
+      minHeight: 100,
+    },
+    row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    rowLabel: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.colors.textPrimary,
+    },
+    rowButtons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: 8,
+      overflow: 'hidden',
+    },
+    rowSpacer: { width: 8 },
+    line: {
+      height: 1,
+      backgroundColor: theme.colors.divider,
+      marginVertical: 12,
+    },
+    modeButton: {
+      width: 70,
+      height: 40,
+      padding: 4,
+    },
+    themeButton: {
+      width: 90,
+      height: 40,
+      padding: 4,
+    },
+    modeButtonWide: {
+      width: 80,
+    },
+    clearButton: {
+      width: '100%',
+      backgroundColor: theme.colors.danger,
+      marginTop: 8,
+    },
+    protocolButton: {
+      width: 60,
+      height: 40,
+      padding: 4,
+    },
+    modeButtonActive: {
+      backgroundColor: theme.colors.buttonPrimary,
+    },
+    modeButtonInactive: {
+      backgroundColor: theme.colors.buttonInactive,
+    },
+    modeButtonText: {
+      color: theme.colors.buttonPrimaryText,
+      fontSize: 12,
+    },
+  });
+}

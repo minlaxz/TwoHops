@@ -6,19 +6,27 @@
  */
 
 import * as React from 'react';
-import { StatusBar, useColorScheme } from 'react-native';
+import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createStaticNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { SetupConfigProvider } from './src/context/SetupConfigContext';
+import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import DashboardScreen from './src/screens/DashboardScreen';
-import AboutScreen from './src/screens/AboutScreen';
+import DebugScreen from './src/screens/DebugScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+function AppNavigator() {
+  const { theme } = useAppTheme();
   const RootStack = createNativeStackNavigator({
+    screenOptions: {
+      headerStyle: { backgroundColor: theme.colors.surface },
+      headerTitleStyle: { color: theme.colors.textPrimary },
+      headerTintColor: theme.colors.textPrimary,
+      headerShadowVisible: !theme.isDark,
+      contentStyle: { backgroundColor: theme.colors.background },
+    },
     screens: {
       Dashboard: {
         screen: DashboardScreen,
@@ -28,20 +36,33 @@ function App() {
         screen: ProfileScreen,
         options: { title: 'Profile' },
       },
-      About: {
-        screen: AboutScreen,
-        options: { title: 'About' },
+      Debug: {
+        screen: DebugScreen,
+        options: { title: 'Debug' },
       },
     },
   });
   const Navigation = createStaticNavigation(RootStack);
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+    <>
+      <StatusBar
+        barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.colors.surface}
+      />
       <SetupConfigProvider>
         <Navigation />
       </SetupConfigProvider>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppNavigator />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

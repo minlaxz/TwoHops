@@ -11,16 +11,13 @@ import { View, Text, StyleSheet, ScrollView, Switch } from 'react-native';
 import { VpnClient } from '../services/vpn';
 import { splitList } from '../services/utils';
 import { useSetupConfig } from '../context/SetupConfigContext';
-import type {
-  RoutingConfig,
-  QueryLogRow,
-  VpnManagerState,
-  ServerConfig,
-} from '../types';
+import type { RoutingConfig, VpnManagerState, ServerConfig } from '../types';
+import type { AppTheme } from '../theme/colors';
+import { useAppTheme } from '../context/ThemeContext';
 
 type RootStackParamList = {
   Profile: undefined;
-  About: { url: string };
+  Debug: undefined;
 };
 
 type DebugLogEntry = {
@@ -46,9 +43,10 @@ const smallButtonTextStyle = { fontWeight: '600' as const, fontSize: 16 };
 
 export default function DashboardScreen() {
   const [state, setState] = useState<VpnManagerState>('disconnected');
-  const [queryLogs, setQueryLogs] = useState<QueryLogRow[]>([]);
   const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
   const [isSwitchActionInFlight, setIsSwitchActionInFlight] = useState(false);
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const { server, routingMode, rulesText, dnsServersText, isHydrated } =
     useSetupConfig();
@@ -157,7 +155,6 @@ export default function DashboardScreen() {
     appendDebugLog('Disconnect button pressed.');
     try {
       await VpnClient.stop();
-      setQueryLogs([]);
       appendDebugLog('Disconnect request sent to VPN client.');
       syncStateWithNative('after disconnect').catch(error => {
         appendDebugLog(
@@ -257,7 +254,6 @@ export default function DashboardScreen() {
   useEffect(() => {
     let active = true;
 
-    setQueryLogs([]);
     setDebugLogs([{ stamp: new Date(), message: 'Main screen ready.' }]);
 
     VpnClient.getCurrentState()
@@ -276,14 +272,9 @@ export default function DashboardScreen() {
       appendDebugLog(`State changed: ${value}.`);
     });
 
-    const unsubscribeLog = VpnClient.onQueryLog(row => {
-      setQueryLogs(prev => [row, ...prev].slice(0, 200));
-    });
-
     return () => {
       active = false;
       unsubscribeState();
-      unsubscribeLog();
     };
   }, [appendDebugLog]);
 
@@ -316,10 +307,8 @@ export default function DashboardScreen() {
           <TouchableOpacityButton
             touchableOpacityStyles={smallButtonTouchableStyle}
             textStyles={smallButtonTextStyle}
-            title="About"
-            onPress={() =>
-              navigation.navigate('About', { url: 'https://example.com' })
-            }
+            title="Debug"
+            onPress={() => navigation.navigate('Debug')}
           />
         </View>
         <View style={styles.rightButton}>
@@ -328,9 +317,16 @@ export default function DashboardScreen() {
           ) : isProfileComplete ? (
             <>
               <Switch
-                trackColor={{ false: '#767577', true: '#31425e' }}
-                thumbColor={states[state].switchValue ? '#000000' : '#f4f3f4'}
-                ios_backgroundColor="#3e3e3e"
+                trackColor={{
+                  false: theme.colors.switchTrackFalse,
+                  true: theme.colors.switchTrackTrue,
+                }}
+                thumbColor={
+                  states[state].switchValue
+                    ? theme.colors.switchThumbOn
+                    : theme.colors.switchThumbOff
+                }
+                ios_backgroundColor={theme.colors.switchTrackFalse}
                 onValueChange={onSwitchValueChange}
                 value={states[state].switchValue}
                 disabled={isSwitchActionInFlight}
@@ -350,21 +346,21 @@ export default function DashboardScreen() {
       </View>
       <View style={styles.logsContainer}>
         <View style={styles.debugPanel}>
-          <DebugLogsScreen logs={debugLogs} />
-        </View>
-        <View style={styles.trafficPanel}>
-          <TrafficLogsScreen logs={queryLogs} />
+          <DebugLogsScreen logs={debugLogs} styles={styles} />
         </View>
       </View>
     </View>
   );
 }
 
+type DashboardStyles = ReturnType<typeof createStyles>;
+
 type DebugLogsScreenProps = {
   logs: DebugLogEntry[];
+  styles: DashboardStyles;
 };
 
-function DebugLogsScreen({ logs }: DebugLogsScreenProps) {
+function DebugLogsScreen({ logs, styles }: DebugLogsScreenProps) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Debug Logs</Text>
@@ -392,150 +388,96 @@ function DebugLogsScreen({ logs }: DebugLogsScreenProps) {
   );
 }
 
-type TrafficLogsScreenProps = {
-  logs: QueryLogRow[];
-};
-
-function toWildcardDomain(domain: string): string {
-  const parts = domain.split('.');
-
-  if (parts.length <= 2) {
-    // example.com → *.example.com
-    return `*.${domain}`;
-  }
-  // Or take last two parts
-  const baseDomain = parts.slice(-2).join('.');
-  return `*.${baseDomain}`;
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 16,
+      backgroundColor: theme.colors.background,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      marginBottom: 12,
+      textAlign: 'center',
+      color: theme.colors.textPrimary,
+    },
+    controlsRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+    },
+    leftButtons: {
+      flex: 1,
+    },
+    leftButtonsSpacer: {
+      height: 12,
+    },
+    rightButton: {
+      flex: 1.2,
+      marginLeft: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    switchEmoji: {
+      marginTop: 8,
+      fontSize: 20,
+    },
+    switchHint: {
+      marginTop: 6,
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      paddingHorizontal: 8,
+    },
+    logsContainer: {
+      flex: 1,
+      marginTop: 14,
+      minHeight: 320,
+    },
+    debugPanel: {
+      flex: 1,
+      minHeight: 180,
+    },
+    section: {
+      flex: 1,
+      padding: 16,
+      borderRadius: 12,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+      borderWidth: 1,
+    },
+    logScrollContainer: {
+      flex: 1,
+    },
+    logScroll: {
+      flex: 1,
+    },
+    logScrollContent: {
+      paddingBottom: 8,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: 12,
+      color: theme.colors.textPrimary,
+    },
+    logEmpty: {
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+    },
+    debugRow: {
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.logBorder,
+    },
+    logLine: {
+      fontSize: 12,
+      color: theme.colors.textPrimary,
+    },
+    logTime: {
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+      marginTop: 6,
+    },
+  });
 }
-
-function TrafficLogsScreen({ logs }: TrafficLogsScreenProps) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Traffic Logs</Text>
-      <View style={styles.logScrollContainer}>
-        <ScrollView
-          style={styles.logScroll}
-          contentContainerStyle={styles.logScrollContent}
-          showsVerticalScrollIndicator
-        >
-          {logs.length === 0 ? (
-            <Text style={styles.logEmpty}>No traffic logs yet.</Text>
-          ) : null}
-          {logs.map((log, index) => (
-            <View
-              style={styles.debugRow}
-              key={`${log.stamp.toISOString()}-${log.source}-${index}`}
-            >
-              <Text style={styles.logTitle}>
-                {log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain:{' '}
-                {toWildcardDomain(log.domain ?? '-')}
-              </Text>
-              <Text style={styles.logLine}>
-                {log.source} → {log.destination ?? 'unknown'}
-              </Text>
-              <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#f0f0f0' },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  leftButtons: {
-    flex: 1,
-  },
-  leftButtonsSpacer: {
-    height: 12,
-  },
-  rightButton: {
-    flex: 1.2,
-    marginLeft: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  switchEmoji: {
-    marginTop: 8,
-    fontSize: 20,
-  },
-  switchHint: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#444',
-    textAlign: 'center',
-    paddingHorizontal: 8,
-  },
-  logsContainer: {
-    flex: 1,
-    marginTop: 14,
-    minHeight: 320,
-  },
-  debugPanel: {
-    flex: 1,
-    minHeight: 120,
-    marginBottom: 12,
-  },
-  trafficPanel: {
-    flex: 2,
-    minHeight: 180,
-  },
-  section: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-  },
-  logScrollContainer: {
-    flex: 1,
-  },
-  logScroll: {
-    flex: 1,
-  },
-  logScrollContent: {
-    paddingBottom: 8,
-  },
-  sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
-  logEmpty: {
-    fontSize: 14,
-    color: '#666',
-  },
-  debugRow: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ececec',
-  },
-  logRow: {
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-    marginBottom: 10,
-    backgroundColor: '#fff',
-  },
-  logTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  logLine: {
-    fontSize: 12,
-    color: '#333',
-  },
-  logTime: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 6,
-  },
-});
