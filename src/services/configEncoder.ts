@@ -1,4 +1,5 @@
 import type { ServerConfig, ConfigInput } from '../types';
+import { expandRules } from './routingRules';
 
 const DEFAULT_INCLUDED_ROUTES = ['0.0.0.0/0', '2000::/3'];
 const DEFAULT_EXCLUDED_ROUTES = [
@@ -12,8 +13,6 @@ const DEFAULT_EXCLUDED_ROUTES = [
 ];
 const DEFAULT_TUN_MTU = 1500;
 
-const WILDCARD_PREFIX = '*.';
-
 export function encodeConfig(input: ConfigInput): string {
   const { server, routing, excludedRoutes } = input;
 
@@ -25,7 +24,7 @@ export function encodeConfig(input: ConfigInput): string {
   const killSwitchEnabled = true;
   const postQuantumGroupEnabled = false;
 
-  const exclusions = parseToConfigList(expandExclusions(routing.rules));
+  const exclusions = parseToConfigList(expandRules(routing.rules));
   const dnsUpStreams = parseToConfigList(server.dnsServers ?? []);
   const hostName = parseToConfigString(server.domain);
 
@@ -83,41 +82,6 @@ export function encodeConfig(input: ConfigInput): string {
 
 function mapProtocol(protocol: ServerConfig['vpnProtocol']): string {
   return protocol === 'QUIC' ? 'http3' : 'http2';
-}
-
-function expandExclusions(rules: string[]): string[] {
-  const domains = new Set<string>();
-  const addresses = new Set<string>();
-
-  for (const rule of rules) {
-    const normalized = rule.trim();
-    if (!normalized) {
-      continue;
-    }
-
-    if (isDomainLike(normalized)) {
-      domains.add(normalized);
-      if (!normalized.startsWith(WILDCARD_PREFIX)) {
-        domains.add(`${WILDCARD_PREFIX}${normalized}`);
-      }
-    } else {
-      addresses.add(normalized);
-    }
-  }
-
-  return [...addresses, ...domains];
-}
-
-function isDomainLike(value: string): boolean {
-  if (value.startsWith('[')) {
-    return false;
-  }
-
-  if (value.includes('/') || value.includes(':')) {
-    return false;
-  }
-
-  return value.includes('.') && !value.includes(' ');
 }
 
 function parseHostAddresses(addresses: string[]): string {
