@@ -9,7 +9,7 @@ import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { TouchableOpacityButton } from '../components/buttons';
 import { View, Text, StyleSheet, ScrollView, Switch } from 'react-native';
 import { VpnClient } from '../services/vpn';
-import { splitList } from '../services/utils';
+import { parseRules } from '../services/routingRules';
 import { useSetupConfig } from '../context/SetupConfigContext';
 import type { RoutingConfig, VpnManagerState, ServerConfig } from '../types';
 import type { AppTheme } from '../theme/colors';
@@ -56,8 +56,8 @@ export default function DashboardScreen() {
   const switchActionInFlightRef = useRef(false);
 
   const setupSummary = useMemo(() => {
-    const dnsServers = splitList(dnsServersText);
-    const rules = splitList(rulesText);
+    const dnsServers = parseRules(dnsServersText);
+    const rules = parseRules(rulesText);
 
     return `server=${server.ipAddress} domain=${server.domain} user=${
       server.login
@@ -126,12 +126,12 @@ export default function DashboardScreen() {
     try {
       const routing: RoutingConfig = {
         mode: routingMode,
-        rules: splitList(rulesText),
+        rules: parseRules(rulesText),
       };
 
       const updatedServer: ServerConfig = {
         ...server,
-        dnsServers: splitList(dnsServersText),
+        dnsServers: parseRules(dnsServersText),
       };
 
       await VpnClient.start({
