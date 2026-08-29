@@ -1,4 +1,4 @@
-import type { ServerConfig, ConfigInput } from '../types';
+import type { ServerConfig, VpnStartInput } from '../types';
 import { expandRules } from './routingRules';
 
 const DEFAULT_INCLUDED_ROUTES = ['0.0.0.0/0', '2000::/3'];
@@ -13,7 +13,7 @@ const DEFAULT_EXCLUDED_ROUTES = [
 ];
 const DEFAULT_TUN_MTU = 1500;
 
-export function encodeConfig(input: ConfigInput): string {
+export function encodeConfig(input: VpnStartInput): string {
   const { server, routing, excludedRoutes } = input;
 
   const logLevel = parseToConfigString('debug');
@@ -45,7 +45,7 @@ export function encodeConfig(input: ConfigInput): string {
 
   const tunIncludedRoutes = parseToConfigList(DEFAULT_INCLUDED_ROUTES);
   const tunExcludedRoutes = parseToConfigList(
-    excludedRoutes ?? DEFAULT_EXCLUDED_ROUTES,
+    excludedRoutes?.length ? excludedRoutes : DEFAULT_EXCLUDED_ROUTES,
   );
   const tunMtuSize = DEFAULT_TUN_MTU;
 

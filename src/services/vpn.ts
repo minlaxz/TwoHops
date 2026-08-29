@@ -13,11 +13,7 @@ const eventEmitter = new NativeEventEmitter();
 
 export const VpnClient = {
   async start(input: VpnStartInput): Promise<void> {
-    const config = encodeConfig({
-      server: input.server,
-      routing: input.routing,
-      excludedRoutes: input.excludedRoutes ?? [],
-    });
+    const config = encodeConfig(input);
     await NativeTrustTunnel.start(input.server.name, config);
   },
 
@@ -27,11 +23,7 @@ export const VpnClient = {
       return;
     }
 
-    const config = encodeConfig({
-      server: input.server,
-      routing: input.routing,
-      excludedRoutes: input.excludedRoutes ?? [],
-    });
+    const config = encodeConfig(input);
     await NativeTrustTunnel.updateConfiguration(input.server.name, config);
   },
 

@@ -27,15 +27,10 @@ export interface RoutingConfig {
   rules: string[];
 }
 
-export type ConfigInput = {
-  server: ServerConfig;
-  routing: RoutingConfig;
-  excludedRoutes: string[];
-};
-
 export interface VpnStartInput {
   server: ServerConfig;
   routing: RoutingConfig;
+  /** Omit or leave empty to use the encoder's default LAN exclusions. */
   excludedRoutes?: string[];
 }
 

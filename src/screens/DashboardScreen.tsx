@@ -137,7 +137,6 @@ export default function DashboardScreen() {
       await VpnClient.start({
         server: updatedServer,
         routing,
-        excludedRoutes: [],
       });
       appendDebugLog('Connect request sent to VPN client.');
       syncStateWithNative('after connect').catch(error => {
