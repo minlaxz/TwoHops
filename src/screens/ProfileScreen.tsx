@@ -3,7 +3,11 @@ import { Alert, Text, StyleSheet, View, TextInput } from 'react-native';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useSetupConfig } from '../context/SetupConfigContext';
-import { splitList, fetchRemoteURL } from '../services/utils';
+import {
+  parseRules,
+  resolveRules,
+  serializeRules,
+} from '../services/routingRules';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme, ThemePreference } from '../theme/colors';
 
@@ -275,8 +279,7 @@ export default function ServerScreen() {
 
         <View style={styles.row}>
           <Text style={styles.rowLabel}>
-            * Current rules:{' '}
-            {rulesText.length ? rulesText.split('\n').length : 0}
+            * Current rules: {parseRules(rulesText).length}
           </Text>
           {/* <TouchableOpacityButton
             touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
@@ -290,18 +293,18 @@ export default function ServerScreen() {
             textStyles={styles.modeButtonText}
             title="Save"
             onPress={async () => {
-              const localRules = splitList(localRoutingRulesText);
-              let remoteRules: string[] = [];
-              if (remoteRoutingURL) {
-                const remoteRoutingRulesText = await fetchRemoteURL(
+              try {
+                const merged = await resolveRules(
+                  localRoutingRulesText,
                   remoteRoutingURL,
                 );
-                remoteRules = splitList(remoteRoutingRulesText);
+                setRulesText(serializeRules(merged));
+              } catch (error) {
+                Alert.alert(
+                  'Remote rules failed',
+                  error instanceof Error ? error.message : String(error),
+                );
               }
-              const mergedRules = Array.from(
-                new Set([...localRules, ...remoteRules]),
-              );
-              setRulesText(mergedRules.join('\n'));
             }}
           />
         </View>
