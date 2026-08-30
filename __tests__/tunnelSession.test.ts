@@ -201,3 +201,21 @@ test('next command clears lastError', async () => {
   session.connect(input);
   expect(session.getSnapshot().lastError).toBeNull();
 });
+
+test('disconnect (cancel) also clears lastError', async () => {
+  const { session, probes, emit, rejectStart } = make();
+  await settle();
+  rejectStart('denied');
+  session.connect(input);
+  await settle();
+  expect(session.getSnapshot().lastError?.code).toBe('start-failed');
+  emit('connecting'); // native reports a late start on its own
+  probes.push('disconnected');
+  session.disconnect();
+  expect(session.getSnapshot()).toEqual({
+    state: 'disconnecting',
+    lastError: null,
+  });
+  await settle();
+  expect(session.getSnapshot().state).toBe('disconnected');
+});
