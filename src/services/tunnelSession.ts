@@ -11,7 +11,7 @@ export type TunnelNativePort = {
   onState(listener: (state: NativeStateReport) => void): () => void;
 };
 
-const KNOWN_STATES: ReadonlySet<string> = new Set<VpnManagerState>([
+const KNOWN_STATES: ReadonlySet<NativeStateReport> = new Set<VpnManagerState>([
   'disconnected',
   'connecting',
   'connected',
@@ -19,6 +19,8 @@ const KNOWN_STATES: ReadonlySet<string> = new Set<VpnManagerState>([
   'recovering',
   'waitingForNetwork',
 ]);
+const isKnownState = (r: NativeStateReport): r is VpnManagerState =>
+  KNOWN_STATES.has(r);
 
 export type SessionState = VpnManagerState | 'disconnecting';
 export type SessionErrorCode =
@@ -71,8 +73,8 @@ export function createTunnelSession(
   };
   // An unknown native state collapses to `disconnected` and is logged.
   const normalize = (report: NativeStateReport): VpnManagerState => {
-    if (KNOWN_STATES.has(report)) {
-      return report as VpnManagerState;
+    if (isKnownState(report)) {
+      return report;
     }
     debug(`Unknown native state: ${report}. Treating as disconnected.`);
     return 'disconnected';
@@ -80,7 +82,7 @@ export function createTunnelSession(
 
   // `gen` is captured when the command is issued: a native event that lands
   // while the native promise is still pending also ends Reconciliation.
-  const reconcile = async (after: string, gen: number) => {
+  const reconcile = async (after: 'connect' | 'disconnect', gen: number) => {
     for (const ms of probeDelays) {
       await delay(ms);
       if (gen !== generation) {
