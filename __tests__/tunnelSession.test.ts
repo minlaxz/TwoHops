@@ -245,9 +245,11 @@ test('stop rejection → stop-failed; disconnect while disconnected is a no-op',
   await settle();
   rejectStop('busy');
   session.disconnect();
+  expect(session.getSnapshot().state).toBe('disconnecting');
   await settle();
+  // Native still reports connected → back to connected, switch usable again.
   expect(session.getSnapshot()).toEqual({
-    state: 'disconnecting',
+    state: 'connected',
     lastError: { code: 'stop-failed', message: 'busy' },
   });
   const { session: idle, stopCalls: idleStops } = make();

@@ -174,11 +174,17 @@ export function createTunnelSession(
       const gen = generation;
       port.stop().then(
         () => reconcile('disconnect', gen),
-        e =>
-          gen === generation &&
-          set({
-            lastError: { code: 'stop-failed', message: errorMessage(e) },
-          }),
+        async e => {
+          // Native is truth: a failed stop leaves the tunnel wherever it was,
+          // so re-read instead of sitting on `disconnecting` forever.
+          const native = normalize(await port.getCurrentState());
+          if (gen === generation) {
+            set({
+              state: native,
+              lastError: { code: 'stop-failed', message: errorMessage(e) },
+            });
+          }
+        },
       );
     },
   };
