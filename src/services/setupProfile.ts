@@ -45,6 +45,8 @@ export type MissingField =
 
 export type StartError = { kind: 'incomplete'; missing: MissingField[] };
 
+export type ProfileLinkError = { kind: 'scheme' } | { kind: 'malformed' };
+
 export const PROFILE_STORAGE_KEY = '@twohops/setup/profile';
 
 export const LEGACY_STORAGE_KEYS = {
@@ -107,6 +109,56 @@ export function updateServer(
   patch: Partial<ServerCredentials>,
 ): SetupProfile {
   return { ...profile, server: { ...profile.server, ...patch } };
+}
+
+// Profile Link: twohops://…?login=&password=&ip=&domain=&protocol=&dns=&remoteRules=
+// Overwrites only the fields the link carries. Pure — no network.
+// ponytail: hand parser; RN's URLSearchParams lacks get(), and this is 15 lines.
+export function applyProfileLink(
+  profile: SetupProfile,
+  link: string,
+): Result<SetupProfile, ProfileLinkError> {
+  const match = link
+    .trim()
+    .match(/^([a-z][a-z\d+\-.]*):(?:[^?#]*)(?:\?([^#]*))?/i);
+  if (!match) {
+    return { ok: false, error: { kind: 'malformed' } };
+  }
+  if (match[1].toLowerCase() !== 'twohops') {
+    return { ok: false, error: { kind: 'scheme' } };
+  }
+  const params = new Map<string, string>();
+  try {
+    for (const pair of (match[2] ?? '').split('&')) {
+      if (!pair) continue;
+      const [key, ...rest] = pair.split('=');
+      params.set(decodeURIComponent(key), decodeURIComponent(rest.join('=')));
+    }
+  } catch {
+    return { ok: false, error: { kind: 'malformed' } };
+  }
+  const server: Partial<ServerCredentials> = {};
+  const set = (key: string, field: Exclude<MissingField, 'name'>) => {
+    const value = params.get(key);
+    if (value !== undefined) server[field] = value;
+  };
+  set('login', 'login');
+  set('password', 'password');
+  set('ip', 'ipAddress');
+  set('domain', 'domain');
+  const protocol = params.get('protocol');
+  if (PROTOCOLS.includes(protocol as VpnProtocol)) {
+    server.vpnProtocol = protocol as VpnProtocol;
+  }
+  const patch: Partial<SetupProfile> = {};
+  const dns = params.get('dns');
+  if (dns !== undefined) patch.dnsServers = parseRules(dns);
+  const remoteRules = params.get('remoteRules');
+  if (remoteRules !== undefined) patch.remoteRulesURL = remoteRules;
+  return {
+    ok: true,
+    value: updateProfile(updateServer(profile, server), patch),
+  };
 }
 
 // --- derivations -----------------------------------------------------------

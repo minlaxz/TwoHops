@@ -3,6 +3,7 @@ import {
   updateProfile,
   updateServer,
   clearProfile,
+  applyProfileLink,
   effectiveRules,
   missingFields,
   tunnelStartInput,
@@ -259,5 +260,63 @@ describe('saveProfile / loadProfile', () => {
     expect([...map.entries()]).toEqual([[PROFILE_STORAGE_KEY, doc]]);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe('applyProfileLink', () => {
+  const base = completeProfile();
+
+  test('wrong scheme is an error', () => {
+    expect(applyProfileLink(base, 'https://x?login=a')).toEqual({
+      ok: false,
+      error: { kind: 'scheme' },
+    });
+  });
+
+  test('malformed link is an error', () => {
+    expect(applyProfileLink(base, 'not a url').ok).toBe(false);
+    expect(applyProfileLink(base, '').ok).toBe(false);
+  });
+
+  test('full link overwrites every carried field', () => {
+    const url =
+      'twohops://import-profile?login=u2&password=p%3D%3D&ip=1.2.3.4' +
+      '&domain=tls.example.com&protocol=Http%2F2' +
+      '&dns=https://dns.nextdns.io,1.1.1.1&remoteRules=https://r.example.com/rules.txt';
+    const result = applyProfileLink(base, url);
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        ...base,
+        server: {
+          ...base.server,
+          login: 'u2',
+          password: 'p==',
+          ipAddress: '1.2.3.4',
+          domain: 'tls.example.com',
+          vpnProtocol: 'Http/2',
+        },
+        dnsServers: ['https://dns.nextdns.io', '1.1.1.1'],
+        remoteRulesURL: 'https://r.example.com/rules.txt',
+      },
+    });
+    expect(base.server.login).toBe('user');
+  });
+
+  test('partial link changes only carried fields', () => {
+    const result = applyProfileLink(base, 'twohops://x?ip=9.9.9.9&dns=8.8.8.8');
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        ...base,
+        server: { ...base.server, ipAddress: '9.9.9.9' },
+        dnsServers: ['8.8.8.8'],
+      },
+    });
+  });
+
+  test('unknown protocol value is ignored', () => {
+    const result = applyProfileLink(base, 'twohops://x?protocol=bogus');
+    expect(result).toEqual({ ok: true, value: base });
   });
 });
