@@ -1,33 +1,26 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Text, StyleSheet, View, TextInput } from 'react-native';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
-import { useSetupConfig } from '../context/SetupConfigContext';
-import {
-  parseRules,
-  resolveRules,
-  serializeRules,
-} from '../services/routingRules';
+import { useSetupProfile } from '../context/SetupProfileContext';
+import { fetchRemoteRules, parseRules } from '../services/routingRules';
+import { effectiveRules } from '../services/setupProfile';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme, ThemePreference } from '../theme/colors';
 
 export default function ServerScreen() {
-  const {
-    server,
-    setServer,
-    routingMode,
-    setRoutingMode,
-    rulesText,
-    setRulesText,
-    dnsServersText,
-    setDnsServersText,
-    localRoutingRulesText,
-    setLocalRoutingRulesText,
-    remoteRoutingURL,
-    setRemoteRoutingURL,
-    clearSetupConfig,
-  } = useSetupConfig();
+  const { profile, patchProfile, patchServer, clear } = useSetupProfile();
+  const { server, routingMode, localRulesText, remoteRulesURL } = profile;
   const [url, setURL] = useState<string>('');
+  // DNS text is only a display of the DNS Servers list; local state keeps
+  // the user's in-progress punctuation while the list is the source of truth.
+  const dnsList = profile.dnsServers.join(',');
+  const [dnsText, setDnsText] = useState(dnsList);
+  useEffect(() => {
+    setDnsText(prev =>
+      parseRules(prev).join(',') === dnsList ? prev : dnsList,
+    );
+  }, [dnsList]);
   const { theme, themePreference, setThemePreference } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const placeholderTextColor = theme.colors.placeholder;
@@ -101,20 +94,19 @@ export default function ServerScreen() {
               const vpnProtocol =
                 protocolParam === 'Http/2' ? 'Http/2' : 'QUIC';
               const dns = urlObj.searchParams.get('dns') ?? '';
-              const remoteRulesURL =
-                urlObj.searchParams.get('remoteRules') ?? '';
+              const remoteRules = urlObj.searchParams.get('remoteRules') ?? '';
 
-              setServer(prev => ({
-                ...prev,
+              patchServer({
                 ipAddress,
                 domain,
                 login,
                 password: parsedPassword,
                 vpnProtocol,
-              }));
-
-              setDnsServersText(dns);
-              setRemoteRoutingURL(remoteRulesURL);
+              });
+              patchProfile({
+                dnsServers: parseRules(dns),
+                remoteRulesURL: remoteRules,
+              });
             } catch (error) {
               console.error('Failed to parse URL:', error);
             }
@@ -127,7 +119,7 @@ export default function ServerScreen() {
           placeholder="Name"
           placeholderTextColor={placeholderTextColor}
           value={server.name}
-          onChangeText={value => setServer(prev => ({ ...prev, name: value }))}
+          onChangeText={value => patchServer({ name: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -135,9 +127,7 @@ export default function ServerScreen() {
           placeholder="Server IP Address"
           placeholderTextColor={placeholderTextColor}
           value={server.ipAddress}
-          onChangeText={value =>
-            setServer(prev => ({ ...prev, ipAddress: value }))
-          }
+          onChangeText={value => patchServer({ ipAddress: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -145,9 +135,7 @@ export default function ServerScreen() {
           placeholder="TLS Domain Name"
           placeholderTextColor={placeholderTextColor}
           value={server.domain}
-          onChangeText={value =>
-            setServer(prev => ({ ...prev, domain: value }))
-          }
+          onChangeText={value => patchServer({ domain: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -155,7 +143,7 @@ export default function ServerScreen() {
           placeholder="Username"
           placeholderTextColor={placeholderTextColor}
           value={server.login}
-          onChangeText={value => setServer(prev => ({ ...prev, login: value }))}
+          onChangeText={value => patchServer({ login: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -163,9 +151,7 @@ export default function ServerScreen() {
           placeholder="Password"
           placeholderTextColor={placeholderTextColor}
           value={server.password}
-          onChangeText={value =>
-            setServer(prev => ({ ...prev, password: value }))
-          }
+          onChangeText={value => patchServer({ password: value })}
           secureTextEntry
         />
         <Text style={styles.inputLabel}>DNS Servers:</Text>
@@ -173,8 +159,11 @@ export default function ServerScreen() {
           style={styles.input}
           placeholder="DNS Servers (comma-separated)"
           placeholderTextColor={placeholderTextColor}
-          value={dnsServersText}
-          onChangeText={setDnsServersText}
+          value={dnsText}
+          onChangeText={value => {
+            setDnsText(value);
+            patchProfile({ dnsServers: parseRules(value) });
+          }}
           autoCapitalize="none"
         />
         <View style={styles.row}>
@@ -191,9 +180,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="Http/2"
-              onPress={() =>
-                setServer(prev => ({ ...prev, vpnProtocol: 'Http/2' }))
-              }
+              onPress={() => patchServer({ vpnProtocol: 'Http/2' })}
             />
             <View style={styles.rowSpacer} />
             <TouchableOpacityButton
@@ -205,9 +192,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="QUIC"
-              onPress={() =>
-                setServer(prev => ({ ...prev, vpnProtocol: 'QUIC' }))
-              }
+              onPress={() => patchServer({ vpnProtocol: 'QUIC' })}
             />
           </View>
         </View>
@@ -224,7 +209,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="General"
-              onPress={() => setRoutingMode('general')}
+              onPress={() => patchProfile({ routingMode: 'general' })}
             />
             <View style={styles.rowSpacer} />
             <TouchableOpacityButton
@@ -237,7 +222,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="Selective"
-              onPress={() => setRoutingMode('selective')}
+              onPress={() => patchProfile({ routingMode: 'selective' })}
             />
           </View>
         </View>
@@ -251,8 +236,8 @@ export default function ServerScreen() {
           style={styles.input}
           placeholder="https://..."
           placeholderTextColor={placeholderTextColor}
-          value={remoteRoutingURL}
-          onChangeText={setRemoteRoutingURL}
+          value={remoteRulesURL}
+          onChangeText={value => patchProfile({ remoteRulesURL: value })}
           autoCapitalize="none"
         />
         <Text style={styles.inputDescription}>
@@ -265,21 +250,21 @@ export default function ServerScreen() {
           style={styles.multilineInput}
           placeholder="example.com, facebook.com"
           placeholderTextColor={placeholderTextColor}
-          value={localRoutingRulesText}
-          onChangeText={setLocalRoutingRulesText}
+          value={localRulesText}
+          onChangeText={value => patchProfile({ localRulesText: value })}
           autoCapitalize="none"
           multiline
           textAlignVertical="top"
         />
         <Text style={styles.inputDescription}>
-          * Domains listed here will be merged with the remote rules (if URL is
-          provided) when you save.
+          * Domains listed here are merged with the imported remote rules (if
+          any) when you connect. Press Import to refresh the remote rules.
         </Text>
         <View style={styles.line} />
 
         <View style={styles.row}>
           <Text style={styles.rowLabel}>
-            * Current rules: {parseRules(rulesText).length}
+            * Effective rules: {effectiveRules(profile).length}
           </Text>
           {/* <TouchableOpacityButton
             touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
@@ -291,14 +276,16 @@ export default function ServerScreen() {
           <TouchableOpacityButton
             touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
             textStyles={styles.modeButtonText}
-            title="Save"
+            title="Import"
             onPress={async () => {
               try {
-                const merged = await resolveRules(
-                  localRoutingRulesText,
-                  remoteRoutingURL,
-                );
-                setRulesText(serializeRules(merged));
+                const importedRules = remoteRulesURL.trim()
+                  ? await fetchRemoteRules(remoteRulesURL.trim())
+                  : [];
+                patchProfile({
+                  importedRules,
+                  importedAt: new Date().toISOString(),
+                });
               } catch (error) {
                 Alert.alert(
                   'Remote rules failed',
@@ -322,8 +309,8 @@ export default function ServerScreen() {
                   text: 'Clear',
                   style: 'destructive',
                   onPress: () => {
-                    clearSetupConfig().catch(error => {
-                      console.error('Failed to clear setup config:', error);
+                    clear().catch(error => {
+                      console.error('Failed to clear Setup Profile:', error);
                     });
                     setURL('');
                   },

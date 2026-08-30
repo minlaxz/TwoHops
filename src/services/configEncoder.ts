@@ -25,7 +25,7 @@ export function encodeConfig(input: VpnStartInput): string {
   const postQuantumGroupEnabled = false;
 
   const exclusions = parseToConfigList(expandRules(routing.rules));
-  const dnsUpStreams = parseToConfigList(server.dnsServers ?? []);
+  const dnsUpStreams = parseToConfigList(server.dnsServers);
   const hostName = parseToConfigString(server.domain);
 
   const hasIpv6 = false;

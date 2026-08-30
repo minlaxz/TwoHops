@@ -7,11 +7,22 @@ import React, {
 } from 'react';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { TouchableOpacityButton } from '../components/buttons';
-import { View, Text, StyleSheet, ScrollView, Switch } from 'react-native';
+import {
+  Alert,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Switch,
+} from 'react-native';
 import { VpnClient } from '../services/vpn';
-import { parseRules } from '../services/routingRules';
-import { useSetupConfig } from '../context/SetupConfigContext';
-import type { RoutingConfig, VpnManagerState, ServerConfig } from '../types';
+import { useSetupProfile } from '../context/SetupProfileContext';
+import {
+  effectiveRules,
+  missingFields,
+  tunnelStartInput,
+} from '../services/setupProfile';
+import type { VpnManagerState } from '../types';
 import type { AppTheme } from '../theme/colors';
 import { useAppTheme } from '../context/ThemeContext';
 
@@ -48,37 +59,22 @@ export default function DashboardScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const { server, routingMode, rulesText, dnsServersText, isHydrated } =
-    useSetupConfig();
+  const { profile, isHydrated } = useSetupProfile();
 
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const didLogSetupChangeRef = useRef(false);
   const switchActionInFlightRef = useRef(false);
 
   const setupSummary = useMemo(() => {
-    const dnsServers = parseRules(dnsServersText);
-    const rules = parseRules(rulesText);
-
+    const { server, routingMode, dnsServers } = profile;
     return `server=${server.ipAddress} domain=${server.domain} user=${
       server.login
     } protocol=${server.vpnProtocol}; dns=${
       dnsServers.join(', ') || '-'
-    }; routeMode=${routingMode}; rules=${rules.length};`;
-  }, [
-    dnsServersText,
-    rulesText,
-    routingMode,
-    server.domain,
-    server.ipAddress,
-    server.login,
-    server.vpnProtocol,
-  ]);
+    }; routeMode=${routingMode}; rules=${effectiveRules(profile).length};`;
+  }, [profile]);
 
-  const isProfileComplete =
-    server.ipAddress !== '' &&
-    server.login !== '' &&
-    server.password !== '' &&
-    server.domain !== '';
+  const missing = missingFields(profile);
 
   const appendDebugLog = useCallback((message: string) => {
     setDebugLogs(prev =>
@@ -124,20 +120,13 @@ export default function DashboardScreen() {
     setState('connecting');
 
     try {
-      const routing: RoutingConfig = {
-        mode: routingMode,
-        rules: parseRules(rulesText),
-      };
-
-      const updatedServer: ServerConfig = {
-        ...server,
-        dnsServers: parseRules(dnsServersText),
-      };
-
-      await VpnClient.start({
-        server: updatedServer,
-        routing,
-      });
+      const input = tunnelStartInput(profile);
+      if (!input.ok) {
+        throw new Error(
+          `Profile incomplete: ${input.error.missing.join(', ')}`,
+        );
+      }
+      await VpnClient.start(input.value);
       appendDebugLog('Connect request sent to VPN client.');
       syncStateWithNative('after connect').catch(error => {
         appendDebugLog(
@@ -147,6 +136,7 @@ export default function DashboardScreen() {
     } catch (error) {
       setState('disconnected');
       appendDebugLog(`Connect failed: ${formatError(error)}`);
+      Alert.alert('Connect failed', formatError(error));
     }
   };
 
@@ -313,7 +303,7 @@ export default function DashboardScreen() {
         <View style={styles.rightButton}>
           {!isHydrated ? (
             <Text style={styles.switchHint}>Loading saved profile...</Text>
-          ) : isProfileComplete ? (
+          ) : missing.length === 0 ? (
             <>
               <Switch
                 trackColor={{
@@ -337,8 +327,8 @@ export default function DashboardScreen() {
             </>
           ) : (
             <Text style={styles.switchHint}>
-              No saved profile found. Open Profile and complete setup to enable
-              connect.
+              Profile incomplete. Missing: {missing.join(', ')}. Open Profile to
+              finish setup.
             </Text>
           )}
         </View>

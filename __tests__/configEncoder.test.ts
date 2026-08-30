@@ -9,6 +9,7 @@ test('exclusions line uses expanded Routing Rules (addresses first, then domains
       login: 'u',
       password: 'p',
       vpnProtocol: 'QUIC',
+      dnsServers: [],
     },
     routing: {
       mode: 'general',
@@ -32,6 +33,7 @@ const baseInput = {
     login: 'u',
     password: 'p',
     vpnProtocol: 'QUIC' as const,
+    dnsServers: [],
   },
   routing: { mode: 'general' as const, rules: [] },
 };
