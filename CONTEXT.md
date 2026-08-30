@@ -45,3 +45,19 @@ _Avoid_: is profile complete (boolean only)
 
 **Tunnel Start Input**:
 The value handed to the native tunnel, derived from the Setup Profile: Server Credentials, DNS Servers, Routing Mode and Effective Rules. Distinct from Profile Completeness — a profile can be complete yet unable to start.
+
+**Tunnel Session**:
+The one long-lived object that owns the tunnel's lifecycle: its current Session State, the last Session Error, and the connect / disconnect commands. Exists always; "disconnected" is one of its states, not its absence. Takes a Tunnel Start Input; knows nothing about the Setup Profile.
+_Avoid_: vpn client, vpn session, vpn manager
+
+**Session State**:
+Where the Tunnel Session is right now: `disconnected`, `connecting`, `connected`, `disconnecting`, `waitingForRecovery`, `recovering`, `waitingForNetwork`. All but `disconnecting` are reported by the native tunnel; `disconnecting` is session-owned. The native tunnel is the source of truth — an optimistic state only bridges the gap until the native tunnel confirms.
+_Avoid_: vpn state, manager state, connection status
+
+**Session Error**:
+The reason the last command did not end where it was expected to (for example the native tunnel never confirmed a start). Kept beside the Session State, never encoded as a state. Cleared by the next command.
+_Avoid_: error state
+
+**Reconciliation**:
+The window after a connect or disconnect command during which the Tunnel Session re-reads the native tunnel until the state settles. A command is in flight until Reconciliation ends; a second connect during that window is ignored, a disconnect during it cancels.
+_Avoid_: state probe, sync
