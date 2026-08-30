@@ -1,8 +1,9 @@
 import {
   createTunnelSession,
+  type NativeStateReport,
   type TunnelNativePort,
 } from '../src/services/tunnelSession';
-import type { VpnManagerState, VpnStartInput } from '../src/types';
+import type { VpnStartInput } from '../src/types';
 
 const input: VpnStartInput = {
   server: {
@@ -17,12 +18,13 @@ const input: VpnStartInput = {
   routing: { mode: 'general', rules: [] },
 };
 
-function fakePort(initial: VpnManagerState = 'disconnected') {
-  let listener: ((s: VpnManagerState) => void) | null = null;
-  const probes: VpnManagerState[] = [];
+function fakePort(initial: NativeStateReport = 'disconnected') {
+  let listener: ((s: NativeStateReport) => void) | null = null;
+  const probes: NativeStateReport[] = [];
   const startCalls: VpnStartInput[] = [];
   const stopCalls: true[] = [];
   let startImpl: () => Promise<void> = () => Promise.resolve();
+  let stopImpl: () => Promise<void> = () => Promise.resolve();
   const port: TunnelNativePort = {
     start: i => {
       startCalls.push(i);
@@ -30,7 +32,7 @@ function fakePort(initial: VpnManagerState = 'disconnected') {
     },
     stop: () => {
       stopCalls.push(true);
-      return Promise.resolve();
+      return stopImpl();
     },
     getCurrentState: () => Promise.resolve(probes.shift() ?? initial),
     onState: l => {
@@ -45,16 +47,19 @@ function fakePort(initial: VpnManagerState = 'disconnected') {
     probes,
     startCalls,
     stopCalls,
-    emit: (s: VpnManagerState) => listener?.(s),
+    emit: (s: NativeStateReport) => listener?.(s),
     rejectStart: (msg: string) => {
       startImpl = () => Promise.reject(new Error(msg));
+    },
+    rejectStop: (msg: string) => {
+      stopImpl = () => Promise.reject(new Error(msg));
     },
   };
 }
 
 const settle = () => new Promise(r => setTimeout(r, 20));
 
-function make(initial?: VpnManagerState) {
+function make(initial?: NativeStateReport) {
   const fake = fakePort(initial);
   const session = createTunnelSession(fake.port, { probeDelays: [0, 0, 0] });
   const debug: string[] = [];
@@ -218,4 +223,83 @@ test('disconnect (cancel) also clears lastError', async () => {
   });
   await settle();
   expect(session.getSnapshot().state).toBe('disconnected');
+});
+
+test('disconnect from connected → disconnecting, stop, probes until disconnected', async () => {
+  const { session, probes, stopCalls } = make('connected');
+  await settle();
+  probes.push('connected', 'disconnected', 'disconnected');
+  session.disconnect();
+  expect(session.getSnapshot().state).toBe('disconnecting');
+  expect(stopCalls).toHaveLength(1);
+  await settle();
+  expect(session.getSnapshot()).toEqual({
+    state: 'disconnected',
+    lastError: null,
+  });
+  expect(probes).toEqual(['disconnected']); // third probe never read
+});
+
+test('stop rejection → stop-failed; disconnect while disconnected is a no-op', async () => {
+  const { session, stopCalls, rejectStop } = make('connected');
+  await settle();
+  rejectStop('busy');
+  session.disconnect();
+  await settle();
+  expect(session.getSnapshot()).toEqual({
+    state: 'disconnecting',
+    lastError: { code: 'stop-failed', message: 'busy' },
+  });
+  const { session: idle, stopCalls: idleStops } = make();
+  await settle();
+  idle.disconnect();
+  expect(idleStops).toHaveLength(0);
+  expect(stopCalls).toHaveLength(1);
+});
+
+test('native event during disconnect reconciliation ends it and wins', async () => {
+  const { session, probes, emit } = make('connected');
+  await settle();
+  probes.push('connected', 'connected', 'connected');
+  session.disconnect();
+  emit('disconnected');
+  await settle();
+  expect(session.getSnapshot().state).toBe('disconnected');
+  expect(probes).toHaveLength(3);
+});
+
+test('recovery states pass through from native events', async () => {
+  const { session, emit } = make('connected');
+  await settle();
+  for (const s of [
+    'waitingForRecovery',
+    'recovering',
+    'waitingForNetwork',
+  ] as const) {
+    emit(s);
+    expect(session.getSnapshot().state).toBe(s);
+  }
+});
+
+test('unknown native state → disconnected + debug entry (event, probe, seed)', async () => {
+  const { session, emit, debug } = make('connected');
+  await settle();
+  emit('unknown:9');
+  expect(session.getSnapshot().state).toBe('disconnected');
+  expect(debug.some(m => m.includes('Unknown native state: unknown:9'))).toBe(
+    true,
+  );
+
+  const seeded = make('unknown:7');
+  await settle();
+  expect(seeded.session.getSnapshot().state).toBe('disconnected');
+  expect(seeded.debug.some(m => m.includes('unknown:7'))).toBe(true);
+
+  const probed = make();
+  await settle();
+  probed.probes.push('connecting', 'unknown:8');
+  probed.session.connect(input);
+  await settle();
+  expect(probed.session.getSnapshot().state).toBe('disconnected');
+  expect(probed.debug.some(m => m.includes('unknown:8'))).toBe(true);
 });
