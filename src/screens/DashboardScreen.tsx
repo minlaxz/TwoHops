@@ -48,7 +48,7 @@ const smallButtonTextStyle = { fontWeight: '600' as const, fontSize: 16 };
 
 export default function DashboardScreen() {
   const {
-    snapshot: { state },
+    snapshot: { state, lastError },
     session,
   } = useTunnelSession();
   const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
@@ -211,6 +211,9 @@ export default function DashboardScreen() {
                 {states[state].statusEmoji}
               </Text>
               <Text style={styles.switchHint}>{states[state].switchHint}</Text>
+              {lastError ? (
+                <Text style={styles.errorHint}>{lastError.message}</Text>
+              ) : null}
             </>
           ) : (
             <Text style={styles.switchHint}>
@@ -302,6 +305,13 @@ function createStyles(theme: AppTheme) {
       marginTop: 6,
       fontSize: 12,
       color: theme.colors.textSecondary,
+      textAlign: 'center',
+      paddingHorizontal: 8,
+    },
+    errorHint: {
+      marginTop: 4,
+      fontSize: 12,
+      color: theme.colors.danger,
       textAlign: 'center',
       paddingHorizontal: 8,
     },

@@ -21,13 +21,17 @@ function fakePort(initial: VpnManagerState = 'disconnected') {
   let listener: ((s: VpnManagerState) => void) | null = null;
   const probes: VpnManagerState[] = [];
   const startCalls: VpnStartInput[] = [];
+  const stopCalls: true[] = [];
   let startImpl: () => Promise<void> = () => Promise.resolve();
   const port: TunnelNativePort = {
     start: i => {
       startCalls.push(i);
       return startImpl();
     },
-    stop: () => Promise.resolve(),
+    stop: () => {
+      stopCalls.push(true);
+      return Promise.resolve();
+    },
     getCurrentState: () => Promise.resolve(probes.shift() ?? initial),
     onState: l => {
       listener = l;
@@ -40,6 +44,7 @@ function fakePort(initial: VpnManagerState = 'disconnected') {
     port,
     probes,
     startCalls,
+    stopCalls,
     emit: (s: VpnManagerState) => listener?.(s),
     rejectStart: (msg: string) => {
       startImpl = () => Promise.reject(new Error(msg));
@@ -130,4 +135,87 @@ test('start rejection → disconnected + start-failed', async () => {
     state: 'disconnected',
     lastError: { code: 'start-failed', message: 'denied' },
   });
+});
+
+test('final probe disconnected → disconnected + start-not-confirmed', async () => {
+  const { session, probes } = make();
+  await settle();
+  probes.push('connecting', 'connecting', 'disconnected');
+  session.connect(input);
+  await settle();
+  expect(session.getSnapshot()).toEqual({
+    state: 'disconnected',
+    lastError: {
+      code: 'start-not-confirmed',
+      message: 'The tunnel never confirmed the start.',
+    },
+  });
+});
+
+test('final probe still connecting → stays connecting until native event', async () => {
+  const { session, probes, emit } = make();
+  await settle();
+  probes.push('connecting', 'connecting', 'connecting');
+  session.connect(input);
+  await settle();
+  expect(session.getSnapshot()).toEqual({
+    state: 'connecting',
+    lastError: null,
+  });
+  emit('connected');
+  expect(session.getSnapshot().state).toBe('connected');
+});
+
+test('connect while not disconnected is a no-op', async () => {
+  const { session, startCalls } = make('connected');
+  await settle();
+  session.connect(input);
+  expect(startCalls).toHaveLength(0);
+});
+
+test('disconnect during connecting → disconnecting, stop, reconciles to disconnected', async () => {
+  const { session, probes, stopCalls } = make();
+  await settle();
+  probes.push('connecting', 'connecting', 'connecting');
+  session.connect(input);
+  session.disconnect();
+  expect(session.getSnapshot().state).toBe('disconnecting');
+  expect(stopCalls).toHaveLength(1);
+  probes.length = 0;
+  probes.push('disconnected');
+  await settle();
+  expect(session.getSnapshot()).toEqual({
+    state: 'disconnected',
+    lastError: null,
+  });
+});
+
+test('next command clears lastError', async () => {
+  const { session, rejectStart, probes } = make();
+  await settle();
+  rejectStart('denied');
+  session.connect(input);
+  await settle();
+  expect(session.getSnapshot().lastError?.code).toBe('start-failed');
+  probes.push('connecting', 'connecting', 'connecting');
+  session.connect(input);
+  expect(session.getSnapshot().lastError).toBeNull();
+});
+
+test('disconnect (cancel) also clears lastError', async () => {
+  const { session, probes, emit, rejectStart } = make();
+  await settle();
+  rejectStart('denied');
+  session.connect(input);
+  await settle();
+  expect(session.getSnapshot().lastError?.code).toBe('start-failed');
+  emit('connecting'); // native reports a late start on its own
+  probes.push('disconnected');
+  session.disconnect();
+  expect(session.getSnapshot()).toEqual({
+    state: 'disconnecting',
+    lastError: null,
+  });
+  await settle();
+  expect(session.getSnapshot().state).toBe('disconnected');
 });

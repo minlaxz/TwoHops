@@ -71,11 +71,21 @@ export function createTunnelSession(
         return;
       }
       debug(`Probe (${after}): ${native}.`);
+      if (native === 'connected' || native === 'disconnected') {
+        set({
+          state: native,
+          lastError:
+            after === 'connect' && native === 'disconnected'
+              ? {
+                  code: 'start-not-confirmed',
+                  message: 'The tunnel never confirmed the start.',
+                }
+              : null,
+        });
+        return;
+      }
       if (native !== snapshot.state) {
         set({ state: native });
-      }
-      if (native === 'connected' || native === 'disconnected') {
-        return;
       }
     }
   };
