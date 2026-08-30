@@ -10,13 +10,12 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from 'react-native-config';
 import {
-  clearProfile,
+  clearProfile as clearProfileIntent,
   defaultProfile,
   loadProfile,
   saveProfile,
-  updateProfile,
-  updateServer,
-  PROFILE_STORAGE_KEY,
+  updateProfile as updateProfileIntent,
+  updateServer as updateServerIntent,
   type ProfileEnv,
   type ProfileStorage,
   type ServerCredentials,
@@ -26,9 +25,9 @@ import {
 type SetupProfileContextValue = {
   profile: SetupProfile;
   isHydrated: boolean;
-  patchProfile: (patch: Partial<Omit<SetupProfile, 'version'>>) => void;
-  patchServer: (patch: Partial<ServerCredentials>) => void;
-  clear: () => Promise<void>;
+  updateProfile: (patch: Partial<Omit<SetupProfile, 'version'>>) => void;
+  updateServer: (patch: Partial<ServerCredentials>) => void;
+  clearProfile: () => void;
 };
 
 const env: ProfileEnv = Config as ProfileEnv;
@@ -86,24 +85,25 @@ export function SetupProfileProvider({
     });
   }, [isHydrated, profile, storage]);
 
-  const patchProfile = useCallback(
+  const updateProfile = useCallback(
     (patch: Partial<Omit<SetupProfile, 'version'>>) =>
-      setProfile(prev => updateProfile(prev, patch)),
+      setProfile(prev => updateProfileIntent(prev, patch)),
     [],
   );
-  const patchServer = useCallback(
+  const updateServer = useCallback(
     (patch: Partial<ServerCredentials>) =>
-      setProfile(prev => updateServer(prev, patch)),
+      setProfile(prev => updateServerIntent(prev, patch)),
     [],
   );
-  const clear = useCallback(async () => {
-    await storage.multiRemove([PROFILE_STORAGE_KEY]);
-    setProfile(clearProfile(env));
-  }, [storage]);
+  // Persist effect writes the defaults; nothing else to remove.
+  const clearProfile = useCallback(
+    () => setProfile(clearProfileIntent(env)),
+    [],
+  );
 
   const value = useMemo(
-    () => ({ profile, isHydrated, patchProfile, patchServer, clear }),
-    [profile, isHydrated, patchProfile, patchServer, clear],
+    () => ({ profile, isHydrated, updateProfile, updateServer, clearProfile }),
+    [profile, isHydrated, updateProfile, updateServer, clearProfile],
   );
 
   return (

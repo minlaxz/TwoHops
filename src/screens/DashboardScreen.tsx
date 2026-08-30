@@ -119,13 +119,16 @@ export default function DashboardScreen() {
     appendDebugLog(`Setup config: ${setupSummary}`);
     setState('connecting');
 
+    const input = tunnelStartInput(profile);
+    if (!input.ok) {
+      setState('disconnected');
+      const message = `Profile incomplete: ${input.error.missing.join(', ')}`;
+      appendDebugLog(`Connect refused: ${message}`);
+      Alert.alert('Connect refused', message);
+      return;
+    }
+
     try {
-      const input = tunnelStartInput(profile);
-      if (!input.ok) {
-        throw new Error(
-          `Profile incomplete: ${input.error.missing.join(', ')}`,
-        );
-      }
       await VpnClient.start(input.value);
       appendDebugLog('Connect request sent to VPN client.');
       syncStateWithNative('after connect').catch(error => {

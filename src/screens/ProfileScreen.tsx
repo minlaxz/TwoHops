@@ -9,7 +9,8 @@ import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme, ThemePreference } from '../theme/colors';
 
 export default function ServerScreen() {
-  const { profile, patchProfile, patchServer, clear } = useSetupProfile();
+  const { profile, updateProfile, updateServer, clearProfile } =
+    useSetupProfile();
   const { server, routingMode, localRulesText, remoteRulesURL } = profile;
   const [url, setURL] = useState<string>('');
   // DNS text is only a display of the DNS Servers list; local state keeps
@@ -94,18 +95,19 @@ export default function ServerScreen() {
               const vpnProtocol =
                 protocolParam === 'Http/2' ? 'Http/2' : 'QUIC';
               const dns = urlObj.searchParams.get('dns') ?? '';
-              const remoteRules = urlObj.searchParams.get('remoteRules') ?? '';
+              const linkRemoteRulesURL =
+                urlObj.searchParams.get('remoteRules') ?? '';
 
-              patchServer({
+              updateServer({
                 ipAddress,
                 domain,
                 login,
                 password: parsedPassword,
                 vpnProtocol,
               });
-              patchProfile({
+              updateProfile({
                 dnsServers: parseRules(dns),
-                remoteRulesURL: remoteRules,
+                remoteRulesURL: linkRemoteRulesURL,
               });
             } catch (error) {
               console.error('Failed to parse URL:', error);
@@ -119,7 +121,7 @@ export default function ServerScreen() {
           placeholder="Name"
           placeholderTextColor={placeholderTextColor}
           value={server.name}
-          onChangeText={value => patchServer({ name: value })}
+          onChangeText={value => updateServer({ name: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -127,7 +129,7 @@ export default function ServerScreen() {
           placeholder="Server IP Address"
           placeholderTextColor={placeholderTextColor}
           value={server.ipAddress}
-          onChangeText={value => patchServer({ ipAddress: value })}
+          onChangeText={value => updateServer({ ipAddress: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -135,7 +137,7 @@ export default function ServerScreen() {
           placeholder="TLS Domain Name"
           placeholderTextColor={placeholderTextColor}
           value={server.domain}
-          onChangeText={value => patchServer({ domain: value })}
+          onChangeText={value => updateServer({ domain: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -143,7 +145,7 @@ export default function ServerScreen() {
           placeholder="Username"
           placeholderTextColor={placeholderTextColor}
           value={server.login}
-          onChangeText={value => patchServer({ login: value })}
+          onChangeText={value => updateServer({ login: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -151,7 +153,7 @@ export default function ServerScreen() {
           placeholder="Password"
           placeholderTextColor={placeholderTextColor}
           value={server.password}
-          onChangeText={value => patchServer({ password: value })}
+          onChangeText={value => updateServer({ password: value })}
           secureTextEntry
         />
         <Text style={styles.inputLabel}>DNS Servers:</Text>
@@ -162,7 +164,7 @@ export default function ServerScreen() {
           value={dnsText}
           onChangeText={value => {
             setDnsText(value);
-            patchProfile({ dnsServers: parseRules(value) });
+            updateProfile({ dnsServers: parseRules(value) });
           }}
           autoCapitalize="none"
         />
@@ -180,7 +182,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="Http/2"
-              onPress={() => patchServer({ vpnProtocol: 'Http/2' })}
+              onPress={() => updateServer({ vpnProtocol: 'Http/2' })}
             />
             <View style={styles.rowSpacer} />
             <TouchableOpacityButton
@@ -192,7 +194,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="QUIC"
-              onPress={() => patchServer({ vpnProtocol: 'QUIC' })}
+              onPress={() => updateServer({ vpnProtocol: 'QUIC' })}
             />
           </View>
         </View>
@@ -209,7 +211,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="General"
-              onPress={() => patchProfile({ routingMode: 'general' })}
+              onPress={() => updateProfile({ routingMode: 'general' })}
             />
             <View style={styles.rowSpacer} />
             <TouchableOpacityButton
@@ -222,7 +224,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="Selective"
-              onPress={() => patchProfile({ routingMode: 'selective' })}
+              onPress={() => updateProfile({ routingMode: 'selective' })}
             />
           </View>
         </View>
@@ -237,7 +239,7 @@ export default function ServerScreen() {
           placeholder="https://..."
           placeholderTextColor={placeholderTextColor}
           value={remoteRulesURL}
-          onChangeText={value => patchProfile({ remoteRulesURL: value })}
+          onChangeText={value => updateProfile({ remoteRulesURL: value })}
           autoCapitalize="none"
         />
         <Text style={styles.inputDescription}>
@@ -251,14 +253,14 @@ export default function ServerScreen() {
           placeholder="example.com, facebook.com"
           placeholderTextColor={placeholderTextColor}
           value={localRulesText}
-          onChangeText={value => patchProfile({ localRulesText: value })}
+          onChangeText={value => updateProfile({ localRulesText: value })}
           autoCapitalize="none"
           multiline
           textAlignVertical="top"
         />
         <Text style={styles.inputDescription}>
-          * Domains listed here are merged with the imported remote rules (if
-          any) when you connect. Press Import to refresh the remote rules.
+          * Domains listed here are merged with the Imported Rules (if any) when
+          you connect. Press Import to refresh the Imported Rules.
         </Text>
         <View style={styles.line} />
 
@@ -278,17 +280,20 @@ export default function ServerScreen() {
             textStyles={styles.modeButtonText}
             title="Import"
             onPress={async () => {
+              const importURL = remoteRulesURL.trim();
+              if (!importURL) {
+                Alert.alert('No Remote Rules URL', 'Enter a URL to import.');
+                return;
+              }
               try {
-                const importedRules = remoteRulesURL.trim()
-                  ? await fetchRemoteRules(remoteRulesURL.trim())
-                  : [];
-                patchProfile({
+                const importedRules = await fetchRemoteRules(importURL);
+                updateProfile({
                   importedRules,
                   importedAt: new Date().toISOString(),
                 });
               } catch (error) {
                 Alert.alert(
-                  'Remote rules failed',
+                  'Import failed',
                   error instanceof Error ? error.message : String(error),
                 );
               }
@@ -309,9 +314,7 @@ export default function ServerScreen() {
                   text: 'Clear',
                   style: 'destructive',
                   onPress: () => {
-                    clear().catch(error => {
-                      console.error('Failed to clear Setup Profile:', error);
-                    });
+                    clearProfile();
                     setURL('');
                   },
                 },

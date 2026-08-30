@@ -58,7 +58,7 @@ test('hydrates from storage and persists edits', async () => {
   expect(ctx().profile.dnsServers).toEqual(['1.1.1.1']);
 
   await ReactTestRenderer.act(async () => {
-    ctx().patchProfile({ dnsServers: ['9.9.9.9'] });
+    ctx().updateProfile({ dnsServers: ['9.9.9.9'] });
   });
   await flush();
   expect(JSON.parse(map.get(PROFILE_STORAGE_KEY)!).dnsServers).toEqual([
@@ -81,10 +81,10 @@ test('clear resets to defaults', async () => {
   const { storage, map } = memoryStorage();
   const ctx = await mount(storage);
   await ReactTestRenderer.act(async () => {
-    ctx().patchServer({ login: 'bob' });
+    ctx().updateServer({ login: 'bob' });
   });
   await ReactTestRenderer.act(async () => {
-    await ctx().clear();
+    ctx().clearProfile();
   });
   await flush();
   expect(ctx().profile.server.login).toBe('');
