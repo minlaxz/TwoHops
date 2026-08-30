@@ -76,12 +76,12 @@ export default function ServerScreen() {
         <TouchableOpacityButton
           touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
           textStyles={styles.modeButtonText}
-          title="Auto Fill"
+          title="Apply Link"
           onPress={() => {
             const result = applyProfileLink(profile, url);
             if (!result.ok) {
               Alert.alert(
-                'Auto Fill failed',
+                'Profile Link failed',
                 result.error.kind === 'scheme'
                   ? 'Link must start with twohops://'
                   : 'Link is not a valid URL.',

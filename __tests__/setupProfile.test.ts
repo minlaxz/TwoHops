@@ -274,7 +274,10 @@ describe('applyProfileLink', () => {
   });
 
   test('malformed link is an error', () => {
-    expect(applyProfileLink(base, 'not a url').ok).toBe(false);
+    expect(applyProfileLink(base, 'not a url')).toEqual({
+      ok: false,
+      error: { kind: 'malformed' },
+    });
     expect(applyProfileLink(base, '').ok).toBe(false);
   });
 

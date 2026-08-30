@@ -65,6 +65,10 @@ export const LEGACY_STORAGE_KEYS = {
 
 const ROUTING_MODES: RoutingMode[] = ['general', 'selective'];
 const PROTOCOLS: VpnProtocol[] = ['Http/2', 'QUIC'];
+const pick = <T extends string>(
+  value: string | null | undefined,
+  allowed: T[],
+) => (allowed.includes(value as T) ? (value as T) : undefined);
 const REQUIRED_FIELDS: MissingField[] = [
   'name',
   'ipAddress',
@@ -138,18 +142,21 @@ export function applyProfileLink(
     return { ok: false, error: { kind: 'malformed' } };
   }
   const server: Partial<ServerCredentials> = {};
-  const set = (key: string, field: Exclude<MissingField, 'name'>) => {
+  const textParams: Record<
+    string,
+    keyof Omit<ServerCredentials, 'vpnProtocol'>
+  > = {
+    login: 'login',
+    password: 'password',
+    ip: 'ipAddress',
+    domain: 'domain',
+  };
+  for (const [key, field] of Object.entries(textParams)) {
     const value = params.get(key);
     if (value !== undefined) server[field] = value;
-  };
-  set('login', 'login');
-  set('password', 'password');
-  set('ip', 'ipAddress');
-  set('domain', 'domain');
-  const protocol = params.get('protocol');
-  if (PROTOCOLS.includes(protocol as VpnProtocol)) {
-    server.vpnProtocol = protocol as VpnProtocol;
   }
+  const protocol = pick(params.get('protocol'), PROTOCOLS);
+  if (protocol !== undefined) server.vpnProtocol = protocol;
   const patch: Partial<SetupProfile> = {};
   const dns = params.get('dns');
   if (dns !== undefined) patch.dnsServers = parseRules(dns);
@@ -229,8 +236,6 @@ async function migrateLegacy(
     return null;
   }
   const get = (key: string) => values[keys.indexOf(key)];
-  const pick = <T extends string>(value: string | null, allowed: T[]) =>
-    allowed.includes(value as T) ? (value as T) : undefined;
   const base = defaultProfile(env);
   const profile: SetupProfile = {
     ...base,
