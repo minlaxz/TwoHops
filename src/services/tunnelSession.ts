@@ -41,7 +41,7 @@ export function createTunnelSession(
   let snapshot: SessionSnapshot = { state: 'disconnected', lastError: null };
   const listeners = new Set<() => void>();
   const debugListeners = new Set<(entry: DebugEntry) => void>();
-  // Bumped whenever a native event lands; a stale reconciliation stops.
+  // Bumped on every command and native event; stale async results are dropped.
   let generation = 0;
 
   const debug = (message: string) => {
@@ -80,8 +80,10 @@ export function createTunnelSession(
     }
   };
 
+  const seedGen = generation;
   port.getCurrentState().then(
-    state => set({ state }),
+    // A command or native event issued before the seed resolves wins.
+    state => seedGen === generation && set({ state }),
     e => debug(`Failed to read current state: ${errorMessage(e)}`),
   );
   port.onState(state => {
@@ -106,10 +108,12 @@ export function createTunnelSession(
         return;
       }
       set({ state: 'connecting', lastError: null });
+      generation++;
       const gen = generation;
       port.start(input).then(
         () => reconcile('connect', gen),
         e =>
+          gen === generation &&
           set({
             state: 'disconnected',
             lastError: { code: 'start-failed', message: errorMessage(e) },
@@ -125,10 +129,12 @@ export function createTunnelSession(
         return;
       }
       set({ state: 'disconnecting', lastError: null });
+      generation++;
       const gen = generation;
       port.stop().then(
         () => reconcile('disconnect', gen),
         e =>
+          gen === generation &&
           set({
             lastError: { code: 'stop-failed', message: errorMessage(e) },
           }),

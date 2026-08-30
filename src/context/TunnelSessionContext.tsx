@@ -3,6 +3,7 @@ import { VpnClient } from '../services/vpn';
 import {
   createTunnelSession,
   type SessionSnapshot,
+  type TunnelNativePort,
   type TunnelSession,
 } from '../services/tunnelSession';
 
@@ -15,9 +16,10 @@ const TunnelSessionContext = createContext<
   TunnelSessionContextValue | undefined
 >(undefined);
 
-// The Session is the only reader of the native module; the wrapper is its port.
+// Real adapter: the wrapper already has the port's shape; tsc catches drift.
+const nativePort: TunnelNativePort = VpnClient;
 let realSession: TunnelSession | undefined;
-const defaultSession = () => (realSession ??= createTunnelSession(VpnClient));
+const defaultSession = () => (realSession ??= createTunnelSession(nativePort));
 
 type Props = {
   children: React.ReactNode;

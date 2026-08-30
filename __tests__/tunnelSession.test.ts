@@ -64,6 +64,15 @@ test('seeds state from native on creation', async () => {
   expect(session.getSnapshot().state).toBe('connected');
 });
 
+test('seed read that resolves after connect does not clobber connecting', async () => {
+  const { session, startCalls, probes } = make('disconnected');
+  probes.push('connecting', 'connecting', 'connecting');
+  session.connect(input); // before the seed read resolves
+  await settle();
+  session.connect(input);
+  expect(startCalls).toHaveLength(1);
+});
+
 test('connect: connecting synchronously, start once, probes stop early on connected', async () => {
   const { session, probes, startCalls, debug } = make();
   await settle();
@@ -95,7 +104,20 @@ test('native event during reconciliation ends it and wins', async () => {
   emit('connected');
   await settle();
   expect(session.getSnapshot().state).toBe('connected');
-  expect(probes.length).toBeGreaterThan(0); // probing stopped
+  expect(probes).toHaveLength(3); // no probe consumed after the event
+});
+
+test('start rejection after a native event does not overwrite it', async () => {
+  const { session, emit, rejectStart } = make();
+  await settle();
+  rejectStart('late');
+  session.connect(input);
+  emit('connected');
+  await settle();
+  expect(session.getSnapshot()).toEqual({
+    state: 'connected',
+    lastError: null,
+  });
 });
 
 test('start rejection → disconnected + start-failed', async () => {
