@@ -242,7 +242,6 @@ anti_dpi = ${input.antiDpi}
 #   * quic://dns.adguard.com:8853 -- DNS-over-QUIC
 dns_upstreams = ${input.dnsUpStreams}
 
-
 # Defines the way to listen to network traffic by the kind of the nested table.
 # Possible types:
 #   * socks: SOCKS proxy with UDP support,

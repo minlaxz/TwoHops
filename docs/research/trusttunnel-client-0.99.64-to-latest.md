@@ -1,5 +1,7 @@
 # TrustTunnel client library: 0.99.64 -> latest (research, 2026-08-30)
 
+> **Applied:** bump + `dns_upstreams` move landed in the same branch as this doc (issue #31). References to `0.99.64` / `configEncoder.ts:213` below describe pre-upgrade state.
+
 Scope: `com.adguard.trusttunnel:trusttunnel-client-android` (pinned at
 `android/app/build.gradle:144` as `0.99.64`) against the newest stable release of
 [TrustTunnel/TrustTunnelClient](https://github.com/TrustTunnel/TrustTunnelClient).
@@ -33,18 +35,18 @@ Sources: `gh api repos/TrustTunnel/TrustTunnelClient/tags`, `git log -1 --format
 `gh release list`, and <https://github.com/TrustTunnel/TrustTunnelClient/packages/2733074/versions>
 (the `gh api .../packages` endpoints return 403 without `read:packages`; the HTML page was used).
 
-| Version | Git tag? | GitHub Release? | Maven pkg? | Date | Notes |
-|---|---|---|---|---|---|
-| 0.99.64 | **no tag** | no | yes (2025-12-17T13:54Z) | 2025-12-17 | TwoHops' current pin. Not tagged; CHANGELOG has `0.99.63` (2025-12-16). |
-| 0.99.66 | yes `b47e5f4` | yes | no | 2025-12-17 | First tag after 0.99.64 (same day). Used as the diff baseline. |
-| 0.99.69 .. 0.99.105 | yes | yes | no | 2025-12-22 .. 2026-02-03 | Core fixes; post-quantum default on (0.99.102); new error code (0.99.118, untagged). |
-| 1.0.5 .. 1.0.49 | some | yes (1.0.14 .. 1.0.49) | yes | 2026-02-18 .. 2026-04-09 | 1.0 line. `[endpoint].dns_upstreams` move lands in 1.0.45 / tag v1.0.49. |
-| 1.0.65 | no | no | yes | 2026-05-05 | package only |
-| 1.1.3 | **no tag** | no | **yes** | 2026-05-12 | **Latest stable Maven artifact** |
-| **1.1.4** | yes `7da863b` | no | no | 2026-05-22 | **Latest stable tag** (Linux C API only vs 1.1.3) |
-| 1.1.5-beta.1 .. rc.6 | yes | yes (prerelease) | yes | 2026-06-04 .. 2026-08-21 | Pre-release. Logging rework, `VpnService.initialize`, recovery-attempts breaking change. |
+| Version              | Git tag?      | GitHub Release?        | Maven pkg?              | Date                     | Notes                                                                                    |
+| -------------------- | ------------- | ---------------------- | ----------------------- | ------------------------ | ---------------------------------------------------------------------------------------- |
+| 0.99.64              | **no tag**    | no                     | yes (2025-12-17T13:54Z) | 2025-12-17               | TwoHops' current pin. Not tagged; CHANGELOG has `0.99.63` (2025-12-16).                  |
+| 0.99.66              | yes `b47e5f4` | yes                    | no                      | 2025-12-17               | First tag after 0.99.64 (same day). Used as the diff baseline.                           |
+| 0.99.69 .. 0.99.105  | yes           | yes                    | no                      | 2025-12-22 .. 2026-02-03 | Core fixes; post-quantum default on (0.99.102); new error code (0.99.118, untagged).     |
+| 1.0.5 .. 1.0.49      | some          | yes (1.0.14 .. 1.0.49) | yes                     | 2026-02-18 .. 2026-04-09 | 1.0 line. `[endpoint].dns_upstreams` move lands in 1.0.45 / tag v1.0.49.                 |
+| 1.0.65               | no            | no                     | yes                     | 2026-05-05               | package only                                                                             |
+| 1.1.3                | **no tag**    | no                     | **yes**                 | 2026-05-12               | **Latest stable Maven artifact**                                                         |
+| **1.1.4**            | yes `7da863b` | no                     | no                      | 2026-05-22               | **Latest stable tag** (Linux C API only vs 1.1.3)                                        |
+| 1.1.5-beta.1 .. rc.6 | yes           | yes (prerelease)       | yes                     | 2026-06-04 .. 2026-08-21 | Pre-release. Logging rework, `VpnService.initialize`, recovery-attempts breaking change. |
 
-Note: the last non-prerelease *GitHub Release* object is `v1.0.49` (2026-04-09); 1.1.x stable
+Note: the last non-prerelease _GitHub Release_ object is `v1.0.49` (2026-04-09); 1.1.x stable
 shipped as tags/packages without Release objects.
 
 Android adapter build parameters are unchanged across the whole range: `compileSdk = 35`,
@@ -55,7 +57,7 @@ v0.99.66, v1.1.4, v1.1.5-rc.6). TwoHops' `minSdkVersion = 26` / `kotlinVersion =
 
 ## 3. Breaking changes (0.99.64 -> 1.1.3/1.1.4)
 
-### 3.1 Android adapter reads `dns_upstreams` from `[endpoint]` only  -- AFFECTS TwoHops: **YES**
+### 3.1 Android adapter reads `dns_upstreams` from `[endpoint]` only -- AFFECTS TwoHops: **YES**
 
 - What: `VpnServiceConfig` (the Kotlin TOML model the adapter uses to build the TUN interface)
   changed from a root-level `dns_upstreams` field to `endpoint.dns_upstreams` (default `[]`).
@@ -79,7 +81,7 @@ v0.99.66, v1.1.4, v1.1.5-rc.6). TwoHops' `minSdkVersion = 26` / `kotlinVersion =
   DNS behaviour changes silently. Fix: emit the key inside `[endpoint]` (keep the value the same).
   Core accepts it there since 1.0.45, so this change is safe to make before bumping the library.
 
-### 3.2 Query-log ring buffer reimplemented (`PrefixedLenRingProto` -> `PersistentRingBuffer`)  -- AFFECTS TwoHops: no (API), maybe (data)
+### 3.2 Query-log ring buffer reimplemented (`PrefixedLenRingProto` -> `PersistentRingBuffer`) -- AFFECTS TwoHops: no (API), maybe (data)
 
 - What: The Kotlin class `PrefixedLenRingProto` was deleted and replaced by `PersistentRingBuffer`
   backed by native code (`platform/android/lib/src/main/cpp/persistent_ring_buffer.cpp`);
@@ -92,16 +94,16 @@ v0.99.66, v1.1.4, v1.1.5-rc.6). TwoHops' `minSdkVersion = 26` / `kotlinVersion =
   the on-disk format differs, `readAll()` returns null and the adapter calls `clear()` on the
   first run after upgrade -- worst case the existing query-log history is dropped once.
 
-### 3.3 `VpnClient.setSystemDnsServers` moved from instance to companion (static)  -- AFFECTS TwoHops: no
+### 3.3 `VpnClient.setSystemDnsServers` moved from instance to companion (static) -- AFFECTS TwoHops: no
 
 - What: instance method `VpnClient.setSystemDnsServers(Array<String>, Array<String>?)` removed;
   companion `VpnClient.setSystemDnsServers(List<String>, List<String>?)` added. Source: same diff,
   `VpnClient.kt`.
 - TwoHops does not use `VpnClient` (only `VpnService` / `AppNotifier`).
 
-### 3.4 Pre-release only (1.1.5-*), not in the recommended target -- listed for planning
+### 3.4 Pre-release only (1.1.5-\*), not in the recommended target -- listed for planning
 
-- `[1.1.5-beta.10]` "***Breaking change***: New config parameter
+- `[1.1.5-beta.10]` "**_Breaking change_**: New config parameter
   `ag::VpnUpstreamSessionRecoverySettings::attempts`... Now it will give up and raise
   `VPN_SS_DISCONNECTED` with `VPN_EC_LOCATION_UNAVAILABLE` after the specified number of
   unsuccessful attempts" (default ~1 minute total). This is a core/C-API change; for TwoHops it
@@ -152,22 +154,22 @@ Core / config format (CHANGELOG.md, `trusttunnel/README.md` diff v0.99.66..v1.1.
 Native module: `android/app/src/main/java/com/nativetrusttunnel/NativeTrustTunnelModule.kt`;
 manifest: `android/app/src/main/AndroidManifest.xml`; config: `src/services/configEncoder.ts`.
 
-| API / contract | TwoHops location | Status in 1.1.3 / 1.1.4 |
-|---|---|---|
-| `import com.adguard.trusttunnel.AppNotifier` + impl `onStateChanged(Int)`, `onConnectionInfo(String)` | `NativeTrustTunnelModule.kt:10, 91, 113-121` | Unchanged |
-| `VpnService.setAppNotifier(File, AppNotifier)` | `NativeTrustTunnelModule.kt:98` | Signature unchanged; now executes asynchronously on the events executor; backing file format reimplemented (3.2) |
-| `VpnService.start(Context, String)` | `NativeTrustTunnelModule.kt:103` | Signature unchanged; now persists config to SharedPreferences (4) |
-| `VpnService.stop(Context)` | `NativeTrustTunnelModule.kt:108` | Signature unchanged; now clears persisted config |
-| `VpnService.startNetworkManager(Context)` | `NativeTrustTunnelModule.kt:144` | Signature unchanged; now idempotent (guard at :139-149 redundant). In 1.1.5-* superseded by `VpnService.initialize` |
-| `android.net.VpnService.prepare()` + `startActivityForResult` | `NativeTrustTunnelModule.kt:26-36` | Android platform API, unaffected |
-| `<activity com.adguard.trusttunnel.VpnPrepareActivity>` | `AndroidManifest.xml:34` | Class still present |
-| `<service com.adguard.trusttunnel.VpnService foregroundServiceType="systemExempted">` | `AndroidManifest.xml:38-45` | Class still present; no manifest changes required |
-| State codes 0..5 surfaced via `getCurrentState()` / `vpn_state` event | `specs/NativeTrustTunnel.ts:12`, `src/services/vpn.ts:26` | `VpnState` unchanged |
-| TOML root key `dns_upstreams` | `configEncoder.ts:213` | **BROKEN for the adapter** -- must move under `[endpoint]` (3.1) |
-| TOML `[endpoint]` keys: `hostname, addresses, has_ipv6, username, password, client_random, skip_verification, certificate, upstream_protocol, upstream_fallback_protocol, anti_dpi` | `configEncoder.ts:216-243` | Still documented in `trusttunnel/README.md` at v1.1.4 |
-| TOML root keys `loglevel, vpn_mode, killswitch_enabled, post_quantum_group_enabled, exclusions` | `configEncoder.ts:161-201` | Unchanged |
-| TOML `[listener.tun]` `included_routes, excluded_routes, mtu_size` | `configEncoder.ts:252-263` | Unchanged (these are the only keys the Kotlin `Tun` model reads; they are required, non-defaulted) |
-| Maven repo `maven.pkg.github.com/TrustTunnel/TrustTunnelClient` | `android/build.gradle:26` | Unchanged; still needs `GITHUB_ACTOR`/`GITHUB_TOKEN` |
+| API / contract                                                                                                                                                                      | TwoHops location                                          | Status in 1.1.3 / 1.1.4                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `import com.adguard.trusttunnel.AppNotifier` + impl `onStateChanged(Int)`, `onConnectionInfo(String)`                                                                               | `NativeTrustTunnelModule.kt:10, 91, 113-121`              | Unchanged                                                                                                            |
+| `VpnService.setAppNotifier(File, AppNotifier)`                                                                                                                                      | `NativeTrustTunnelModule.kt:98`                           | Signature unchanged; now executes asynchronously on the events executor; backing file format reimplemented (3.2)     |
+| `VpnService.start(Context, String)`                                                                                                                                                 | `NativeTrustTunnelModule.kt:103`                          | Signature unchanged; now persists config to SharedPreferences (4)                                                    |
+| `VpnService.stop(Context)`                                                                                                                                                          | `NativeTrustTunnelModule.kt:108`                          | Signature unchanged; now clears persisted config                                                                     |
+| `VpnService.startNetworkManager(Context)`                                                                                                                                           | `NativeTrustTunnelModule.kt:144`                          | Signature unchanged; now idempotent (guard at :139-149 redundant). In 1.1.5-\* superseded by `VpnService.initialize` |
+| `android.net.VpnService.prepare()` + `startActivityForResult`                                                                                                                       | `NativeTrustTunnelModule.kt:26-36`                        | Android platform API, unaffected                                                                                     |
+| `<activity com.adguard.trusttunnel.VpnPrepareActivity>`                                                                                                                             | `AndroidManifest.xml:34`                                  | Class still present                                                                                                  |
+| `<service com.adguard.trusttunnel.VpnService foregroundServiceType="systemExempted">`                                                                                               | `AndroidManifest.xml:38-45`                               | Class still present; no manifest changes required                                                                    |
+| State codes 0..5 surfaced via `getCurrentState()` / `vpn_state` event                                                                                                               | `specs/NativeTrustTunnel.ts:12`, `src/services/vpn.ts:26` | `VpnState` unchanged                                                                                                 |
+| TOML root key `dns_upstreams`                                                                                                                                                       | `configEncoder.ts:213`                                    | **BROKEN for the adapter** -- must move under `[endpoint]` (3.1)                                                     |
+| TOML `[endpoint]` keys: `hostname, addresses, has_ipv6, username, password, client_random, skip_verification, certificate, upstream_protocol, upstream_fallback_protocol, anti_dpi` | `configEncoder.ts:216-243`                                | Still documented in `trusttunnel/README.md` at v1.1.4                                                                |
+| TOML root keys `loglevel, vpn_mode, killswitch_enabled, post_quantum_group_enabled, exclusions`                                                                                     | `configEncoder.ts:161-201`                                | Unchanged                                                                                                            |
+| TOML `[listener.tun]` `included_routes, excluded_routes, mtu_size`                                                                                                                  | `configEncoder.ts:252-263`                                | Unchanged (these are the only keys the Kotlin `Tun` model reads; they are required, non-defaulted)                   |
+| Maven repo `maven.pkg.github.com/TrustTunnel/TrustTunnelClient`                                                                                                                     | `android/build.gradle:26`                                 | Unchanged; still needs `GITHUB_ACTOR`/`GITHUB_TOKEN`                                                                 |
 
 iOS: TwoHops does **not** consume the iOS library. `ios/TrustTunnelModule.mm` is a stub
 `RCTEventEmitter` with no TrustTunnel import; `ios/Podfile` has no TrustTunnel pod and there is no
