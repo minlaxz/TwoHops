@@ -5,6 +5,7 @@ import {
   clearProfile,
   applyProfileLink,
   effectiveRules,
+  importRemoteRules,
   missingFields,
   tunnelStartInput,
   loadProfile,
@@ -321,5 +322,94 @@ describe('applyProfileLink', () => {
   test('unknown protocol value is ignored', () => {
     const result = applyProfileLink(base, 'twohops://x?protocol=bogus');
     expect(result).toEqual({ ok: true, value: base });
+  });
+});
+
+describe('importRemoteRules', () => {
+  const okFetch = (body: string) => () =>
+    Promise.resolve({
+      ok: true,
+      statusText: 'OK',
+      text: () => Promise.resolve(body),
+    });
+  const base = updateProfile(completeProfile(), {
+    localRulesText: 'a.com',
+    remoteRulesURL: ' https://x/rules.txt ',
+    importedRules: ['old.com'],
+    importedAt: '2020-01-01T00:00:00.000Z',
+  });
+
+  test('success stores Imported Rules and an ISO importedAt', async () => {
+    const before = Date.now();
+    const result = await importRemoteRules(
+      base,
+      okFetch('b.com\nc.com') as any,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.importedRules).toEqual(['b.com', 'c.com']);
+    expect(Date.parse(result.value.importedAt!)).toBeGreaterThanOrEqual(before);
+    expect(result.value.importedAt).toBe(
+      new Date(result.value.importedAt!).toISOString(),
+    );
+    expect({ ...result.value, importedRules: 0, importedAt: 0 }).toEqual({
+      ...base,
+      importedRules: 0,
+      importedAt: 0,
+    });
+    expect(base.importedRules).toEqual(['old.com']);
+  });
+
+  test('fetch is called with the trimmed URL', async () => {
+    const fetchImpl = jest.fn(okFetch(''));
+    await importRemoteRules(base, fetchImpl as any);
+    expect(fetchImpl).toHaveBeenCalledWith('https://x/rules.txt');
+  });
+
+  test('failed fetch is an error; previous Imported Rules kept', async () => {
+    const fetchImpl = () => Promise.reject(new Error('offline'));
+    await expect(importRemoteRules(base, fetchImpl as any)).resolves.toEqual({
+      ok: false,
+      error: { kind: 'fetch', message: 'offline' },
+    });
+    expect(base.importedRules).toEqual(['old.com']);
+    expect(base.importedAt).toBe('2020-01-01T00:00:00.000Z');
+  });
+
+  test('non-OK response is an error', async () => {
+    const fetchImpl = () =>
+      Promise.resolve({ ok: false, statusText: 'Not Found', text: () => '' });
+    const result = await importRemoteRules(base, fetchImpl as any);
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: 'fetch', message: expect.stringContaining('Not Found') },
+    });
+  });
+
+  test('empty Remote Rules URL is an error; fetch never called', async () => {
+    const fetchImpl = jest.fn();
+    await expect(
+      importRemoteRules(
+        updateProfile(base, { remoteRulesURL: '  ' }),
+        fetchImpl as any,
+      ),
+    ).resolves.toEqual({ ok: false, error: { kind: 'noURL' } });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test('import, go offline, connect: tunnel gets Local + Imported rules', async () => {
+    const imported = await importRemoteRules(
+      base,
+      okFetch('a.com\nz.com') as any,
+    );
+    if (!imported.ok) throw new Error('import failed');
+    // tunnelStartInput is synchronous and takes no fetch: connect is offline.
+    const start = tunnelStartInput(imported.value);
+    expect(start).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        routing: { mode: 'selective', rules: ['a.com', 'z.com'] },
+      }),
+    });
   });
 });

@@ -68,15 +68,3 @@ export async function fetchRemoteRules(
   }
   return parseRules(await response.text());
 }
-
-/** Parse local text, fetch remote (if URL given), merge local-first. */
-export async function resolveRules(
-  localText: string,
-  remoteUrl: string,
-  fetchImpl: typeof fetch = fetch,
-): Promise<string[]> {
-  const local = parseRules(localText);
-  const url = remoteUrl.trim();
-  const remote = url ? await fetchRemoteRules(url, fetchImpl) : [];
-  return mergeRules(local, remote);
-}

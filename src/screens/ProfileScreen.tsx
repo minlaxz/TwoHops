@@ -3,15 +3,20 @@ import { Alert, Text, StyleSheet, View, TextInput } from 'react-native';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useSetupProfile } from '../context/SetupProfileContext';
-import { fetchRemoteRules, parseRules } from '../services/routingRules';
-import { applyProfileLink, effectiveRules } from '../services/setupProfile';
+import { parseRules } from '../services/routingRules';
+import {
+  applyProfileLink,
+  effectiveRules,
+  importRemoteRules,
+} from '../services/setupProfile';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme, ThemePreference } from '../theme/colors';
 
 export default function ServerScreen() {
   const { profile, updateProfile, updateServer, clearProfile } =
     useSetupProfile();
-  const { server, routingMode, localRulesText, remoteRulesURL } = profile;
+  const { server, routingMode, localRulesText, remoteRulesURL, importedAt } =
+    profile;
   const [url, setURL] = useState<string>('');
   // DNS text is only a display of the DNS Servers list; local state keeps
   // the user's in-progress punctuation while the list is the source of truth.
@@ -244,36 +249,29 @@ export default function ServerScreen() {
         <View style={styles.row}>
           <Text style={styles.rowLabel}>
             * Effective rules: {effectiveRules(profile).length}
+            {'\n'}* Imported:{' '}
+            {importedAt ? new Date(importedAt).toLocaleString() : 'never'}
           </Text>
-          {/* <TouchableOpacityButton
-            touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
-            textStyles={styles.modeButtonText}
-            title="Reset"
-            onPress={() => setRulesText('')}
-          /> */}
           <View style={styles.rowSpacer} />
           <TouchableOpacityButton
             touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
             textStyles={styles.modeButtonText}
             title="Import"
             onPress={async () => {
-              const importURL = remoteRulesURL.trim();
-              if (!importURL) {
-                Alert.alert('No Remote Rules URL', 'Enter a URL to import.');
-                return;
-              }
-              try {
-                const importedRules = await fetchRemoteRules(importURL);
-                updateProfile({
-                  importedRules,
-                  importedAt: new Date().toISOString(),
-                });
-              } catch (error) {
+              const result = await importRemoteRules(profile);
+              if (!result.ok) {
                 Alert.alert(
                   'Import failed',
-                  error instanceof Error ? error.message : String(error),
+                  result.error.kind === 'noURL'
+                    ? 'Enter a Remote Rules URL to import.'
+                    : result.error.message,
                 );
+                return;
               }
+              // Patch only the imported fields so edits made during the fetch
+              // are not reverted by the pre-await profile snapshot.
+              const { importedRules, importedAt: at } = result.value;
+              updateProfile({ importedRules, importedAt: at });
             }}
           />
         </View>
