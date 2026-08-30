@@ -7,7 +7,7 @@ import type {
   VpnProtocol,
   VpnStartInput,
 } from '../types';
-import { mergeRules, parseRules } from './routingRules';
+import { fetchRemoteRules, mergeRules, parseRules } from './routingRules';
 
 export type { ServerCredentials };
 
@@ -46,6 +46,10 @@ export type MissingField =
 export type StartError = { kind: 'incomplete'; missing: MissingField[] };
 
 export type ProfileLinkError = { kind: 'scheme' } | { kind: 'malformed' };
+
+export type ImportError =
+  | { kind: 'noURL' }
+  | { kind: 'fetch'; message: string };
 
 export const PROFILE_STORAGE_KEY = '@twohops/setup/profile';
 
@@ -166,6 +170,32 @@ export function applyProfileLink(
     ok: true,
     value: updateProfile(updateServer(profile, server), patch),
   };
+}
+
+// Remote Rules import: fetch the Remote Rules URL into the Imported Rules
+// cache. Network is injected. Failure leaves the profile (and the previous
+// Imported Rules) untouched; the error is transient UI state, never persisted.
+export async function importRemoteRules(
+  profile: SetupProfile,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Result<SetupProfile, ImportError>> {
+  const url = profile.remoteRulesURL.trim();
+  if (!url) {
+    return { ok: false, error: { kind: 'noURL' } };
+  }
+  try {
+    const importedRules = await fetchRemoteRules(url, fetchImpl);
+    return {
+      ok: true,
+      value: updateProfile(profile, {
+        importedRules,
+        importedAt: new Date().toISOString(),
+      }),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: { kind: 'fetch', message } };
+  }
 }
 
 // --- derivations -----------------------------------------------------------

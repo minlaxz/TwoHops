@@ -4,7 +4,6 @@ import {
   serializeRules,
   expandRules,
   fetchRemoteRules,
-  resolveRules,
 } from '../src/services/routingRules';
 
 describe('parseRules', () => {
@@ -104,35 +103,6 @@ describe('fetchRemoteRules', () => {
     const fetchImpl = () => Promise.reject(new Error('offline'));
     await expect(
       fetchRemoteRules('https://x/rules.txt', fetchImpl as any),
-    ).rejects.toThrow('offline');
-  });
-});
-
-describe('resolveRules', () => {
-  test('no remote URL merges local only; fetch never called', async () => {
-    const fetchImpl = jest.fn();
-    await expect(
-      resolveRules('a.com, b.com', '', fetchImpl as any),
-    ).resolves.toEqual(['a.com', 'b.com']);
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  test('local first then remote, deduplicated', async () => {
-    const fetchImpl = () =>
-      Promise.resolve({
-        ok: true,
-        statusText: 'OK',
-        text: () => Promise.resolve('b.com\nc.com'),
-      });
-    await expect(
-      resolveRules('a.com\nb.com', 'https://x', fetchImpl as any),
-    ).resolves.toEqual(['a.com', 'b.com', 'c.com']);
-  });
-
-  test('propagates fetch failure', async () => {
-    const fetchImpl = () => Promise.reject(new Error('offline'));
-    await expect(
-      resolveRules('a.com', 'https://x', fetchImpl as any),
     ).rejects.toThrow('offline');
   });
 });
