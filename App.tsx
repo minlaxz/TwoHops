@@ -12,6 +12,7 @@ import { createStaticNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { SetupProfileProvider } from './src/context/SetupProfileContext';
+import { TunnelSessionProvider } from './src/context/TunnelSessionContext';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import DashboardScreen from './src/screens/DashboardScreen';
 import DebugScreen from './src/screens/DebugScreen';
@@ -51,7 +52,9 @@ function AppNavigator() {
         backgroundColor={theme.colors.surface}
       />
       <SetupProfileProvider>
-        <Navigation />
+        <TunnelSessionProvider>
+          <Navigation />
+        </TunnelSessionProvider>
       </SetupProfileProvider>
     </>
   );
