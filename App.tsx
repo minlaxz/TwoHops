@@ -11,7 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createStaticNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { SetupConfigProvider } from './src/context/SetupConfigContext';
+import { SetupProfileProvider } from './src/context/SetupProfileContext';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import DashboardScreen from './src/screens/DashboardScreen';
 import DebugScreen from './src/screens/DebugScreen';
@@ -50,9 +50,9 @@ function AppNavigator() {
         barStyle={theme.isDark ? 'light-content' : 'dark-content'}
         backgroundColor={theme.colors.surface}
       />
-      <SetupConfigProvider>
+      <SetupProfileProvider>
         <Navigation />
-      </SetupConfigProvider>
+      </SetupProfileProvider>
     </>
   );
 }

@@ -12,14 +12,18 @@ export type VpnManagerState =
 
 export type RoutingMode = 'general' | 'selective';
 
-export interface ServerConfig {
+export interface ServerCredentials {
   name: string;
   ipAddress: string;
   domain: string;
   login: string;
   password: string;
   vpnProtocol: VpnProtocol;
-  dnsServers?: string[];
+}
+
+/** Server Credentials plus the DNS Servers list, as handed to the tunnel. */
+export interface ServerConfig extends ServerCredentials {
+  dnsServers: string[];
 }
 
 export interface RoutingConfig {

@@ -3,13 +3,13 @@
 
 import type {
   RoutingMode,
-  ServerConfig,
+  ServerCredentials,
   VpnProtocol,
   VpnStartInput,
 } from '../types';
 import { mergeRules, parseRules } from './routingRules';
 
-export type ServerCredentials = Omit<ServerConfig, 'dnsServers'>;
+export type { ServerCredentials };
 
 export interface SetupProfile {
   version: 1;

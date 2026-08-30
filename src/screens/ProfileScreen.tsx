@@ -1,33 +1,27 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Text, StyleSheet, View, TextInput } from 'react-native';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
-import { useSetupConfig } from '../context/SetupConfigContext';
-import {
-  parseRules,
-  resolveRules,
-  serializeRules,
-} from '../services/routingRules';
+import { useSetupProfile } from '../context/SetupProfileContext';
+import { fetchRemoteRules, parseRules } from '../services/routingRules';
+import { effectiveRules } from '../services/setupProfile';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme, ThemePreference } from '../theme/colors';
 
 export default function ServerScreen() {
-  const {
-    server,
-    setServer,
-    routingMode,
-    setRoutingMode,
-    rulesText,
-    setRulesText,
-    dnsServersText,
-    setDnsServersText,
-    localRoutingRulesText,
-    setLocalRoutingRulesText,
-    remoteRoutingURL,
-    setRemoteRoutingURL,
-    clearSetupConfig,
-  } = useSetupConfig();
+  const { profile, updateProfile, updateServer, clearProfile } =
+    useSetupProfile();
+  const { server, routingMode, localRulesText, remoteRulesURL } = profile;
   const [url, setURL] = useState<string>('');
+  // DNS text is only a display of the DNS Servers list; local state keeps
+  // the user's in-progress punctuation while the list is the source of truth.
+  const dnsList = profile.dnsServers.join(',');
+  const [dnsText, setDnsText] = useState(dnsList);
+  useEffect(() => {
+    setDnsText(prev =>
+      parseRules(prev).join(',') === dnsList ? prev : dnsList,
+    );
+  }, [dnsList]);
   const { theme, themePreference, setThemePreference } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const placeholderTextColor = theme.colors.placeholder;
@@ -101,20 +95,20 @@ export default function ServerScreen() {
               const vpnProtocol =
                 protocolParam === 'Http/2' ? 'Http/2' : 'QUIC';
               const dns = urlObj.searchParams.get('dns') ?? '';
-              const remoteRulesURL =
+              const linkRemoteRulesURL =
                 urlObj.searchParams.get('remoteRules') ?? '';
 
-              setServer(prev => ({
-                ...prev,
+              updateServer({
                 ipAddress,
                 domain,
                 login,
                 password: parsedPassword,
                 vpnProtocol,
-              }));
-
-              setDnsServersText(dns);
-              setRemoteRoutingURL(remoteRulesURL);
+              });
+              updateProfile({
+                dnsServers: parseRules(dns),
+                remoteRulesURL: linkRemoteRulesURL,
+              });
             } catch (error) {
               console.error('Failed to parse URL:', error);
             }
@@ -127,7 +121,7 @@ export default function ServerScreen() {
           placeholder="Name"
           placeholderTextColor={placeholderTextColor}
           value={server.name}
-          onChangeText={value => setServer(prev => ({ ...prev, name: value }))}
+          onChangeText={value => updateServer({ name: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -135,9 +129,7 @@ export default function ServerScreen() {
           placeholder="Server IP Address"
           placeholderTextColor={placeholderTextColor}
           value={server.ipAddress}
-          onChangeText={value =>
-            setServer(prev => ({ ...prev, ipAddress: value }))
-          }
+          onChangeText={value => updateServer({ ipAddress: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -145,9 +137,7 @@ export default function ServerScreen() {
           placeholder="TLS Domain Name"
           placeholderTextColor={placeholderTextColor}
           value={server.domain}
-          onChangeText={value =>
-            setServer(prev => ({ ...prev, domain: value }))
-          }
+          onChangeText={value => updateServer({ domain: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -155,7 +145,7 @@ export default function ServerScreen() {
           placeholder="Username"
           placeholderTextColor={placeholderTextColor}
           value={server.login}
-          onChangeText={value => setServer(prev => ({ ...prev, login: value }))}
+          onChangeText={value => updateServer({ login: value })}
           autoCapitalize="none"
         />
         <TextInput
@@ -163,9 +153,7 @@ export default function ServerScreen() {
           placeholder="Password"
           placeholderTextColor={placeholderTextColor}
           value={server.password}
-          onChangeText={value =>
-            setServer(prev => ({ ...prev, password: value }))
-          }
+          onChangeText={value => updateServer({ password: value })}
           secureTextEntry
         />
         <Text style={styles.inputLabel}>DNS Servers:</Text>
@@ -173,8 +161,11 @@ export default function ServerScreen() {
           style={styles.input}
           placeholder="DNS Servers (comma-separated)"
           placeholderTextColor={placeholderTextColor}
-          value={dnsServersText}
-          onChangeText={setDnsServersText}
+          value={dnsText}
+          onChangeText={value => {
+            setDnsText(value);
+            updateProfile({ dnsServers: parseRules(value) });
+          }}
           autoCapitalize="none"
         />
         <View style={styles.row}>
@@ -191,9 +182,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="Http/2"
-              onPress={() =>
-                setServer(prev => ({ ...prev, vpnProtocol: 'Http/2' }))
-              }
+              onPress={() => updateServer({ vpnProtocol: 'Http/2' })}
             />
             <View style={styles.rowSpacer} />
             <TouchableOpacityButton
@@ -205,9 +194,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="QUIC"
-              onPress={() =>
-                setServer(prev => ({ ...prev, vpnProtocol: 'QUIC' }))
-              }
+              onPress={() => updateServer({ vpnProtocol: 'QUIC' })}
             />
           </View>
         </View>
@@ -224,7 +211,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="General"
-              onPress={() => setRoutingMode('general')}
+              onPress={() => updateProfile({ routingMode: 'general' })}
             />
             <View style={styles.rowSpacer} />
             <TouchableOpacityButton
@@ -237,7 +224,7 @@ export default function ServerScreen() {
               ]}
               textStyles={styles.modeButtonText}
               title="Selective"
-              onPress={() => setRoutingMode('selective')}
+              onPress={() => updateProfile({ routingMode: 'selective' })}
             />
           </View>
         </View>
@@ -251,8 +238,8 @@ export default function ServerScreen() {
           style={styles.input}
           placeholder="https://..."
           placeholderTextColor={placeholderTextColor}
-          value={remoteRoutingURL}
-          onChangeText={setRemoteRoutingURL}
+          value={remoteRulesURL}
+          onChangeText={value => updateProfile({ remoteRulesURL: value })}
           autoCapitalize="none"
         />
         <Text style={styles.inputDescription}>
@@ -265,21 +252,21 @@ export default function ServerScreen() {
           style={styles.multilineInput}
           placeholder="example.com, facebook.com"
           placeholderTextColor={placeholderTextColor}
-          value={localRoutingRulesText}
-          onChangeText={setLocalRoutingRulesText}
+          value={localRulesText}
+          onChangeText={value => updateProfile({ localRulesText: value })}
           autoCapitalize="none"
           multiline
           textAlignVertical="top"
         />
         <Text style={styles.inputDescription}>
-          * Domains listed here will be merged with the remote rules (if URL is
-          provided) when you save.
+          * Domains listed here are merged with the Imported Rules (if any) when
+          you connect. Press Import to refresh the Imported Rules.
         </Text>
         <View style={styles.line} />
 
         <View style={styles.row}>
           <Text style={styles.rowLabel}>
-            * Current rules: {parseRules(rulesText).length}
+            * Effective rules: {effectiveRules(profile).length}
           </Text>
           {/* <TouchableOpacityButton
             touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
@@ -291,17 +278,22 @@ export default function ServerScreen() {
           <TouchableOpacityButton
             touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
             textStyles={styles.modeButtonText}
-            title="Save"
+            title="Import"
             onPress={async () => {
+              const importURL = remoteRulesURL.trim();
+              if (!importURL) {
+                Alert.alert('No Remote Rules URL', 'Enter a URL to import.');
+                return;
+              }
               try {
-                const merged = await resolveRules(
-                  localRoutingRulesText,
-                  remoteRoutingURL,
-                );
-                setRulesText(serializeRules(merged));
+                const importedRules = await fetchRemoteRules(importURL);
+                updateProfile({
+                  importedRules,
+                  importedAt: new Date().toISOString(),
+                });
               } catch (error) {
                 Alert.alert(
-                  'Remote rules failed',
+                  'Import failed',
                   error instanceof Error ? error.message : String(error),
                 );
               }
@@ -322,9 +314,7 @@ export default function ServerScreen() {
                   text: 'Clear',
                   style: 'destructive',
                   onPress: () => {
-                    clearSetupConfig().catch(error => {
-                      console.error('Failed to clear setup config:', error);
-                    });
+                    clearProfile();
                     setURL('');
                   },
                 },
