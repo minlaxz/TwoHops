@@ -251,12 +251,12 @@ describe('saveProfile / loadProfile', () => {
 
   test('unknown version warns and yields defaults', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    const { storage } = memoryStorage({
-      [PROFILE_STORAGE_KEY]: JSON.stringify({ version: 99 }),
-    });
+    const doc = JSON.stringify({ version: 99 });
+    const { storage, map } = memoryStorage({ [PROFILE_STORAGE_KEY]: doc });
     await expect(loadProfile(storage, env)).resolves.toEqual(
       defaultProfile(env),
     );
+    expect([...map.entries()]).toEqual([[PROFILE_STORAGE_KEY, doc]]);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
