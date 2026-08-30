@@ -2,7 +2,8 @@ import { NativeEventEmitter } from 'react-native';
 import NativeTrustTunnel from '../../specs/NativeTrustTunnel';
 import { encodeConfig } from './configEncoder';
 import { parseQueryLogRow } from './queryLog';
-import type { VpnManagerState, VpnStartInput, QueryLogRow } from '../types';
+import type { VpnStartInput, QueryLogRow } from '../types';
+import type { NativeStateReport } from './tunnelSession';
 
 const STATE_EVENT = 'vpn_state';
 const QUERY_LOG_EVENT = 'vpn_query_log';
@@ -21,12 +22,12 @@ export const VpnClient = {
     await NativeTrustTunnel.stop();
   },
 
-  async getCurrentState(): Promise<VpnManagerState> {
+  async getCurrentState(): Promise<NativeStateReport> {
     const raw = await NativeTrustTunnel.getCurrentState();
     return mapStateOrdinal(raw);
   },
 
-  onState(listener: (state: VpnManagerState) => void): () => void {
+  onState(listener: (state: NativeStateReport) => void): () => void {
     const subscription = eventEmitter.addListener(STATE_EVENT, raw => {
       listener(mapStateOrdinal(raw));
     });
@@ -48,8 +49,11 @@ export const VpnClient = {
   },
 };
 
-function mapStateOrdinal(raw: number): VpnManagerState {
+// The Tunnel Session collapses `unknown:*` to `disconnected` and logs it.
+function mapStateOrdinal(raw: number): NativeStateReport {
   switch (raw) {
+    case 0:
+      return 'disconnected';
     case 1:
       return 'connecting';
     case 2:
@@ -60,8 +64,7 @@ function mapStateOrdinal(raw: number): VpnManagerState {
       return 'recovering';
     case 5:
       return 'waitingForNetwork';
-    case 0:
     default:
-      return 'disconnected';
+      return `unknown:${raw}`;
   }
 }
