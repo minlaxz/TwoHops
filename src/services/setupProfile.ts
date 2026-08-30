@@ -1,0 +1,207 @@
+// Setup Profile — single owner of the profile value, its intents,
+// derivations, persistence and legacy migration. See CONTEXT.md and ADR 0001.
+
+import type {
+  RoutingMode,
+  ServerConfig,
+  VpnProtocol,
+  VpnStartInput,
+} from '../types';
+import { mergeRules, parseRules } from './routingRules';
+
+export type ServerCredentials = Omit<ServerConfig, 'dnsServers'>;
+
+export interface SetupProfile {
+  version: 1;
+  server: ServerCredentials;
+  dnsServers: string[];
+  routingMode: RoutingMode;
+  localRulesText: string;
+  remoteRulesURL: string;
+  importedRules: string[];
+  importedAt: string | null;
+}
+
+export type ProfileEnv = {
+  ENV_SERVER_NAME?: string;
+  ENV_PROTOCOL?: VpnProtocol;
+  ENV_DNS_SERVERS?: string;
+};
+
+export interface ProfileStorage {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+  multiRemove(keys: string[]): Promise<void>;
+}
+
+export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
+
+export type MissingField =
+  | 'name'
+  | 'ipAddress'
+  | 'domain'
+  | 'login'
+  | 'password';
+
+export type StartError = { kind: 'incomplete'; missing: MissingField[] };
+
+export const PROFILE_STORAGE_KEY = '@twohops/setup/profile';
+
+export const LEGACY_STORAGE_KEYS = {
+  serverName: '@twohops/setup/server/name',
+  serverIpAddress: '@twohops/setup/server/ipAddress',
+  serverDomain: '@twohops/setup/server/domain',
+  serverLogin: '@twohops/setup/server/login',
+  serverPassword: '@twohops/setup/server/password',
+  serverVpnProtocol: '@twohops/setup/server/vpnProtocol',
+  routingMode: '@twohops/setup/routing/mode',
+  dnsServersText: '@twohops/setup/dns/serversText',
+  localRoutingRulesText: '@twohops/setup/routing/localRulesText',
+  remoteRoutingURL: '@twohops/setup/routing/remoteRulesURL',
+  rulesText: '@twohops/setup/routing/mergedRulesText',
+} as const;
+
+const ROUTING_MODES: RoutingMode[] = ['general', 'selective'];
+const PROTOCOLS: VpnProtocol[] = ['Http/2', 'QUIC'];
+const REQUIRED_FIELDS: MissingField[] = [
+  'name',
+  'ipAddress',
+  'domain',
+  'login',
+  'password',
+];
+
+// --- intents ---------------------------------------------------------------
+
+export function defaultProfile(env: ProfileEnv): SetupProfile {
+  return {
+    version: 1,
+    server: {
+      name: env.ENV_SERVER_NAME || '',
+      ipAddress: '',
+      domain: '',
+      login: '',
+      password: '',
+      vpnProtocol: env.ENV_PROTOCOL || 'QUIC',
+    },
+    dnsServers: parseRules(env.ENV_DNS_SERVERS || ''),
+    routingMode: 'selective',
+    localRulesText: '',
+    remoteRulesURL: '',
+    importedRules: [],
+    importedAt: null,
+  };
+}
+
+export const clearProfile = defaultProfile;
+
+export function updateProfile(
+  profile: SetupProfile,
+  patch: Partial<Omit<SetupProfile, 'version'>>,
+): SetupProfile {
+  return { ...profile, ...patch };
+}
+
+export function updateServer(
+  profile: SetupProfile,
+  patch: Partial<ServerCredentials>,
+): SetupProfile {
+  return { ...profile, server: { ...profile.server, ...patch } };
+}
+
+// --- derivations -----------------------------------------------------------
+
+export function effectiveRules(profile: SetupProfile): string[] {
+  return mergeRules(parseRules(profile.localRulesText), profile.importedRules);
+}
+
+export function missingFields(profile: SetupProfile): MissingField[] {
+  return REQUIRED_FIELDS.filter(
+    field => profile.server[field].trim().length === 0,
+  );
+}
+
+export function tunnelStartInput(
+  profile: SetupProfile,
+): Result<VpnStartInput, StartError> {
+  const missing = missingFields(profile);
+  if (missing.length > 0) {
+    return { ok: false, error: { kind: 'incomplete', missing } };
+  }
+  return {
+    ok: true,
+    value: {
+      server: { ...profile.server, dnsServers: profile.dnsServers },
+      routing: { mode: profile.routingMode, rules: effectiveRules(profile) },
+    },
+  };
+}
+
+// --- persistence -----------------------------------------------------------
+
+export async function saveProfile(
+  storage: ProfileStorage,
+  profile: SetupProfile,
+): Promise<void> {
+  await storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+}
+
+export async function loadProfile(
+  storage: ProfileStorage,
+  env: ProfileEnv,
+): Promise<SetupProfile> {
+  const raw = await storage.getItem(PROFILE_STORAGE_KEY);
+  if (raw === null) {
+    return (await migrateLegacy(storage, env)) ?? defaultProfile(env);
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.version !== 1) {
+      throw new Error(`unknown version ${parsed?.version}`);
+    }
+    // ponytail: trust v1 shape; add field validation if corrupt docs show up
+    return parsed as SetupProfile;
+  } catch (error) {
+    console.warn('Setup Profile unreadable, using defaults:', error);
+    return defaultProfile(env);
+  }
+}
+
+async function migrateLegacy(
+  storage: ProfileStorage,
+  env: ProfileEnv,
+): Promise<SetupProfile | null> {
+  const keys: string[] = Object.values(LEGACY_STORAGE_KEYS);
+  const values = await Promise.all(keys.map(key => storage.getItem(key)));
+  if (values.every(value => value === null)) {
+    return null;
+  }
+  const get = (key: string) => values[keys.indexOf(key)];
+  const pick = <T extends string>(value: string | null, allowed: T[]) =>
+    allowed.includes(value as T) ? (value as T) : undefined;
+  const base = defaultProfile(env);
+  const profile: SetupProfile = {
+    ...base,
+    server: {
+      name: get(LEGACY_STORAGE_KEYS.serverName) || base.server.name,
+      ipAddress: get(LEGACY_STORAGE_KEYS.serverIpAddress) ?? '',
+      domain: get(LEGACY_STORAGE_KEYS.serverDomain) ?? '',
+      login: get(LEGACY_STORAGE_KEYS.serverLogin) ?? '',
+      password: get(LEGACY_STORAGE_KEYS.serverPassword) ?? '',
+      vpnProtocol:
+        pick(get(LEGACY_STORAGE_KEYS.serverVpnProtocol), PROTOCOLS) ??
+        base.server.vpnProtocol,
+    },
+    dnsServers: parseRules(
+      get(LEGACY_STORAGE_KEYS.dnsServersText) ?? base.dnsServers.join(','),
+    ),
+    routingMode:
+      pick(get(LEGACY_STORAGE_KEYS.routingMode), ROUTING_MODES) ??
+      base.routingMode,
+    localRulesText: get(LEGACY_STORAGE_KEYS.localRoutingRulesText) ?? '',
+    remoteRulesURL: get(LEGACY_STORAGE_KEYS.remoteRoutingURL) ?? '',
+  };
+  await saveProfile(storage, profile);
+  await storage.multiRemove(keys);
+  return profile;
+}
