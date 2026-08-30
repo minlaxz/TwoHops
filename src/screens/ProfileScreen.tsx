@@ -268,7 +268,10 @@ export default function ServerScreen() {
                 );
                 return;
               }
-              updateProfile(result.value);
+              // Patch only the imported fields so edits made during the fetch
+              // are not reverted by the pre-await profile snapshot.
+              const { importedRules, importedAt: at } = result.value;
+              updateProfile({ importedRules, importedAt: at });
             }}
           />
         </View>

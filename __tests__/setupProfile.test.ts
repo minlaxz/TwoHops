@@ -403,7 +403,7 @@ describe('importRemoteRules', () => {
       okFetch('a.com\nz.com') as any,
     );
     if (!imported.ok) throw new Error('import failed');
-    const offline = jest.fn(() => Promise.reject(new Error('offline')));
+    // tunnelStartInput is synchronous and takes no fetch: connect is offline.
     const start = tunnelStartInput(imported.value);
     expect(start).toEqual({
       ok: true,
@@ -411,6 +411,5 @@ describe('importRemoteRules', () => {
         routing: { mode: 'selective', rules: ['a.com', 'z.com'] },
       }),
     });
-    expect(offline).not.toHaveBeenCalled();
   });
 });
