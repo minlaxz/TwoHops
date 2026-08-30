@@ -4,7 +4,7 @@ import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { fetchRemoteRules, parseRules } from '../services/routingRules';
-import { effectiveRules } from '../services/setupProfile';
+import { applyProfileLink, effectiveRules } from '../services/setupProfile';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme, ThemePreference } from '../theme/colors';
 
@@ -76,42 +76,19 @@ export default function ServerScreen() {
         <TouchableOpacityButton
           touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
           textStyles={styles.modeButtonText}
-          title="Auto Fill"
+          title="Apply Link"
           onPress={() => {
-            // Example URL format:
-            // twohops://import-profile?login=user&password=password==&ip=1.2.3.4&domain=tls-domain.example.com&dns=https://dns.nextdns.io&remoteRules=https://example.comrules.txt
-            try {
-              const urlObj: globalThis.URL = new URL(url);
-
-              if (urlObj.protocol !== 'twohops:') {
-                throw new Error('Invalid URL scheme');
-              }
-
-              const login = urlObj.searchParams.get('login') ?? '';
-              const parsedPassword = urlObj.searchParams.get('password') ?? '';
-              const ipAddress = urlObj.searchParams.get('ip') ?? '';
-              const domain = urlObj.searchParams.get('domain') ?? '';
-              const protocolParam = urlObj.searchParams.get('protocol');
-              const vpnProtocol =
-                protocolParam === 'Http/2' ? 'Http/2' : 'QUIC';
-              const dns = urlObj.searchParams.get('dns') ?? '';
-              const linkRemoteRulesURL =
-                urlObj.searchParams.get('remoteRules') ?? '';
-
-              updateServer({
-                ipAddress,
-                domain,
-                login,
-                password: parsedPassword,
-                vpnProtocol,
-              });
-              updateProfile({
-                dnsServers: parseRules(dns),
-                remoteRulesURL: linkRemoteRulesURL,
-              });
-            } catch (error) {
-              console.error('Failed to parse URL:', error);
+            const result = applyProfileLink(profile, url);
+            if (!result.ok) {
+              Alert.alert(
+                'Profile Link failed',
+                result.error.kind === 'scheme'
+                  ? 'Link must start with twohops://'
+                  : 'Link is not a valid URL.',
+              );
+              return;
             }
+            updateProfile(result.value);
           }}
         />
         <View style={styles.line} />

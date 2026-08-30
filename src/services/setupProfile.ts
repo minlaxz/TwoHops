@@ -45,6 +45,8 @@ export type MissingField =
 
 export type StartError = { kind: 'incomplete'; missing: MissingField[] };
 
+export type ProfileLinkError = { kind: 'scheme' } | { kind: 'malformed' };
+
 export const PROFILE_STORAGE_KEY = '@twohops/setup/profile';
 
 export const LEGACY_STORAGE_KEYS = {
@@ -63,6 +65,10 @@ export const LEGACY_STORAGE_KEYS = {
 
 const ROUTING_MODES: RoutingMode[] = ['general', 'selective'];
 const PROTOCOLS: VpnProtocol[] = ['Http/2', 'QUIC'];
+const pick = <T extends string>(
+  value: string | null | undefined,
+  allowed: T[],
+) => (allowed.includes(value as T) ? (value as T) : undefined);
 const REQUIRED_FIELDS: MissingField[] = [
   'name',
   'ipAddress',
@@ -107,6 +113,59 @@ export function updateServer(
   patch: Partial<ServerCredentials>,
 ): SetupProfile {
   return { ...profile, server: { ...profile.server, ...patch } };
+}
+
+// Profile Link: twohops://…?login=&password=&ip=&domain=&protocol=&dns=&remoteRules=
+// Overwrites only the fields the link carries. Pure — no network.
+// ponytail: hand parser; RN's URLSearchParams lacks get(), and this is 15 lines.
+export function applyProfileLink(
+  profile: SetupProfile,
+  link: string,
+): Result<SetupProfile, ProfileLinkError> {
+  const match = link
+    .trim()
+    .match(/^([a-z][a-z\d+\-.]*):(?:[^?#]*)(?:\?([^#]*))?/i);
+  if (!match) {
+    return { ok: false, error: { kind: 'malformed' } };
+  }
+  if (match[1].toLowerCase() !== 'twohops') {
+    return { ok: false, error: { kind: 'scheme' } };
+  }
+  const params = new Map<string, string>();
+  try {
+    for (const pair of (match[2] ?? '').split('&')) {
+      if (!pair) continue;
+      const [key, ...rest] = pair.split('=');
+      params.set(decodeURIComponent(key), decodeURIComponent(rest.join('=')));
+    }
+  } catch {
+    return { ok: false, error: { kind: 'malformed' } };
+  }
+  const server: Partial<ServerCredentials> = {};
+  const textParams: Record<
+    string,
+    keyof Omit<ServerCredentials, 'vpnProtocol'>
+  > = {
+    login: 'login',
+    password: 'password',
+    ip: 'ipAddress',
+    domain: 'domain',
+  };
+  for (const [key, field] of Object.entries(textParams)) {
+    const value = params.get(key);
+    if (value !== undefined) server[field] = value;
+  }
+  const protocol = pick(params.get('protocol'), PROTOCOLS);
+  if (protocol !== undefined) server.vpnProtocol = protocol;
+  const patch: Partial<SetupProfile> = {};
+  const dns = params.get('dns');
+  if (dns !== undefined) patch.dnsServers = parseRules(dns);
+  const remoteRules = params.get('remoteRules');
+  if (remoteRules !== undefined) patch.remoteRulesURL = remoteRules;
+  return {
+    ok: true,
+    value: updateProfile(updateServer(profile, server), patch),
+  };
 }
 
 // --- derivations -----------------------------------------------------------
@@ -177,8 +236,6 @@ async function migrateLegacy(
     return null;
   }
   const get = (key: string) => values[keys.indexOf(key)];
-  const pick = <T extends string>(value: string | null, allowed: T[]) =>
-    allowed.includes(value as T) ? (value as T) : undefined;
   const base = defaultProfile(env);
   const profile: SetupProfile = {
     ...base,
