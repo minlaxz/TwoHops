@@ -53,3 +53,18 @@ test('explicit excluded routes override the default', () => {
   expect(config).toContain('excluded_routes = ["1.1.1.0/24"]');
   expect(config).not.toContain('10.0.0.0/8');
 });
+
+test('dns_upstreams lives under [endpoint] (trusttunnel-client >= 1.0.45 ignores root-level key)', () => {
+  const config = encodeConfig({
+    ...baseInput,
+    server: { ...baseInput.server, dnsServers: ['tls://1.1.1.1'] },
+  });
+
+  const endpoint = config.indexOf('[endpoint]');
+  const dns = config.indexOf('dns_upstreams = ["tls://1.1.1.1"]');
+  const listener = config.indexOf('[listener]');
+
+  expect(endpoint).toBeGreaterThan(-1);
+  expect(dns).toBeGreaterThan(endpoint);
+  expect(dns).toBeLessThan(listener);
+});
