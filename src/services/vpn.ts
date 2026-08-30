@@ -17,16 +17,6 @@ export const VpnClient = {
     await NativeTrustTunnel.start(input.server.name, config);
   },
 
-  async updateConfiguration(input?: VpnStartInput | null): Promise<void> {
-    if (!input) {
-      await NativeTrustTunnel.updateConfiguration(null, null);
-      return;
-    }
-
-    const config = encodeConfig(input);
-    await NativeTrustTunnel.updateConfiguration(input.server.name, config);
-  },
-
   async stop(): Promise<void> {
     await NativeTrustTunnel.stop();
   },
