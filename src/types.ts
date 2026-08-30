@@ -38,13 +38,6 @@ export interface VpnStartInput {
   excludedRoutes?: string[];
 }
 
-export type VpnManagerStateDescriptor = {
-  statusText: string;
-  statusEmoji: string;
-  action: () => Promise<void>;
-  actionText: string;
-};
-
 export type QueryLogAction = 'bypass' | 'tunnel' | 'reject';
 export type ConnectionProtocol = 'tcp' | 'udp';
 
