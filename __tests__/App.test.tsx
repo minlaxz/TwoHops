@@ -14,6 +14,7 @@ jest.mock('react-native-config', () => ({
   ENV_SERVER_NAME: 'env-server',
   ENV_PROTOCOL: 'QUIC',
   ENV_DNS_SERVERS: '1.1.1.1',
+  ENV_BUILD_NUMBER: '2025010100',
 }));
 jest.mock('../src/services/vpn', () => ({
   VpnClient: {
@@ -927,7 +928,14 @@ test('Settings tab shows theme picker and app version', async () => {
 
   const text = renderedText(renderer);
   expect(text).toContain('Appearance');
-  expect(text).toContain(require('../package.json').version);
+  // About section (issue #50): version + build from CI env, core pin, licenses.
+  expect(text).toContain('About');
+  expect(text).toContain(`${require('../package.json').version} (2025010100)`);
+  expect(text).toContain('Core Version');
+  expect(text).toContain('1.1.3');
+  expect(text).toContain('App License');
+  expect(text).toContain('Core License');
+  expect(text).toContain('Apache-2.0');
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
