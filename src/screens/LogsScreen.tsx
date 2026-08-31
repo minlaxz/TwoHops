@@ -9,7 +9,7 @@ import { useAppTheme } from '../context/ThemeContext';
 
 const MAX_LOG_ROWS = 250;
 
-export default function DebugScreen() {
+export default function LogsScreen() {
   const [logs, setLogs] = useState<QueryLogRow[]>([]);
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -33,11 +33,11 @@ export default function DebugScreen() {
   );
 }
 
-type DebugScreenStyles = ReturnType<typeof createStyles>;
+type LogsScreenStyles = ReturnType<typeof createStyles>;
 
 type TrafficLogsScreenProps = {
   logs: QueryLogRow[];
-  styles: DebugScreenStyles;
+  styles: LogsScreenStyles;
 };
 
 function toWildcardDomain(domain: string): string {

@@ -10,7 +10,7 @@ import {
   importRemoteRules,
 } from '../services/setupProfile';
 import { useAppTheme } from '../context/ThemeContext';
-import type { AppTheme, ThemePreference } from '../theme/colors';
+import type { AppTheme } from '../theme/colors';
 
 export default function ServerScreen() {
   const { profile, updateProfile, updateServer, clearProfile } =
@@ -27,42 +27,14 @@ export default function ServerScreen() {
       parseRules(prev).join(',') === dnsList ? prev : dnsList,
     );
   }, [dnsList]);
-  const { theme, themePreference, setThemePreference } = useAppTheme();
+  const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const placeholderTextColor = theme.colors.placeholder;
-
-  const themeOptions: ThemePreference[] = ['system', 'light', 'dark'];
 
   return (
     <MainScreen>
       <Text style={styles.title}>Configurations</Text>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Appearance</Text>
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Theme: {themePreference}</Text>
-        </View>
-        <View style={styles.rowButtons}>
-          {themeOptions.map(option => (
-            <React.Fragment key={option}>
-              <TouchableOpacityButton
-                touchableOpacityStyles={[
-                  styles.themeButton,
-                  themePreference === option
-                    ? styles.modeButtonActive
-                    : styles.modeButtonInactive,
-                ]}
-                textStyles={styles.modeButtonText}
-                title={option[0].toUpperCase() + option.slice(1)}
-                onPress={() => setThemePreference(option)}
-              />
-              {option !== 'dark' ? <View style={styles.rowSpacer} /> : null}
-            </React.Fragment>
-          ))}
-        </View>
-        <Text style={styles.inputDescription}>
-          Use "System" to follow your phone appearance settings.
-        </Text>
-        <View style={styles.line} />
         <Text style={styles.sectionTitle}>Simple</Text>
         <TextInput
           style={styles.input}
@@ -382,11 +354,6 @@ function createStyles(theme: AppTheme) {
     },
     modeButton: {
       width: 70,
-      height: 40,
-      padding: 4,
-    },
-    themeButton: {
-      width: 90,
       height: 40,
       padding: 4,
     },
