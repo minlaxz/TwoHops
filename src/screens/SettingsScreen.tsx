@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Text, StyleSheet, View } from 'react-native';
+import Config from 'react-native-config';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useAppTheme } from '../context/ThemeContext';
@@ -8,6 +9,22 @@ import type { AppTheme, ThemePreference } from '../theme/colors';
 // ponytail: package.json is this repo's release version source of truth;
 // switch to react-native-device-info if native build numbers ever diverge.
 const APP_VERSION: string = require('../../package.json').version;
+// Build number is CI-injected via .env (ENV_BUILD_NUMBER); absent in local dev.
+const BUILD_NUMBER: string | undefined = Config.ENV_BUILD_NUMBER;
+// TrustTunnel core library version. Source of truth: android/app/build.gradle
+// ("com.adguard.trusttunnel:trusttunnel-client-android:1.1.3") — update by
+// hand on pin bumps. iOS bundles no core today.
+const CORE_VERSION = '1.1.3';
+
+const aboutRows: [string, string][] = [
+  [
+    'App Version',
+    BUILD_NUMBER ? `${APP_VERSION} (${BUILD_NUMBER})` : APP_VERSION,
+  ],
+  ['Core Version', CORE_VERSION],
+  ['App License', 'Apache-2.0'],
+  ['Core License', 'Apache-2.0'],
+];
 
 const themeOptions: ThemePreference[] = ['system', 'light', 'dark'];
 
@@ -44,7 +61,15 @@ export default function SettingsScreen() {
           Use "System" to follow your phone appearance settings.
         </Text>
       </View>
-      <Text style={styles.versionFooter}>Version {APP_VERSION}</Text>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>About</Text>
+        {aboutRows.map(([label, value]) => (
+          <View key={label} style={styles.row}>
+            <Text style={styles.rowLabel}>{label}</Text>
+            <Text style={styles.rowValue}>{value}</Text>
+          </View>
+        ))}
+      </View>
     </MainScreen>
   );
 }
@@ -99,11 +124,9 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.buttonPrimaryText,
       fontSize: 12,
     },
-    versionFooter: {
-      fontSize: 12,
-      textAlign: 'center',
+    rowValue: {
+      fontSize: 14,
       color: theme.colors.textSecondary,
-      marginTop: 8,
     },
   });
 }

@@ -113,6 +113,7 @@ jobs:
           ENV_SERVER_NAME=${{ secrets.ENV_SERVER_NAME }}
           ENV_PROTOCOL=${{ secrets.ENV_PROTOCOL }}
           ENV_DNS_SERVERS=${{ secrets.ENV_DNS_SERVERS }}
+          ENV_BUILD_NUMBER=${{ steps.version.outputs.version_code }}
           EOF
 
       - name: 🏗 Build APK # & AAB (add `bundleRelease` for AAB)
