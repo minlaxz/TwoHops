@@ -7,35 +7,30 @@ import React, {
 } from 'react';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
-import { TouchableOpacityButton } from '../components/buttons';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   View,
   Text,
-  TextInput,
   StyleSheet,
 } from 'react-native';
+import { useAppAlert } from '../components/AppAlert';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
 import { useLogs } from '../context/LogsContext';
 import {
   effectiveRules,
   missingFields,
-  profileLinkErrorMessage,
   tunnelStartInput,
 } from '../services/setupProfile';
 import { displayState, type SessionState } from '../services/tunnelSession';
 import type { AppTheme } from '../theme/colors';
+import type { ProfileScreenParams } from './ProfileScreen';
 import { useAppTheme } from '../context/ThemeContext';
 
 type RootStackParamList = {
-  Profile: { profileId?: string } | undefined;
+  Profile: ProfileScreenParams | undefined;
 };
-
-const smallButtonTouchableStyle = { width: '100%', height: 56 } as const;
-const smallButtonTextStyle = { fontWeight: '600' as const, fontSize: 16 };
 
 export default function DashboardScreen() {
   const {
@@ -52,13 +47,9 @@ export default function DashboardScreen() {
     selectedId,
     selectProfile,
     addProfile,
-    addFromProfileLink,
     isHydrated,
   } = useSetupProfile();
-  // "+" flow: closed → menu (New / Paste link) → link input. One value, so
-  // the states cannot overlap.
-  const [addFlow, setAddFlow] = useState<'closed' | 'menu' | 'link'>('closed');
-  const [linkText, setLinkText] = useState('');
+  const alert = useAppAlert();
   // ponytail: inline transient notice as the "toast"; RN has no cross-platform
   // toast and this is the only caller — extract if a second one shows up
   const [switchLockNotice, setSwitchLockNotice] = useState<string | null>(null);
@@ -98,7 +89,7 @@ export default function DashboardScreen() {
     if (!input.ok) {
       const message = `Profile incomplete: ${input.error.missing.join(', ')}`;
       appendDebugLog(`Connect refused: ${message}`);
-      Alert.alert('Connect refused', message);
+      alert('Connect refused', message);
       return;
     }
     // Logs are cleared on each connect command, never by recovery (CONTEXT.md).
@@ -175,15 +166,7 @@ export default function DashboardScreen() {
         <Text style={styles.detailLabel}>{recoveryDetail[state]}</Text>
       ) : null}
       <View style={styles.controlsRow}>
-        <View style={styles.leftButtons}>
-          <TouchableOpacityButton
-            touchableOpacityStyles={smallButtonTouchableStyle}
-            title="Profile"
-            textStyles={smallButtonTextStyle}
-            onPress={() => navigation.navigate('Profile')}
-          />
-        </View>
-        <View style={styles.rightButton}>
+        <View style={styles.hintArea}>
           {!isHydrated ? (
             <Text style={styles.hint}>Loading saved profile...</Text>
           ) : profiles.length > 0 && missing.length > 0 ? (
@@ -204,73 +187,15 @@ export default function DashboardScreen() {
             accessibilityRole="button"
             accessibilityLabel="Add profile"
             style={styles.addButton}
-            onPress={() =>
-              setAddFlow(prev => (prev === 'closed' ? 'menu' : 'closed'))
-            }
+            onPress={() => {
+              const id = addProfile();
+              appendDebugLog('New profile created.');
+              navigation.navigate('Profile', { profileId: id, mode: 'create' });
+            }}
           >
             <Text style={styles.addGlyph}>＋</Text>
           </Pressable>
         </View>
-        {addFlow === 'menu' ? (
-          <View style={styles.addMenu}>
-            <Pressable
-              testID="profile-add-new"
-              accessibilityRole="button"
-              style={styles.addMenuItem}
-              onPress={() => {
-                setAddFlow('closed');
-                const id = addProfile();
-                appendDebugLog('New profile created.');
-                navigation.navigate('Profile', { profileId: id });
-              }}
-            >
-              <Text style={styles.profileName}>New profile</Text>
-            </Pressable>
-            <Pressable
-              testID="profile-add-link"
-              accessibilityRole="button"
-              style={styles.addMenuItem}
-              onPress={() => setAddFlow('link')}
-            >
-              <Text style={styles.profileName}>Paste profile link</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        {addFlow === 'link' ? (
-          <View style={styles.linkRow}>
-            <TextInput
-              testID="profile-link-input"
-              style={styles.linkInput}
-              placeholder="twohops://..."
-              placeholderTextColor={theme.colors.placeholder}
-              value={linkText}
-              onChangeText={setLinkText}
-              autoCapitalize="none"
-            />
-            <TouchableOpacityButton
-              touchableOpacityStyles={styles.linkApplyButton}
-              textStyles={styles.linkApplyText}
-              title="Add"
-              testID="profile-link-apply"
-              onPress={() => {
-                const result = addFromProfileLink(
-                  linkText,
-                  display === 'stopped',
-                );
-                if (!result.ok) {
-                  Alert.alert(
-                    'Profile Link failed',
-                    profileLinkErrorMessage(result.error),
-                  );
-                  return;
-                }
-                appendDebugLog('Profile created from a Profile Link.');
-                setLinkText('');
-                setAddFlow('closed');
-              }}
-            />
-          </View>
-        ) : null}
         {profiles.map(entry => {
           const isSelected = entry.id === selectedId;
           return (
@@ -294,7 +219,6 @@ export default function DashboardScreen() {
                 {entry.name}
               </Text>
               <View style={styles.rowRight}>
-                {isSelected ? <Text style={styles.profileName}>✓</Text> : null}
                 <Pressable
                   testID={`profile-edit-${entry.id}`}
                   accessibilityRole="button"
@@ -366,12 +290,8 @@ function createStyles(theme: AppTheme) {
       flexDirection: 'row',
       alignItems: 'stretch',
     },
-    leftButtons: {
+    hintArea: {
       flex: 1,
-    },
-    rightButton: {
-      flex: 1.2,
-      marginLeft: 12,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -429,42 +349,6 @@ function createStyles(theme: AppTheme) {
     addGlyph: {
       fontSize: 18,
       color: theme.colors.buttonPrimaryText,
-    },
-    addMenu: {
-      marginBottom: 8,
-    },
-    addMenuItem: {
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      marginBottom: 6,
-      backgroundColor: theme.colors.background,
-    },
-    linkRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    linkInput: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: theme.colors.inputBackground,
-      color: theme.colors.textPrimary,
-      marginRight: 8,
-    },
-    linkApplyButton: {
-      width: 64,
-      height: 40,
-      padding: 4,
-    },
-    linkApplyText: {
-      fontSize: 12,
     },
     rowRight: {
       flexDirection: 'row',

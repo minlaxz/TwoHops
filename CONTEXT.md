@@ -44,7 +44,7 @@ Local Rules merged with Imported Rules, deduplicated, local first. Derived on de
 _Avoid_: merged rules text, rules text
 
 **Profile Link**:
-A `twohops:` URL that carries Server Credentials, DNS Servers and a Remote Rules URL. Applying one creates a new Setup Profile without any network access; it never overwrites an existing Profile.
+A `twohops:` URL that carries Server Credentials, DNS Servers and a Remote Rules URL. Applying one creates a new Setup Profile without any network access; it never overwrites an existing Profile — except on the create screen, where applying fills the just-created blank Profile in place (ADR 0004).
 _Avoid_: auto fill, import URL
 
 **Profile Completeness**:
