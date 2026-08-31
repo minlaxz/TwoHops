@@ -9,6 +9,7 @@ import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { TouchableOpacityButton } from '../components/buttons';
 import {
   Alert,
+  Pressable,
   View,
   Text,
   StyleSheet,
@@ -22,7 +23,7 @@ import {
   missingFields,
   tunnelStartInput,
 } from '../services/setupProfile';
-import type { SessionState } from '../services/tunnelSession';
+import { displayState, type SessionState } from '../services/tunnelSession';
 import type { AppTheme } from '../theme/colors';
 import { useAppTheme } from '../context/ThemeContext';
 
@@ -54,7 +55,20 @@ export default function DashboardScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const { profile, isHydrated } = useSetupProfile();
+  const { profile, profiles, selectedId, selectProfile, isHydrated } =
+    useSetupProfile();
+  // ponytail: inline transient notice as the "toast"; RN has no cross-platform
+  // toast and this is the only caller — extract if a second one shows up
+  const [switchLockNotice, setSwitchLockNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) {
+        clearTimeout(noticeTimer.current);
+      }
+    },
+    [],
+  );
 
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const didLogSetupChangeRef = useRef(false);
@@ -133,6 +147,23 @@ export default function DashboardScreen() {
       switchValue: true,
       switchHint: 'Recovering tunnel state...',
     },
+  };
+
+  const handleSelectProfile = (id: string) => {
+    // Recovery states collapse to Running; Busy is locked too — honest either way.
+    if (displayState(state) !== 'stopped') {
+      appendDebugLog('Profile switch refused: tunnel is not stopped.');
+      setSwitchLockNotice('Stop the tunnel to switch profiles.');
+      if (noticeTimer.current) {
+        clearTimeout(noticeTimer.current);
+      }
+      noticeTimer.current = setTimeout(() => setSwitchLockNotice(null), 2500);
+      return;
+    }
+    if (id !== selectedId) {
+      selectProfile(id);
+      appendDebugLog('Selected Profile changed.');
+    }
   };
 
   const onSwitchValueChange = (nextValue: boolean) => {
@@ -214,6 +245,38 @@ export default function DashboardScreen() {
             </Text>
           )}
         </View>
+      </View>
+      <View style={styles.profilesCard}>
+        <Text style={styles.sectionTitle}>Profiles</Text>
+        {profiles.map(entry => {
+          const isSelected = entry.id === selectedId;
+          return (
+            <Pressable
+              key={entry.id}
+              testID={`profile-row-${entry.id}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected }}
+              style={[
+                styles.profileRow,
+                isSelected && styles.profileRowSelected,
+              ]}
+              onPress={() => handleSelectProfile(entry.id)}
+            >
+              <Text
+                style={[
+                  styles.profileName,
+                  isSelected && styles.profileNameSelected,
+                ]}
+              >
+                {entry.name}
+              </Text>
+              {isSelected ? <Text style={styles.profileName}>✓</Text> : null}
+            </Pressable>
+          );
+        })}
+        {switchLockNotice ? (
+          <Text style={styles.errorHint}>{switchLockNotice}</Text>
+        ) : null}
       </View>
       <View style={styles.logsContainer}>
         <View style={styles.debugPanel}>
@@ -303,6 +366,35 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.danger,
       textAlign: 'center',
       paddingHorizontal: 8,
+    },
+    profilesCard: {
+      marginTop: 14,
+      padding: 16,
+      borderRadius: 12,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+      borderWidth: 1,
+    },
+    profileRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    profileRowSelected: {
+      borderColor: theme.colors.buttonPrimary,
+      backgroundColor: theme.colors.background,
+    },
+    profileName: {
+      fontSize: 14,
+      color: theme.colors.textPrimary,
+    },
+    profileNameSelected: {
+      fontWeight: '600',
     },
     logsContainer: {
       flex: 1,

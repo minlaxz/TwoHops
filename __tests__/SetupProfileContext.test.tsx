@@ -4,10 +4,11 @@ import {
   SetupProfileProvider,
   useSetupProfile,
 } from '../src/context/SetupProfileContext';
+import { type ProfileStorage } from '../src/services/setupProfile';
 import {
-  PROFILE_STORAGE_KEY,
-  type ProfileStorage,
-} from '../src/services/setupProfile';
+  PROFILES_STORAGE_KEY,
+  type ProfileList,
+} from '../src/services/profileStore';
 
 jest.mock('react-native-config', () => ({
   ENV_SERVER_NAME: 'env-server',
@@ -51,6 +52,9 @@ async function mount(storage: ProfileStorage) {
 
 const flush = () => ReactTestRenderer.act(() => Promise.resolve());
 
+const storedList = (map: Map<string, string>): ProfileList =>
+  JSON.parse(map.get(PROFILES_STORAGE_KEY)!);
+
 test('hydrates from storage and persists edits', async () => {
   const { storage, map } = memoryStorage();
   const ctx = await mount(storage);
@@ -61,9 +65,7 @@ test('hydrates from storage and persists edits', async () => {
     ctx().updateProfile({ dnsServers: ['9.9.9.9'] });
   });
   await flush();
-  expect(JSON.parse(map.get(PROFILE_STORAGE_KEY)!).dnsServers).toEqual([
-    '9.9.9.9',
-  ]);
+  expect(storedList(map).profiles[0].dnsServers).toEqual(['9.9.9.9']);
 
   // relaunch
   const again = await mount(storage);
@@ -74,10 +76,10 @@ test('does not write before hydration completes', async () => {
   const { storage, map } = memoryStorage();
   await mount(storage);
   await flush();
-  expect(map.has(PROFILE_STORAGE_KEY)).toBe(false);
+  expect(map.has(PROFILES_STORAGE_KEY)).toBe(false);
 });
 
-test('clear resets to defaults', async () => {
+test('clear resets the Selected Profile to defaults', async () => {
   const { storage, map } = memoryStorage();
   const ctx = await mount(storage);
   await ReactTestRenderer.act(async () => {
@@ -88,5 +90,52 @@ test('clear resets to defaults', async () => {
   });
   await flush();
   expect(ctx().profile.server.login).toBe('');
-  expect(JSON.parse(map.get(PROFILE_STORAGE_KEY)!).server.login).toBe('');
+  expect(storedList(map).profiles[0].server.login).toBe('');
 });
+
+test('selectProfile switches the Selected Profile and persists', async () => {
+  const seed: ProfileList = {
+    version: 1,
+    profiles: [
+      { ...defaultsEntry('a', 'Alpha'), localRulesText: 'a.com' },
+      { ...defaultsEntry('b', 'Beta'), localRulesText: 'b.com' },
+    ],
+    selectedId: 'a',
+  };
+  const { storage, map } = memoryStorage({
+    [PROFILES_STORAGE_KEY]: JSON.stringify(seed),
+  });
+  const ctx = await mount(storage);
+  expect(ctx().profiles.map(entry => entry.name)).toEqual(['Alpha', 'Beta']);
+  expect(ctx().profile.localRulesText).toBe('a.com');
+
+  await ReactTestRenderer.act(async () => {
+    ctx().selectProfile('b');
+  });
+  await flush();
+  expect(ctx().selectedId).toBe('b');
+  expect(ctx().profile.localRulesText).toBe('b.com');
+  expect(storedList(map).selectedId).toBe('b');
+});
+
+function defaultsEntry(id: string, name: string) {
+  return {
+    version: 1 as const,
+    server: {
+      name,
+      ipAddress: '',
+      domain: '',
+      login: '',
+      password: '',
+      vpnProtocol: 'QUIC' as const,
+    },
+    dnsServers: [],
+    routingMode: 'selective' as const,
+    localRulesText: '',
+    remoteRulesURL: '',
+    importedRules: [],
+    importedAt: null,
+    id,
+    name,
+  };
+}

@@ -1,5 +1,6 @@
 import {
   createTunnelSession,
+  displayState,
   type NativeStateReport,
   type TunnelNativePort,
 } from '../src/services/tunnelSession';
@@ -304,4 +305,16 @@ test('unknown native state → disconnected + debug entry (event, probe, seed)',
   await settle();
   expect(probed.session.getSnapshot().state).toBe('disconnected');
   expect(probed.debug.some(m => m.includes('unknown:8'))).toBe(true);
+});
+
+describe('displayState', () => {
+  test('collapses every Session State into Stopped / Busy / Running', () => {
+    expect(displayState('disconnected')).toBe('stopped');
+    expect(displayState('connecting')).toBe('busy');
+    expect(displayState('disconnecting')).toBe('busy');
+    expect(displayState('connected')).toBe('running');
+    expect(displayState('waitingForRecovery')).toBe('running');
+    expect(displayState('recovering')).toBe('running');
+    expect(displayState('waitingForNetwork')).toBe('running');
+  });
 });
