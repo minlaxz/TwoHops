@@ -887,6 +887,20 @@ test('theme change stays on Settings and keeps Debug Logs (issue #49)', async ()
   // renderedText joins JSX text children with newlines: "Theme: " / "dark".
   expect(text).toMatch(/Theme: ?\ndark/);
   expect(text).toContain('Appearance');
+  // Pressable spreads props across nested nodes; any Settings-tab node
+  // carrying accessibilityState reports the selected tab.
+  expect(
+    renderer.root
+      .findAll(
+        node =>
+          typeof node.props.accessibilityLabel === 'string' &&
+          node.props.accessibilityLabel.startsWith('Settings, tab,') &&
+          node.props.accessibilityState !== undefined,
+      )
+      .some(node => node.props.accessibilityState.selected === true),
+  ).toBe(true);
+  // Tunnel Session state survived too: Dashboard still shows Running.
+  expect(text).toContain('Running');
 
   // Debug Logs survived the theme change.
   await openLogsTab(renderer);

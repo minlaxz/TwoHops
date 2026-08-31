@@ -35,7 +35,7 @@ import {
 import { LogsProvider } from './src/context/LogsContext';
 import { displayState } from './src/services/tunnelSession';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
-import type { AppTheme } from './src/theme/colors';
+import { getAppTheme, type AppTheme } from './src/theme/colors';
 import DashboardScreen from './src/screens/DashboardScreen';
 import LogsScreen from './src/screens/LogsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -110,8 +110,11 @@ function toNavigationTheme(theme: AppTheme): NavigationAppTheme {
   };
 }
 
+// Falls back to the stock palette if <Navigation> ever renders without
+// toNavigationTheme's output (e.g. a bare render in a test).
 function appThemeOf(navigationTheme: Theme): AppTheme {
-  return (navigationTheme as NavigationAppTheme).app;
+  const { app } = navigationTheme as NavigationAppTheme;
+  return app ?? getAppTheme(navigationTheme.dark ? 'dark' : 'light');
 }
 
 function headerOptions(theme: AppTheme) {
