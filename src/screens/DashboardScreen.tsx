@@ -8,13 +8,13 @@ import React, {
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { TouchableOpacityButton } from '../components/buttons';
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Switch,
 } from 'react-native';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
@@ -34,13 +34,6 @@ type RootStackParamList = {
 type DebugLogEntry = {
   stamp: Date;
   message: string;
-};
-
-type VpnUiStateDescriptor = {
-  statusText: string;
-  statusEmoji: string;
-  switchValue: boolean;
-  switchHint: string;
 };
 
 const smallButtonTouchableStyle = { width: '100%', height: 56 } as const;
@@ -104,54 +97,20 @@ export default function DashboardScreen() {
     session.connect(input.value);
   };
 
-  const states: Record<SessionState, VpnUiStateDescriptor> = {
-    connected: {
-      statusText: 'Connected',
-      statusEmoji: '🔗',
-      switchValue: true,
-      switchHint: 'Turn off to disconnect',
-    },
-    connecting: {
-      statusText: 'Connecting',
-      statusEmoji: '⏳',
-      switchValue: true,
-      switchHint: 'Connecting in progress...',
-    },
-    disconnecting: {
-      statusText: 'Disconnecting',
-      statusEmoji: '⏳',
-      switchValue: false,
-      switchHint: 'Disconnecting...',
-    },
-    disconnected: {
-      statusText: 'Disconnected',
-      statusEmoji: '⛓️‍💥',
-      switchValue: false,
-      switchHint: 'Turn on to connect',
-    },
-    waitingForRecovery: {
-      statusText: 'Waiting for Recovery',
-      statusEmoji: '🛟',
-      switchValue: true,
-      switchHint: 'Waiting for tunnel recovery...',
-    },
-    waitingForNetwork: {
-      statusText: 'Waiting for Network',
-      statusEmoji: '📡',
-      switchValue: true,
-      switchHint: 'Waiting for network connectivity...',
-    },
-    recovering: {
-      statusEmoji: '🔄',
-      statusText: 'Recovering',
-      switchValue: true,
-      switchHint: 'Recovering tunnel state...',
-    },
+  const display = displayState(state);
+  const displayTitle = { stopped: 'Stopped', busy: 'Busy', running: 'Running' }[
+    display
+  ];
+  // Recovery states collapse to Running; the detail label carries the nuance.
+  const recoveryDetail: Partial<Record<SessionState, string>> = {
+    waitingForRecovery: 'Reconnecting…',
+    recovering: 'Reconnecting…',
+    waitingForNetwork: 'Waiting for network…',
   };
 
   const handleSelectProfile = (id: string) => {
     // Recovery states collapse to Running; Busy is locked too — honest either way.
-    if (displayState(state) !== 'stopped') {
+    if (display !== 'stopped') {
       appendDebugLog('Profile switch refused: tunnel is not stopped.');
       setSwitchLockNotice('Stop the tunnel to switch profiles.');
       if (noticeTimer.current) {
@@ -166,16 +125,21 @@ export default function DashboardScreen() {
     }
   };
 
-  const onSwitchValueChange = (nextValue: boolean) => {
-    appendDebugLog(
-      `Switch toggled to ${nextValue ? 'ON' : 'OFF'} while state=${state}.`,
-    );
-    if (nextValue) {
+  // Hidden with no Profile List or an incomplete Selected Profile (see #40).
+  // Incompleteness only blocks starting — a Running/Busy tunnel keeps its
+  // Stop control even if the profile is edited to incompleteness meanwhile.
+  const fabVisible =
+    isHydrated &&
+    profiles.length > 0 &&
+    (display !== 'stopped' || missing.length === 0);
+
+  const onFabPress = () => {
+    if (display === 'stopped') {
       handleConnect();
-    } else {
-      appendDebugLog('Disconnect button pressed.');
-      session.disconnect();
+      return;
     }
+    appendDebugLog('Stop button pressed.');
+    session.disconnect();
   };
 
   useEffect(() => {
@@ -200,7 +164,10 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{states[state].statusText}</Text>
+      <Text style={styles.title}>{displayTitle}</Text>
+      {recoveryDetail[state] ? (
+        <Text style={styles.detailLabel}>{recoveryDetail[state]}</Text>
+      ) : null}
       <View style={styles.controlsRow}>
         <View style={styles.leftButtons}>
           <TouchableOpacityButton
@@ -212,38 +179,15 @@ export default function DashboardScreen() {
         </View>
         <View style={styles.rightButton}>
           {!isHydrated ? (
-            <Text style={styles.switchHint}>Loading saved profile...</Text>
-          ) : missing.length === 0 ? (
-            <>
-              <Switch
-                trackColor={{
-                  false: theme.colors.switchTrackFalse,
-                  true: theme.colors.switchTrackTrue,
-                }}
-                thumbColor={
-                  states[state].switchValue
-                    ? theme.colors.switchThumbOn
-                    : theme.colors.switchThumbOff
-                }
-                ios_backgroundColor={theme.colors.switchTrackFalse}
-                onValueChange={onSwitchValueChange}
-                value={states[state].switchValue}
-                disabled={state !== 'disconnected' && state !== 'connected'}
-              />
-              <Text style={styles.switchEmoji}>
-                {states[state].statusEmoji}
-              </Text>
-              <Text style={styles.switchHint}>{states[state].switchHint}</Text>
-              {lastError ? (
-                <Text style={styles.errorHint}>{lastError.message}</Text>
-              ) : null}
-            </>
-          ) : (
-            <Text style={styles.switchHint}>
+            <Text style={styles.hint}>Loading saved profile...</Text>
+          ) : profiles.length > 0 && missing.length > 0 ? (
+            <Text style={styles.hint}>
               Profile incomplete. Missing: {missing.join(', ')}. Open Profile to
               finish setup.
             </Text>
-          )}
+          ) : lastError ? (
+            <Text style={styles.errorHint}>{lastError.message}</Text>
+          ) : null}
         </View>
       </View>
       <View style={styles.profilesCard}>
@@ -274,6 +218,11 @@ export default function DashboardScreen() {
             </Pressable>
           );
         })}
+        {profiles.length === 0 && isHydrated ? (
+          <Text style={styles.hint}>
+            No profiles yet. Open Profile to create one.
+          </Text>
+        ) : null}
         {switchLockNotice ? (
           <Text style={styles.errorHint}>{switchLockNotice}</Text>
         ) : null}
@@ -283,6 +232,31 @@ export default function DashboardScreen() {
           <DebugLogsScreen logs={debugLogs} styles={styles} />
         </View>
       </View>
+      {fabVisible ? (
+        <Pressable
+          testID="fab"
+          accessibilityRole="button"
+          accessibilityLabel={
+            display === 'stopped'
+              ? 'Start tunnel'
+              : display === 'busy'
+              ? 'Tunnel busy'
+              : 'Stop tunnel'
+          }
+          accessibilityState={{ disabled: display === 'busy' }}
+          disabled={display === 'busy'}
+          onPress={onFabPress}
+          style={styles.fab}
+        >
+          {display === 'busy' ? (
+            <ActivityIndicator color={theme.colors.buttonPrimaryText} />
+          ) : (
+            <Text style={styles.fabGlyph}>
+              {display === 'running' ? '■' : '▶'}
+            </Text>
+          )}
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -349,16 +323,39 @@ function createStyles(theme: AppTheme) {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    switchEmoji: {
-      marginTop: 8,
-      fontSize: 20,
+    detailLabel: {
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      marginTop: -8,
+      marginBottom: 12,
     },
-    switchHint: {
+    hint: {
       marginTop: 6,
       fontSize: 12,
       color: theme.colors.textSecondary,
       textAlign: 'center',
       paddingHorizontal: 8,
+    },
+    fab: {
+      position: 'absolute',
+      right: 24,
+      bottom: 24,
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: theme.colors.buttonPrimary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: 6,
+      shadowColor: '#000',
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 3 },
+    },
+    fabGlyph: {
+      fontSize: 24,
+      color: theme.colors.buttonPrimaryText,
     },
     errorHint: {
       marginTop: 4,

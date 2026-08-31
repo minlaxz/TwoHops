@@ -3,6 +3,7 @@
  */
 
 import React from 'react';
+import { ActivityIndicator } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import App from '../App';
@@ -71,6 +72,7 @@ function emitNativeState(state: string) {
 beforeEach(async () => {
   await AsyncStorage.clear();
   VpnClient.start.mockClear();
+  VpnClient.stop.mockClear();
   emitNativeState('disconnected');
 });
 
@@ -104,6 +106,22 @@ async function seedTwoProfiles() {
       profiles: [profileEntry('a', 'Alpha'), profileEntry('b', 'Beta')],
       selectedId: 'a',
     }),
+  );
+}
+
+// Pressable forwards its props to nested nodes; the composite node carries
+// both onPress and the accessibility props.
+function fab(renderer: ReactTestRenderer.ReactTestRenderer) {
+  const nodes = renderer.root.findAll(
+    node =>
+      node.props.testID === 'fab' && typeof node.props.onPress === 'function',
+  );
+  return nodes[0] ?? null;
+}
+
+function fabIsHidden(renderer: ReactTestRenderer.ReactTestRenderer) {
+  return (
+    renderer.root.findAll(node => node.props.testID === 'fab').length === 0
   );
 }
 
@@ -281,11 +299,8 @@ test('tunnel start reads the Selected Profile', async () => {
   await ReactTestRenderer.act(async () => {
     profileRows(renderer)[1].props.onPress();
   });
-  const toggle = renderer.root.find(
-    node => typeof node.props.onValueChange === 'function',
-  );
   await ReactTestRenderer.act(async () => {
-    toggle.props.onValueChange(true);
+    fab(renderer)!.props.onPress();
   });
 
   expect(VpnClient.start).toHaveBeenCalledWith(
@@ -298,6 +313,162 @@ test('tunnel start reads the Selected Profile', async () => {
   await ReactTestRenderer.act(async () => {
     emitNativeState('connected');
   });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('FAB shows Play when Stopped and starts the tunnel', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  const node = fab(renderer)!;
+  expect(node.props.accessibilityLabel).toBe('Start tunnel');
+  expect(renderedText(renderer)).toContain('Stopped');
+  expect(renderedText(renderer)).toContain('▶');
+
+  await ReactTestRenderer.act(async () => {
+    node.props.onPress();
+  });
+  expect(VpnClient.start).toHaveBeenCalled();
+
+  // Settle the session so its reconciliation probes stop.
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('FAB is a disabled spinner while Busy', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    fab(renderer)!.props.onPress();
+  });
+
+  // start() resolved but reconciliation has not settled: still `connecting`.
+  const node = fab(renderer)!;
+  expect(node.props.accessibilityState.disabled).toBe(true);
+  expect(renderer.root.findAllByType(ActivityIndicator).length).toBe(1);
+  expect(renderedText(renderer)).toContain('Busy');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+
+  // `disconnecting` is Busy too: press Stop, reconciliation pending again.
+  await ReactTestRenderer.act(async () => {
+    fab(renderer)!.props.onPress();
+  });
+  expect(fab(renderer)!.props.accessibilityState.disabled).toBe(true);
+  expect(renderer.root.findAllByType(ActivityIndicator).length).toBe(1);
+  expect(renderedText(renderer)).toContain('Busy');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('FAB shows Stop when Running and stops the tunnel', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+
+  const node = fab(renderer)!;
+  expect(node.props.accessibilityLabel).toBe('Stop tunnel');
+  expect(renderedText(renderer)).toContain('Running');
+  expect(renderedText(renderer)).toContain('■');
+
+  await ReactTestRenderer.act(async () => {
+    node.props.onPress();
+  });
+  expect(VpnClient.stop).toHaveBeenCalled();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('recovery states show Running plus a detail label with Stop available', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('waitingForNetwork');
+  });
+  let text = renderedText(renderer);
+  expect(text).toContain('Running');
+  expect(text).toContain('Waiting for network…');
+  expect(fab(renderer)!.props.accessibilityLabel).toBe('Stop tunnel');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('recovering');
+  });
+  text = renderedText(renderer);
+  expect(text).toContain('Running');
+  expect(text).toContain('Reconnecting…');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('waitingForRecovery');
+  });
+  text = renderedText(renderer);
+  expect(text).toContain('Running');
+  expect(text).toContain('Reconnecting…');
+  expect(fab(renderer)!.props.accessibilityLabel).toBe('Stop tunnel');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('empty Profile List hides the FAB and hints to create a profile', async () => {
+  await AsyncStorage.setItem(
+    PROFILES_STORAGE_KEY,
+    JSON.stringify({ version: 1, profiles: [], selectedId: null }),
+  );
+  const renderer = await renderApp();
+
+  expect(fabIsHidden(renderer)).toBe(true);
+  expect(renderedText(renderer)).toContain(
+    'No profiles yet. Open Profile to create one.',
+  );
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('incomplete Selected Profile hides the FAB and lists missing fields', async () => {
+  const incomplete = profileEntry('a', 'Alpha');
+  incomplete.server.login = '';
+  incomplete.server.password = '';
+  await AsyncStorage.setItem(
+    PROFILES_STORAGE_KEY,
+    JSON.stringify({ version: 1, profiles: [incomplete], selectedId: 'a' }),
+  );
+  const renderer = await renderApp();
+
+  expect(fabIsHidden(renderer)).toBe(true);
+  const text = renderedText(renderer);
+  expect(text).toContain('login');
+  expect(text).toContain('password');
+  expect(text).toContain('Profile incomplete');
+
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
