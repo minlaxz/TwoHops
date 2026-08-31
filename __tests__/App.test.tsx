@@ -15,6 +15,8 @@ jest.mock('react-native-config', () => ({
 }));
 jest.mock('../src/services/vpn', () => ({
   VpnClient: {
+    start: jest.fn().mockResolvedValue(undefined),
+    stop: jest.fn().mockResolvedValue(undefined),
     getCurrentState: jest.fn().mockResolvedValue('disconnected'),
     onState: jest.fn(() => jest.fn()),
     onQueryLog: jest.fn(() => jest.fn()),
@@ -68,15 +70,16 @@ function emitNativeState(state: string) {
 
 beforeEach(async () => {
   await AsyncStorage.clear();
+  VpnClient.start.mockClear();
   emitNativeState('disconnected');
 });
 
-function profileEntry(id: string, name: string) {
+function profileEntry(id: string, name: string, ipAddress = '10.0.0.1') {
   return {
     version: 1,
     server: {
       name,
-      ipAddress: '10.0.0.1',
+      ipAddress,
       domain: 'vpn.example.com',
       login: 'user',
       password: 'pw',
@@ -256,6 +259,45 @@ test('tapping a profile in a recovery state is locked too', async () => {
     profileRows(renderer).map(row => row.props.accessibilityState.selected),
   ).toEqual([true, false]);
 
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('tunnel start reads the Selected Profile', async () => {
+  await AsyncStorage.setItem(
+    PROFILES_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      profiles: [
+        profileEntry('a', 'Alpha', '10.0.0.1'),
+        profileEntry('b', 'Beta', '10.0.0.2'),
+      ],
+      selectedId: 'a',
+    }),
+  );
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    profileRows(renderer)[1].props.onPress();
+  });
+  const toggle = renderer.root.find(
+    node => typeof node.props.onValueChange === 'function',
+  );
+  await ReactTestRenderer.act(async () => {
+    toggle.props.onValueChange(true);
+  });
+
+  expect(VpnClient.start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      server: expect.objectContaining({ name: 'Beta', ipAddress: '10.0.0.2' }),
+    }),
+  );
+
+  // Settle the session so its reconciliation probes stop.
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
