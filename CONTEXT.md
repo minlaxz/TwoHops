@@ -3,8 +3,16 @@
 ## Language
 
 **Setup Profile**:
-Everything the app remembers between launches: the user's Server Credentials, DNS Servers, Routing Mode, Local Rules, Remote Rules URL, plus the Imported Rules cache. One profile, one document.
+One named, identified tunnel configuration: the user's Server Credentials, DNS Servers, Routing Mode, Local Rules, Remote Rules URL, plus the Imported Rules cache. The app keeps many; each is one document.
 _Avoid_: setup config, settings, saved profile
+
+**Profile List**:
+Every Setup Profile the app remembers. May be empty on a fresh install.
+_Avoid_: profiles array
+
+**Selected Profile**:
+The one Setup Profile that tunnel commands act on and the Dashboard shows. Can only change while the Display State is Stopped. Deleting it while Stopped selects another Profile, or none.
+_Avoid_: active profile, current profile
 
 **Server Credentials**:
 The server identity and login used to start the tunnel: name, IP address, domain, login, password, protocol. Name is the native tunnel's profile identifier.
@@ -36,7 +44,7 @@ Local Rules merged with Imported Rules, deduplicated, local first. Derived on de
 _Avoid_: merged rules text, rules text
 
 **Profile Link**:
-A `twohops:` URL that carries Server Credentials, DNS Servers and a Remote Rules URL. Applying one fills the Setup Profile without any network access.
+A `twohops:` URL that carries Server Credentials, DNS Servers and a Remote Rules URL. Applying one creates a new Setup Profile without any network access; it never overwrites an existing Profile.
 _Avoid_: auto fill, import URL
 
 **Profile Completeness**:
@@ -61,3 +69,15 @@ _Avoid_: error state
 **Reconciliation**:
 The window after a connect or disconnect command during which the Tunnel Session re-reads the native tunnel until the state settles. A command is in flight until Reconciliation ends; a second connect during that window is ignored, a disconnect during it cancels.
 _Avoid_: state probe, sync
+
+**Display State**:
+The UI-facing collapse of Session State into three values: Stopped (`disconnected`), Busy (`connecting`, `disconnecting`), Running (`connected` and the recovery states, which add a detail label such as "Reconnecting…"). The play/stop control and profile-switch lock follow the Display State, never a raw Session State.
+_Avoid_: ui state, simple state
+
+**Traffic Logs**:
+The per-connection query rows the native tunnel emits (action, protocol, domain, addresses, time). Collected globally from tunnel start into a capped buffer, independent of which screen is open. Deliberately outside the Tunnel Session.
+_Avoid_: query log (in UI copy), connection log
+
+**Debug Logs**:
+App-side narration of lifecycle events (commands sent, state changes, profile edits). In-memory only; gone on app restart.
+_Avoid_: ui debug logs, app logs
