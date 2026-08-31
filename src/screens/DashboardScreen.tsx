@@ -42,7 +42,7 @@ export default function DashboardScreen() {
     snapshot: { state, lastError },
     session,
   } = useTunnelSession();
-  const { debugLogs } = useLogs();
+  const { trafficLogs, debugLogs } = useLogs();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -93,7 +93,6 @@ export default function DashboardScreen() {
 
   const handleConnect = () => {
     appendDebugLog('Connect button pressed.');
-    appendDebugLog(`Setup config: ${setupSummary}`);
 
     const input = tunnelStartInput(profile);
     if (!input.ok) {
@@ -102,6 +101,11 @@ export default function DashboardScreen() {
       Alert.alert('Connect refused', message);
       return;
     }
+    // Logs are cleared on each connect command, never by recovery (CONTEXT.md).
+    // A refused connect issues no command, so its refusal lines survive above.
+    trafficLogs.clear();
+    debugLogs.clear();
+    appendDebugLog(`Setup config: ${setupSummary}`);
     session.connect(input.value);
   };
 

@@ -3,6 +3,7 @@ import type { QueryLogRow } from '../types';
 /** A capped, newest-first, in-memory log store with change notification. */
 export type LogBuffer<T> = {
   append(row: T): void;
+  clear(): void;
   getRows(): readonly T[];
   subscribe(listener: () => void): () => void;
 };
@@ -13,6 +14,14 @@ export function createLogBuffer<T>({ cap }: { cap: number }): LogBuffer<T> {
   return {
     append: row => {
       rows = [row, ...rows].slice(0, cap);
+      listeners.forEach(l => l());
+    },
+    clear: () => {
+      // No-op on empty keeps the snapshot referentially stable.
+      if (rows.length === 0) {
+        return;
+      }
+      rows = [];
       listeners.forEach(l => l());
     },
     getRows: () => rows,
