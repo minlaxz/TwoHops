@@ -28,7 +28,6 @@ import { useAppTheme } from '../context/ThemeContext';
 
 type RootStackParamList = {
   Profile: undefined;
-  Debug: undefined;
 };
 
 type DebugLogEntry = {
@@ -179,13 +178,6 @@ export default function DashboardScreen() {
             textStyles={smallButtonTextStyle}
             onPress={() => navigation.navigate('Profile')}
           />
-          <View style={styles.leftButtonsSpacer} />
-          <TouchableOpacityButton
-            touchableOpacityStyles={smallButtonTouchableStyle}
-            textStyles={smallButtonTextStyle}
-            title="Debug"
-            onPress={() => navigation.navigate('Debug')}
-          />
         </View>
         <View style={styles.rightButton}>
           {!isHydrated ? (
@@ -287,9 +279,6 @@ function createStyles(theme: AppTheme) {
     },
     leftButtons: {
       flex: 1,
-    },
-    leftButtonsSpacer: {
-      height: 12,
     },
     rightButton: {
       flex: 1.2,
