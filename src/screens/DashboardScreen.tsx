@@ -126,7 +126,12 @@ export default function DashboardScreen() {
   };
 
   // Hidden with no Profile List or an incomplete Selected Profile (see #40).
-  const fabVisible = isHydrated && profiles.length > 0 && missing.length === 0;
+  // Incompleteness only blocks starting — a Running/Busy tunnel keeps its
+  // Stop control even if the profile is edited to incompleteness meanwhile.
+  const fabVisible =
+    isHydrated &&
+    profiles.length > 0 &&
+    (display !== 'stopped' || missing.length === 0);
 
   const onFabPress = () => {
     if (display === 'stopped') {

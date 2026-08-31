@@ -358,6 +358,18 @@ test('FAB is a disabled spinner while Busy', async () => {
   await ReactTestRenderer.act(async () => {
     emitNativeState('connected');
   });
+
+  // `disconnecting` is Busy too: press Stop, reconciliation pending again.
+  await ReactTestRenderer.act(async () => {
+    fab(renderer)!.props.onPress();
+  });
+  expect(fab(renderer)!.props.accessibilityState.disabled).toBe(true);
+  expect(renderer.root.findAllByType(ActivityIndicator).length).toBe(1);
+  expect(renderedText(renderer)).toContain('Busy');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
@@ -407,6 +419,14 @@ test('recovery states show Running plus a detail label with Stop available', asy
   text = renderedText(renderer);
   expect(text).toContain('Running');
   expect(text).toContain('Reconnecting…');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('waitingForRecovery');
+  });
+  text = renderedText(renderer);
+  expect(text).toContain('Running');
+  expect(text).toContain('Reconnecting…');
+  expect(fab(renderer)!.props.accessibilityLabel).toBe('Stop tunnel');
 
   await ReactTestRenderer.act(async () => {
     emitNativeState('disconnected');
