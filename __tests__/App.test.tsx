@@ -859,6 +859,62 @@ test('a twohops: deep link while Running creates without selecting', async () =>
   });
 });
 
+test('theme change stays on Settings and keeps Debug Logs (issue #49)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  // Produce a debug entry, then leave for Settings.
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  const settingsTab = tabButtons(renderer).find(node =>
+    node.props.accessibilityLabel.startsWith('Settings'),
+  )!;
+  await ReactTestRenderer.act(async () => {
+    settingsTab.props.onPress();
+  });
+
+  const darkButton = renderer.root.findAll(
+    node =>
+      node.props.title === 'Dark' && typeof node.props.onPress === 'function',
+  )[0];
+  await ReactTestRenderer.act(async () => {
+    darkButton.props.onPress();
+  });
+
+  // Theme applied, navigation did not reset to Dashboard.
+  let text = renderedText(renderer);
+  // renderedText joins JSX text children with newlines: "Theme: " / "dark".
+  expect(text).toMatch(/Theme: ?\ndark/);
+  expect(text).toContain('Appearance');
+  // Pressable spreads props across nested nodes; any Settings-tab node
+  // carrying accessibilityState reports the selected tab.
+  expect(
+    renderer.root
+      .findAll(
+        node =>
+          typeof node.props.accessibilityLabel === 'string' &&
+          node.props.accessibilityLabel.startsWith('Settings, tab,') &&
+          node.props.accessibilityState !== undefined,
+      )
+      .some(node => node.props.accessibilityState.selected === true),
+  ).toBe(true);
+  // Tunnel Session state survived too: Dashboard still shows Running.
+  expect(text).toContain('Running');
+
+  // Debug Logs survived the theme change.
+  await openLogsTab(renderer);
+  await press(renderer, 'logs-segment-debug');
+  expect(renderedText(renderer)).toContain('Native event: connected.');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
 test('Settings tab shows theme picker and app version', async () => {
   const renderer = await renderApp();
 

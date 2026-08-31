@@ -8,7 +8,12 @@
 import * as React from 'react';
 import { Linking, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { createStaticNavigation } from '@react-navigation/native';
+import {
+  createStaticNavigation,
+  DarkTheme,
+  DefaultTheme,
+  type Theme,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {
   createBottomTabNavigator,
@@ -30,6 +35,7 @@ import {
 import { LogsProvider } from './src/context/LogsContext';
 import { displayState } from './src/services/tunnelSession';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
+import { getAppTheme, type AppTheme } from './src/theme/colors';
 import DashboardScreen from './src/screens/DashboardScreen';
 import LogsScreen from './src/screens/LogsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -80,63 +86,110 @@ function ProfileLinkListener() {
   return null;
 }
 
-function AppNavigator() {
-  const { theme } = useAppTheme();
-  const headerOptions = {
+// Navigators are created ONCE at module scope (issue #49): rebuilding them in
+// render produces new component types, which unmounts the whole navigation
+// tree on every theme change — resetting to Dashboard and wiping provider
+// state. Theme reaches screenOptions through the navigation `theme` prop; the
+// full AppTheme rides along on the `app` key.
+type NavigationAppTheme = Theme & { app: AppTheme };
+
+function toNavigationTheme(theme: AppTheme): NavigationAppTheme {
+  const base = theme.isDark ? DarkTheme : DefaultTheme;
+  return {
+    ...base,
+    dark: theme.isDark,
+    colors: {
+      ...base.colors,
+      primary: theme.colors.buttonPrimary,
+      background: theme.colors.background,
+      card: theme.colors.surface,
+      text: theme.colors.textPrimary,
+      border: theme.colors.border,
+    },
+    app: theme,
+  };
+}
+
+// Falls back to the stock palette if <Navigation> ever renders without
+// toNavigationTheme's output (e.g. a bare render in a test).
+function appThemeOf(navigationTheme: Theme): AppTheme {
+  const { app } = navigationTheme as NavigationAppTheme;
+  return app ?? getAppTheme(navigationTheme.dark ? 'dark' : 'light');
+}
+
+function headerOptions(theme: AppTheme) {
+  return {
     headerStyle: { backgroundColor: theme.colors.surface },
     headerTitleStyle: { color: theme.colors.textPrimary },
     headerTintColor: theme.colors.textPrimary,
     headerShadowVisible: !theme.isDark,
   };
-  const MainTabs = createBottomTabNavigator({
-    screenOptions: {
-      ...headerOptions,
+}
+
+const MainTabs = createBottomTabNavigator({
+  screenOptions: ({ theme: navigationTheme }) => {
+    const theme = appThemeOf(navigationTheme);
+    return {
+      ...headerOptions(theme),
       tabBarStyle: { backgroundColor: theme.colors.surface },
       tabBarActiveTintColor: theme.colors.buttonPrimary,
       tabBarInactiveTintColor: theme.colors.textSecondary,
       sceneStyle: { backgroundColor: theme.colors.background },
-    },
-    screens: {
-      Dashboard: {
-        screen: DashboardScreen,
-        options: {
-          title: 'Dashboard',
-          tabBarIcon: tabIcon('speedometer', 'speedometer-outline'),
-        },
-      },
-      Logs: {
-        screen: LogsScreen,
-        options: {
-          title: 'Logs',
-          tabBarIcon: tabIcon('reader', 'reader-outline'),
-        },
-      },
-      Settings: {
-        screen: SettingsScreen,
-        options: {
-          title: 'Settings',
-          tabBarIcon: tabIcon('settings', 'settings-outline'),
-        },
+    };
+  },
+  screens: {
+    Dashboard: {
+      screen: DashboardScreen,
+      options: {
+        title: 'Dashboard',
+        tabBarIcon: tabIcon('speedometer', 'speedometer-outline'),
       },
     },
-  });
-  const RootStack = createNativeStackNavigator({
-    screenOptions: {
-      ...headerOptions,
+    Logs: {
+      screen: LogsScreen,
+      options: {
+        title: 'Logs',
+        tabBarIcon: tabIcon('reader', 'reader-outline'),
+      },
+    },
+    Settings: {
+      screen: SettingsScreen,
+      options: {
+        title: 'Settings',
+        tabBarIcon: tabIcon('settings', 'settings-outline'),
+      },
+    },
+  },
+});
+
+const RootStack = createNativeStackNavigator({
+  screenOptions: ({ theme: navigationTheme }) => {
+    const theme = appThemeOf(navigationTheme);
+    return {
+      ...headerOptions(theme),
       contentStyle: { backgroundColor: theme.colors.background },
+    };
+  },
+  screens: {
+    Main: {
+      screen: MainTabs,
+      options: { headerShown: false },
     },
-    screens: {
-      Main: {
-        screen: MainTabs,
-        options: { headerShown: false },
-      },
-      Profile: {
-        screen: ProfileScreen,
-        options: { title: 'Profile' },
-      },
+    Profile: {
+      screen: ProfileScreen,
+      options: { title: 'Profile' },
     },
-  });
-  const Navigation = createStaticNavigation(RootStack);
+  },
+});
+
+const Navigation = createStaticNavigation(RootStack);
+
+function AppNavigator() {
+  const { theme } = useAppTheme();
+  const navigationTheme = React.useMemo(
+    () => toNavigationTheme(theme),
+    [theme],
+  );
 
   return (
     <>
@@ -148,7 +201,7 @@ function AppNavigator() {
         <TunnelSessionProvider>
           <ProfileLinkListener />
           <LogsProvider>
-            <Navigation />
+            <Navigation theme={navigationTheme} />
           </LogsProvider>
         </TunnelSessionProvider>
       </SetupProfileProvider>
