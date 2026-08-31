@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Alert, Linking } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import App from '../App';
@@ -74,6 +74,10 @@ beforeEach(async () => {
   VpnClient.start.mockClear();
   VpnClient.stop.mockClear();
   emitNativeState('disconnected');
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 function profileEntry(id: string, name: string, ipAddress = '10.0.0.1') {
@@ -445,7 +449,7 @@ test('empty Profile List hides the FAB and hints to create a profile', async () 
 
   expect(fabIsHidden(renderer)).toBe(true);
   expect(renderedText(renderer)).toContain(
-    'No profiles yet. Open Profile to create one.',
+    'No profiles yet. Tap + to add one.',
   );
 
   await ReactTestRenderer.act(async () => {
@@ -469,6 +473,301 @@ test('incomplete Selected Profile hides the FAB and lists missing fields', async
   expect(text).toContain('password');
   expect(text).toContain('Profile incomplete');
 
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+// Pressable forwards testID to nested nodes; keep the composite node.
+function pressableByTestID(
+  renderer: ReactTestRenderer.ReactTestRenderer,
+  testID: string,
+) {
+  const nodes = renderer.root.findAll(
+    node =>
+      node.props.testID === testID && typeof node.props.onPress === 'function',
+  );
+  return nodes[0] ?? null;
+}
+
+function textInputByTestID(
+  renderer: ReactTestRenderer.ReactTestRenderer,
+  testID: string,
+) {
+  return renderer.root.findAll(
+    node =>
+      node.props.testID === testID &&
+      typeof node.props.onChangeText === 'function',
+  )[0];
+}
+
+async function press(
+  renderer: ReactTestRenderer.ReactTestRenderer,
+  testID: string,
+) {
+  await ReactTestRenderer.act(async () => {
+    pressableByTestID(renderer, testID)!.props.onPress();
+  });
+}
+
+test('"+" → New profile opens a blank editor for the new profile', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-add');
+  await press(renderer, 'profile-add-new');
+
+  // Editor pushed, loaded with the numbered new profile, no credentials.
+  expect(renderedText(renderer)).toContain('Configurations');
+  expect(textInputByTestID(renderer, 'profile-name-input').props.value).toBe(
+    'Profile 1',
+  );
+  expect(profileRows(renderer)).toHaveLength(3);
+  // Selection stays on Alpha — adding is not selecting.
+  expect(
+    profileRows(renderer).map(row => row.props.accessibilityState.selected),
+  ).toEqual([true, false, false]);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('"+" → Paste profile link creates and selects while Stopped', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-add');
+  await press(renderer, 'profile-add-link');
+  await ReactTestRenderer.act(async () => {
+    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
+      'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com',
+    );
+  });
+  await press(renderer, 'profile-link-apply');
+
+  const rows = profileRows(renderer);
+  expect(rows).toHaveLength(3);
+  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
+    false,
+    false,
+    true,
+  ]);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('a bad pasted link alerts and creates nothing', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-add');
+  await press(renderer, 'profile-add-link');
+  await ReactTestRenderer.act(async () => {
+    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
+      'https://not-a-profile-link',
+    );
+  });
+  await press(renderer, 'profile-link-apply');
+
+  expect(alert).toHaveBeenCalledWith('Profile Link failed', expect.anything());
+  expect(profileRows(renderer)).toHaveLength(2);
+
+  alert.mockRestore();
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('a Profile Link while Running creates without selecting', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  await press(renderer, 'profile-add');
+  await press(renderer, 'profile-add-link');
+  await ReactTestRenderer.act(async () => {
+    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
+      'twohops://x?login=bob',
+    );
+  });
+  await press(renderer, 'profile-link-apply');
+
+  const rows = profileRows(renderer);
+  expect(rows).toHaveLength(3);
+  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
+    true,
+    false,
+    false,
+  ]);
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('pencil opens the editor for that profile; rename shows on the card', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-edit-b');
+
+  const nameInput = textInputByTestID(renderer, 'profile-name-input');
+  expect(nameInput.props.value).toBe('Beta');
+  await ReactTestRenderer.act(async () => {
+    nameInput.props.onChangeText('Backup');
+  });
+
+  // The Dashboard stays mounted beneath the pushed editor.
+  expect(renderedText(renderer)).toContain('Backup');
+  expect(renderedText(renderer)).not.toContain('Beta');
+  // Editing is not selecting: Alpha keeps the selection.
+  expect(
+    profileRows(renderer).map(row => row.props.accessibilityState.selected),
+  ).toEqual([true, false]);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('pencil edits land on that profile only; tunnel still starts from the Selected Profile', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-edit-b');
+  const username = renderer.root.findAll(
+    node =>
+      node.props.placeholder === 'Username' &&
+      typeof node.props.onChangeText === 'function',
+  )[0];
+  await ReactTestRenderer.act(async () => {
+    username.props.onChangeText('edited-user');
+  });
+
+  await ReactTestRenderer.act(async () => {
+    fab(renderer)!.props.onPress();
+  });
+  expect(VpnClient.start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      server: expect.objectContaining({ name: 'Alpha', login: 'user' }),
+    }),
+  );
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('deleting the Selected Profile is blocked while Running', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  await press(renderer, 'profile-edit-a');
+  await press(renderer, 'profile-delete');
+
+  expect(alert).toHaveBeenCalledWith(
+    'Cannot delete',
+    expect.stringContaining('Stop the tunnel'),
+  );
+  expect(profileRows(renderer)).toHaveLength(2);
+
+  alert.mockRestore();
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('deleting the Selected Profile while Stopped reselects the other', async () => {
+  const alert = jest
+    .spyOn(Alert, 'alert')
+    .mockImplementation((_title, _message, buttons) => {
+      buttons?.find(button => button.style === 'destructive')?.onPress?.();
+    });
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-edit-a');
+  await press(renderer, 'profile-delete');
+
+  const rows = profileRows(renderer);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].props.testID).toBe('profile-row-b');
+  expect(rows[0].props.accessibilityState.selected).toBe(true);
+  // The editor for the deleted profile has been popped.
+  expect(renderedText(renderer)).not.toContain('Configurations');
+
+  alert.mockRestore();
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('a twohops: deep link creates and selects while Stopped', async () => {
+  jest
+    .spyOn(Linking, 'getInitialURL')
+    .mockResolvedValue('twohops://x?login=bob&ip=10.9.9.9');
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  const rows = profileRows(renderer);
+  expect(rows).toHaveLength(3);
+  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
+    false,
+    false,
+    true,
+  ]);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('a twohops: deep link while Running creates without selecting', async () => {
+  // Hold the initial URL until the tunnel is Running, then release it.
+  let releaseInitialURL!: (url: string) => void;
+  jest
+    .spyOn(Linking, 'getInitialURL')
+    .mockReturnValue(new Promise(resolve => (releaseInitialURL = resolve)));
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  await ReactTestRenderer.act(async () => {
+    releaseInitialURL('twohops://x?login=bob');
+  });
+
+  const rows = profileRows(renderer);
+  expect(rows).toHaveLength(3);
+  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
+    true,
+    false,
+    false,
+  ]);
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });

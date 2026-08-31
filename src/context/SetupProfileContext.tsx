@@ -10,22 +10,27 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from 'react-native-config';
 import {
-  clearProfile as clearProfileIntent,
   defaultProfile,
   updateProfile as updateProfileIntent,
   updateServer as updateServerIntent,
   type ProfileEnv,
+  type ProfileLinkError,
   type ProfileStorage,
+  type Result,
   type ServerCredentials,
   type SetupProfile,
 } from '../services/setupProfile';
 import {
+  addFromProfileLink as addFromProfileLinkIntent,
+  addProfile as addProfileIntent,
   defaultProfileList,
+  deleteProfile as deleteProfileIntent,
   loadProfileList,
+  renameProfile as renameProfileIntent,
   saveProfileList,
   selectProfile as selectProfileIntent,
   selectedProfile,
-  updateSelected,
+  updateEntry,
   type ProfileEntry,
   type ProfileList,
 } from '../services/profileStore';
@@ -33,13 +38,24 @@ import {
 type SetupProfileContextValue = {
   profiles: ProfileEntry[];
   selectedId: string | null;
-  /** The Selected Profile — what the editor edits and tunnel start reads. */
+  /** The Selected Profile — what the Dashboard shows and tunnel start reads. */
   profile: SetupProfile;
   isHydrated: boolean;
   selectProfile: (id: string) => void;
-  updateProfile: (patch: Partial<Omit<SetupProfile, 'version'>>) => void;
-  updateServer: (patch: Partial<ServerCredentials>) => void;
-  clearProfile: () => void;
+  /** Appends a blank profile and returns its id (for opening its editor). */
+  addProfile: () => string;
+  /** Creates a profile from a Profile Link; selects it when `select`. */
+  addFromProfileLink: (
+    link: string,
+    select: boolean,
+  ) => Result<{ id: string }, ProfileLinkError>;
+  updateEntryProfile: (
+    id: string,
+    patch: Partial<Omit<SetupProfile, 'version'>>,
+  ) => void;
+  updateEntryServer: (id: string, patch: Partial<ServerCredentials>) => void;
+  renameProfile: (id: string, name: string) => void;
+  deleteProfile: (id: string) => void;
 };
 
 const env: ProfileEnv = Config as ProfileEnv;
@@ -99,23 +115,58 @@ export function SetupProfileProvider({
     (id: string) => setList(prev => selectProfileIntent(prev, id)),
     [],
   );
-  const updateProfile = useCallback(
-    (patch: Partial<Omit<SetupProfile, 'version'>>) =>
+  // Adds must hand the new id back synchronously (to open its editor), so
+  // they compute from a ref mirroring the latest list instead of an updater,
+  // which React defers.
+  const listRef = useRef(list);
+  listRef.current = list;
+  const addProfile = useCallback(() => {
+    const result = addProfileIntent(listRef.current, env);
+    listRef.current = result.list;
+    setList(result.list);
+    return result.id;
+  }, []);
+  const addFromProfileLink = useCallback(
+    (
+      link: string,
+      select: boolean,
+    ): Result<{ id: string }, ProfileLinkError> => {
+      const result = addFromProfileLinkIntent(
+        listRef.current,
+        link,
+        env,
+        select,
+      );
+      if (!result.ok) {
+        return result;
+      }
+      listRef.current = result.value.list;
+      setList(result.value.list);
+      return { ok: true, value: { id: result.value.id } };
+    },
+    [],
+  );
+  const updateEntryProfile = useCallback(
+    (id: string, patch: Partial<Omit<SetupProfile, 'version'>>) =>
       setList(prev =>
-        updateSelected(prev, profile => updateProfileIntent(profile, patch)),
+        updateEntry(prev, id, profile => updateProfileIntent(profile, patch)),
       ),
     [],
   );
-  const updateServer = useCallback(
-    (patch: Partial<ServerCredentials>) =>
+  const updateEntryServer = useCallback(
+    (id: string, patch: Partial<ServerCredentials>) =>
       setList(prev =>
-        updateSelected(prev, profile => updateServerIntent(profile, patch)),
+        updateEntry(prev, id, profile => updateServerIntent(profile, patch)),
       ),
     [],
   );
-  // Persist effect writes the defaults; nothing else to remove.
-  const clearProfile = useCallback(
-    () => setList(prev => updateSelected(prev, () => clearProfileIntent(env))),
+  const renameProfile = useCallback(
+    (id: string, name: string) =>
+      setList(prev => renameProfileIntent(prev, id, name)),
+    [],
+  );
+  const deleteProfile = useCallback(
+    (id: string) => setList(prev => deleteProfileIntent(prev, id)),
     [],
   );
 
@@ -126,11 +177,24 @@ export function SetupProfileProvider({
       profile: selectedProfile(list) ?? defaultProfile(env),
       isHydrated,
       selectProfile,
-      updateProfile,
-      updateServer,
-      clearProfile,
+      addProfile,
+      addFromProfileLink,
+      updateEntryProfile,
+      updateEntryServer,
+      renameProfile,
+      deleteProfile,
     }),
-    [list, isHydrated, selectProfile, updateProfile, updateServer, clearProfile],
+    [
+      list,
+      isHydrated,
+      selectProfile,
+      addProfile,
+      addFromProfileLink,
+      updateEntryProfile,
+      updateEntryServer,
+      renameProfile,
+      deleteProfile,
+    ],
   );
 
   return (

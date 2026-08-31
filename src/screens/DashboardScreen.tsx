@@ -13,6 +13,7 @@ import {
   Pressable,
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
 } from 'react-native';
@@ -21,6 +22,7 @@ import { useTunnelSession } from '../context/TunnelSessionContext';
 import {
   effectiveRules,
   missingFields,
+  profileLinkErrorMessage,
   tunnelStartInput,
 } from '../services/setupProfile';
 import { displayState, type SessionState } from '../services/tunnelSession';
@@ -28,7 +30,7 @@ import type { AppTheme } from '../theme/colors';
 import { useAppTheme } from '../context/ThemeContext';
 
 type RootStackParamList = {
-  Profile: undefined;
+  Profile: { profileId?: string } | undefined;
 };
 
 type DebugLogEntry = {
@@ -48,8 +50,19 @@ export default function DashboardScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const { profile, profiles, selectedId, selectProfile, isHydrated } =
-    useSetupProfile();
+  const {
+    profile,
+    profiles,
+    selectedId,
+    selectProfile,
+    addProfile,
+    addFromProfileLink,
+    isHydrated,
+  } = useSetupProfile();
+  // "+" flow: closed → menu (New / Paste link) → link input. One value, so
+  // the states cannot overlap.
+  const [addFlow, setAddFlow] = useState<'closed' | 'menu' | 'link'>('closed');
+  const [linkText, setLinkText] = useState('');
   // ponytail: inline transient notice as the "toast"; RN has no cross-platform
   // toast and this is the only caller — extract if a second one shows up
   const [switchLockNotice, setSwitchLockNotice] = useState<string | null>(null);
@@ -191,7 +204,80 @@ export default function DashboardScreen() {
         </View>
       </View>
       <View style={styles.profilesCard}>
-        <Text style={styles.sectionTitle}>Profiles</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.sectionTitle}>Profiles</Text>
+          <Pressable
+            testID="profile-add"
+            accessibilityRole="button"
+            accessibilityLabel="Add profile"
+            style={styles.addButton}
+            onPress={() =>
+              setAddFlow(prev => (prev === 'closed' ? 'menu' : 'closed'))
+            }
+          >
+            <Text style={styles.addGlyph}>＋</Text>
+          </Pressable>
+        </View>
+        {addFlow === 'menu' ? (
+          <View style={styles.addMenu}>
+            <Pressable
+              testID="profile-add-new"
+              accessibilityRole="button"
+              style={styles.addMenuItem}
+              onPress={() => {
+                setAddFlow('closed');
+                const id = addProfile();
+                appendDebugLog('New profile created.');
+                navigation.navigate('Profile', { profileId: id });
+              }}
+            >
+              <Text style={styles.profileName}>New profile</Text>
+            </Pressable>
+            <Pressable
+              testID="profile-add-link"
+              accessibilityRole="button"
+              style={styles.addMenuItem}
+              onPress={() => setAddFlow('link')}
+            >
+              <Text style={styles.profileName}>Paste profile link</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {addFlow === 'link' ? (
+          <View style={styles.linkRow}>
+            <TextInput
+              testID="profile-link-input"
+              style={styles.linkInput}
+              placeholder="twohops://..."
+              placeholderTextColor={theme.colors.placeholder}
+              value={linkText}
+              onChangeText={setLinkText}
+              autoCapitalize="none"
+            />
+            <TouchableOpacityButton
+              touchableOpacityStyles={styles.linkApplyButton}
+              textStyles={styles.linkApplyText}
+              title="Add"
+              testID="profile-link-apply"
+              onPress={() => {
+                const result = addFromProfileLink(
+                  linkText,
+                  display === 'stopped',
+                );
+                if (!result.ok) {
+                  Alert.alert(
+                    'Profile Link failed',
+                    profileLinkErrorMessage(result.error),
+                  );
+                  return;
+                }
+                appendDebugLog('Profile created from a Profile Link.');
+                setLinkText('');
+                setAddFlow('closed');
+              }}
+            />
+          </View>
+        ) : null}
         {profiles.map(entry => {
           const isSelected = entry.id === selectedId;
           return (
@@ -214,14 +300,25 @@ export default function DashboardScreen() {
               >
                 {entry.name}
               </Text>
-              {isSelected ? <Text style={styles.profileName}>✓</Text> : null}
+              <View style={styles.rowRight}>
+                {isSelected ? <Text style={styles.profileName}>✓</Text> : null}
+                <Pressable
+                  testID={`profile-edit-${entry.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit profile ${entry.name}`}
+                  hitSlop={8}
+                  onPress={() =>
+                    navigation.navigate('Profile', { profileId: entry.id })
+                  }
+                >
+                  <Text style={styles.pencil}>✎</Text>
+                </Pressable>
+              </View>
             </Pressable>
           );
         })}
         {profiles.length === 0 && isHydrated ? (
-          <Text style={styles.hint}>
-            No profiles yet. Open Profile to create one.
-          </Text>
+          <Text style={styles.hint}>No profiles yet. Tap + to add one.</Text>
         ) : null}
         {switchLockNotice ? (
           <Text style={styles.errorHint}>{switchLockNotice}</Text>
@@ -363,6 +460,69 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.danger,
       textAlign: 'center',
       paddingHorizontal: 8,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    addButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.buttonPrimary,
+      marginBottom: 12,
+    },
+    addGlyph: {
+      fontSize: 18,
+      color: theme.colors.buttonPrimaryText,
+    },
+    addMenu: {
+      marginBottom: 8,
+    },
+    addMenuItem: {
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      marginBottom: 6,
+      backgroundColor: theme.colors.background,
+    },
+    linkRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    linkInput: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: theme.colors.inputBackground,
+      color: theme.colors.textPrimary,
+      marginRight: 8,
+    },
+    linkApplyButton: {
+      width: 64,
+      height: 40,
+      padding: 4,
+    },
+    linkApplyText: {
+      fontSize: 12,
+    },
+    rowRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    pencil: {
+      fontSize: 16,
+      color: theme.colors.textSecondary,
     },
     profilesCard: {
       marginTop: 14,

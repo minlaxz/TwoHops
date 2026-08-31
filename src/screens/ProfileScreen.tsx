@@ -1,26 +1,45 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Text, StyleSheet, View, TextInput } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useSetupProfile } from '../context/SetupProfileContext';
+import { useTunnelSession } from '../context/TunnelSessionContext';
 import { parseRules } from '../services/routingRules';
 import {
-  applyProfileLink,
   effectiveRules,
   importRemoteRules,
+  profileLinkErrorMessage,
 } from '../services/setupProfile';
+import { displayState } from '../services/tunnelSession';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme } from '../theme/colors';
 
 export default function ServerScreen() {
-  const { profile, updateProfile, updateServer, clearProfile } =
-    useSetupProfile();
-  const { server, routingMode, localRulesText, remoteRulesURL, importedAt } =
-    profile;
+  const {
+    profiles,
+    selectedId,
+    addFromProfileLink,
+    updateEntryProfile,
+    updateEntryServer,
+    renameProfile,
+    deleteProfile,
+  } = useSetupProfile();
+  const {
+    snapshot: { state },
+  } = useTunnelSession();
+  const navigation = useNavigation();
+  const route = useRoute();
+  // The editor is addressed by id (pencil / New profile); the Dashboard's
+  // plain Profile button falls back to the Selected Profile.
+  const routeProfileId = (route.params as { profileId?: string } | undefined)
+    ?.profileId;
+  const profileId = routeProfileId ?? selectedId;
+  const entry = profiles.find(candidate => candidate.id === profileId);
   const [url, setURL] = useState<string>('');
   // DNS text is only a display of the DNS Servers list; local state keeps
   // the user's in-progress punctuation while the list is the source of truth.
-  const dnsList = profile.dnsServers.join(',');
+  const dnsList = (entry?.dnsServers ?? []).join(',');
   const [dnsText, setDnsText] = useState(dnsList);
   useEffect(() => {
     setDnsText(prev =>
@@ -30,6 +49,52 @@ export default function ServerScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const placeholderTextColor = theme.colors.placeholder;
+
+  // Deleted underneath us, or opened with nothing to edit.
+  if (!entry) {
+    return (
+      <MainScreen>
+        <Text style={styles.title}>Configurations</Text>
+        <Text style={styles.inputDescription}>
+          No profile to edit. Use + on the Dashboard to add one.
+        </Text>
+      </MainScreen>
+    );
+  }
+
+  const profile = entry;
+  const { server, routingMode, localRulesText, remoteRulesURL, importedAt } =
+    profile;
+  const display = displayState(state);
+  const updateProfile = (patch: Parameters<typeof updateEntryProfile>[1]) =>
+    updateEntryProfile(entry.id, patch);
+  const updateServer = (patch: Parameters<typeof updateEntryServer>[1]) =>
+    updateEntryServer(entry.id, patch);
+
+  const handleDelete = () => {
+    if (entry.id === selectedId && display !== 'stopped') {
+      Alert.alert(
+        'Cannot delete',
+        'Stop the tunnel to delete the Selected Profile.',
+      );
+      return;
+    }
+    Alert.alert(
+      `Delete "${entry.name}"?`,
+      'This removes the profile and its saved credentials from this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteProfile(entry.id);
+            navigation.goBack();
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <MainScreen>
@@ -45,31 +110,38 @@ export default function ServerScreen() {
           autoCapitalize="none"
         />
         <Text style={styles.inputDescription}>
-          This section is for users who want a quick setup without filling in
-          individual fields. You can paste a single URL containing all necessary
-          information, and the app will attempt to parse it to fill in the
-          details automatically.
+          Paste a Profile Link to create a new profile with its details filled
+          in automatically. Existing profiles are never overwritten.
         </Text>
         <TouchableOpacityButton
           touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
           textStyles={styles.modeButtonText}
           title="Apply Link"
           onPress={() => {
-            const result = applyProfileLink(profile, url);
+            const result = addFromProfileLink(url, display === 'stopped');
             if (!result.ok) {
               Alert.alert(
                 'Profile Link failed',
-                result.error.kind === 'scheme'
-                  ? 'Link must start with twohops://'
-                  : 'Link is not a valid URL.',
+                profileLinkErrorMessage(result.error),
               );
               return;
             }
-            updateProfile(result.value);
+            setURL('');
+            navigation.setParams({ profileId: result.value.id } as never);
           }}
         />
         <View style={styles.line} />
         <Text style={styles.sectionTitle}>Advance</Text>
+        <Text style={styles.inputLabel}>Profile name:</Text>
+        <TextInput
+          testID="profile-name-input"
+          style={styles.input}
+          placeholder="Profile name"
+          placeholderTextColor={placeholderTextColor}
+          value={entry.name}
+          onChangeText={value => renameProfile(entry.id, value)}
+          autoCapitalize="none"
+        />
         <TextInput
           style={styles.input}
           placeholder="Name"
@@ -250,24 +322,9 @@ export default function ServerScreen() {
         <TouchableOpacityButton
           touchableOpacityStyles={[styles.modeButton, styles.clearButton]}
           textStyles={styles.modeButtonText}
-          title="Clear Profile"
-          onPress={() => {
-            Alert.alert(
-              'Clear profile?',
-              'This removes saved server, DNS, and routing data from this device.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Clear',
-                  style: 'destructive',
-                  onPress: () => {
-                    clearProfile();
-                    setURL('');
-                  },
-                },
-              ],
-            );
-          }}
+          title="Delete Profile"
+          testID="profile-delete"
+          onPress={handleDelete}
         />
       </View>
     </MainScreen>

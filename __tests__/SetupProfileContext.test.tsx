@@ -62,7 +62,7 @@ test('hydrates from storage and persists edits', async () => {
   expect(ctx().profile.dnsServers).toEqual(['1.1.1.1']);
 
   await ReactTestRenderer.act(async () => {
-    ctx().updateProfile({ dnsServers: ['9.9.9.9'] });
+    ctx().updateEntryProfile(ctx().selectedId!, { dnsServers: ['9.9.9.9'] });
   });
   await flush();
   expect(storedList(map).profiles[0].dnsServers).toEqual(['9.9.9.9']);
@@ -79,18 +79,67 @@ test('does not write before hydration completes', async () => {
   expect(map.has(PROFILES_STORAGE_KEY)).toBe(false);
 });
 
-test('clear resets the Selected Profile to defaults', async () => {
-  const { storage, map } = memoryStorage();
+test('edits land on the addressed profile only, selected or not', async () => {
+  const seed: ProfileList = {
+    version: 1,
+    profiles: [defaultsEntry('a', 'Alpha'), defaultsEntry('b', 'Beta')],
+    selectedId: 'a',
+  };
+  const { storage, map } = memoryStorage({
+    [PROFILES_STORAGE_KEY]: JSON.stringify(seed),
+  });
   const ctx = await mount(storage);
   await ReactTestRenderer.act(async () => {
-    ctx().updateServer({ login: 'bob' });
-  });
-  await ReactTestRenderer.act(async () => {
-    ctx().clearProfile();
+    ctx().updateEntryServer('b', { login: 'bob' });
   });
   await flush();
-  expect(ctx().profile.server.login).toBe('');
-  expect(storedList(map).profiles[0].server.login).toBe('');
+  expect(ctx().profile.server.login).toBe(''); // Selected Profile untouched
+  expect(storedList(map).profiles[1].server.login).toBe('bob');
+});
+
+test('addProfile returns the new id; rename and delete persist', async () => {
+  const { storage, map } = memoryStorage();
+  const ctx = await mount(storage);
+  let id = '';
+  await ReactTestRenderer.act(async () => {
+    id = ctx().addProfile();
+  });
+  await flush();
+  expect(ctx().profiles).toHaveLength(2);
+  expect(storedList(map).profiles[1].id).toBe(id);
+
+  await ReactTestRenderer.act(async () => {
+    ctx().renameProfile(id, 'Backup');
+  });
+  await flush();
+  expect(storedList(map).profiles[1].name).toBe('Backup');
+
+  await ReactTestRenderer.act(async () => {
+    ctx().deleteProfile(id);
+  });
+  await flush();
+  expect(storedList(map).profiles).toHaveLength(1);
+});
+
+test('addFromProfileLink creates + selects; errors reported', async () => {
+  const { storage, map } = memoryStorage();
+  const ctx = await mount(storage);
+  let result!: ReturnType<Ctx['addFromProfileLink']>;
+  await ReactTestRenderer.act(async () => {
+    result = ctx().addFromProfileLink('twohops://x?login=bob', true);
+  });
+  await flush();
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(ctx().selectedId).toBe(result.value.id);
+  expect(storedList(map).profiles).toHaveLength(2);
+  expect(ctx().profile.server.login).toBe('bob');
+
+  await ReactTestRenderer.act(async () => {
+    result = ctx().addFromProfileLink('https://x', true);
+  });
+  expect(result).toEqual({ ok: false, error: { kind: 'scheme' } });
+  expect(ctx().profiles).toHaveLength(2);
 });
 
 test('selectProfile switches the Selected Profile and persists', async () => {

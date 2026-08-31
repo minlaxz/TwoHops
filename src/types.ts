@@ -53,6 +53,7 @@ export interface QueryLogRow {
 export type CustomButtonProps = {
   title?: string;
   disabled?: boolean;
+  testID?: string;
   onPress?: () => void;
   touchableOpacityStyles?: StyleProp<ViewStyle>;
   textStyles?: StyleProp<TextStyle>;

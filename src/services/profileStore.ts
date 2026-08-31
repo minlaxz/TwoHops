@@ -2,12 +2,15 @@
 // Setup Profile and the selection pointer. See CONTEXT.md and ADR 0003.
 
 import {
+  applyProfileLink,
   defaultProfile,
   loadProfile,
   LEGACY_STORAGE_KEYS,
   PROFILE_STORAGE_KEY,
   type ProfileEnv,
+  type ProfileLinkError,
   type ProfileStorage,
+  type Result,
   type SetupProfile,
 } from './setupProfile';
 
@@ -47,6 +50,63 @@ export function defaultProfileList(env: ProfileEnv): ProfileList {
   return wrapAsList(defaultProfile(env));
 }
 
+// Smallest "Profile N" not already taken, so deletes free their numbers.
+function nextProfileName(list: ProfileList): string {
+  const taken = new Set(list.profiles.map(entry => entry.name));
+  let n = 1;
+  while (taken.has(`Profile ${n}`)) {
+    n += 1;
+  }
+  return `Profile ${n}`;
+}
+
+// Appending never steals the selection — editing and selecting are separate
+// acts — except when nothing is selected yet.
+function appendProfile(
+  list: ProfileList,
+  profile: SetupProfile,
+  select: boolean,
+  name?: string,
+): { list: ProfileList; id: string } {
+  const entry: ProfileEntry = {
+    ...profile,
+    id: newProfileId(),
+    name: name ?? (profile.server.name.trim() || nextProfileName(list)),
+  };
+  return {
+    list: {
+      ...list,
+      profiles: [...list.profiles, entry],
+      selectedId:
+        select || list.selectedId === null ? entry.id : list.selectedId,
+    },
+    id: entry.id,
+  };
+}
+
+export function addProfile(
+  list: ProfileList,
+  env: ProfileEnv,
+): { list: ProfileList; id: string } {
+  // "New profile" is numbered, not named after the env server.
+  return appendProfile(list, defaultProfile(env), false, nextProfileName(list));
+}
+
+// Profile Link rule (ADR 0003): always creates, never overwrites; selected
+// only when the caller says the Display State is Stopped.
+export function addFromProfileLink(
+  list: ProfileList,
+  link: string,
+  env: ProfileEnv,
+  select: boolean,
+): Result<{ list: ProfileList; id: string }, ProfileLinkError> {
+  const applied = applyProfileLink(defaultProfile(env), link);
+  if (!applied.ok) {
+    return applied;
+  }
+  return { ok: true, value: appendProfile(list, applied.value, select) };
+}
+
 export function selectProfile(list: ProfileList, id: string): ProfileList {
   if (!list.profiles.some(entry => entry.id === id)) {
     return list;
@@ -54,25 +114,59 @@ export function selectProfile(list: ProfileList, id: string): ProfileList {
   return { ...list, selectedId: id };
 }
 
+// Edits address a profile by id — the editor may be open on a profile that
+// is not selected. The transform can rebuild the document; id and name stay.
+export function updateEntry(
+  list: ProfileList,
+  id: string | null,
+  transform: (profile: SetupProfile) => SetupProfile,
+): ProfileList {
+  const target = list.profiles.find(entry => entry.id === id);
+  if (!target) {
+    return list;
+  }
+  const next: ProfileEntry = {
+    ...transform(target),
+    id: target.id,
+    name: target.name,
+  };
+  return {
+    ...list,
+    profiles: list.profiles.map(entry => (entry.id === id ? next : entry)),
+  };
+}
+
 export function updateSelected(
   list: ProfileList,
   transform: (profile: SetupProfile) => SetupProfile,
 ): ProfileList {
-  const selected = selectedProfile(list);
-  if (!selected) {
-    return list;
-  }
-  const next: ProfileEntry = {
-    ...transform(selected),
-    id: selected.id,
-    name: selected.name,
-  };
+  return updateEntry(list, list.selectedId, transform);
+}
+
+export function renameProfile(
+  list: ProfileList,
+  id: string,
+  name: string,
+): ProfileList {
   return {
     ...list,
     profiles: list.profiles.map(entry =>
-      entry.id === selected.id ? next : entry,
+      entry.id === id ? { ...entry, name } : entry,
     ),
   };
+}
+
+// Reselect-or-none: deleting the Selected Profile points at another profile
+// or null, never at a ghost. Blocking while Running is the caller's rule —
+// only the UI knows the Display State.
+export function deleteProfile(list: ProfileList, id: string): ProfileList {
+  if (!list.profiles.some(entry => entry.id === id)) {
+    return list;
+  }
+  const profiles = list.profiles.filter(entry => entry.id !== id);
+  const selectedId =
+    list.selectedId === id ? profiles[0]?.id ?? null : list.selectedId;
+  return { ...list, profiles, selectedId };
 }
 
 // --- derivations -----------------------------------------------------------
@@ -118,7 +212,10 @@ async function migrateSingleDocument(
   storage: ProfileStorage,
   env: ProfileEnv,
 ): Promise<ProfileList | null> {
-  const legacyKeys = [PROFILE_STORAGE_KEY, ...Object.values(LEGACY_STORAGE_KEYS)];
+  const legacyKeys = [
+    PROFILE_STORAGE_KEY,
+    ...Object.values(LEGACY_STORAGE_KEYS),
+  ];
   const values = await Promise.all(legacyKeys.map(key => storage.getItem(key)));
   if (values.every(value => value === null)) {
     return null; // fresh install — nothing to migrate
