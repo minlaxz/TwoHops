@@ -15,10 +15,10 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  ScrollView,
 } from 'react-native';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
+import { useLogs } from '../context/LogsContext';
 import {
   effectiveRules,
   missingFields,
@@ -33,11 +33,6 @@ type RootStackParamList = {
   Profile: { profileId?: string } | undefined;
 };
 
-type DebugLogEntry = {
-  stamp: Date;
-  message: string;
-};
-
 const smallButtonTouchableStyle = { width: '100%', height: 56 } as const;
 const smallButtonTextStyle = { fontWeight: '600' as const, fontSize: 16 };
 
@@ -46,7 +41,7 @@ export default function DashboardScreen() {
     snapshot: { state, lastError },
     session,
   } = useTunnelSession();
-  const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
+  const { debugLogs } = useLogs();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -90,11 +85,10 @@ export default function DashboardScreen() {
 
   const missing = missingFields(profile);
 
-  const appendDebugLog = useCallback((message: string) => {
-    setDebugLogs(prev =>
-      [{ stamp: new Date(), message }, ...prev].slice(0, 200),
-    );
-  }, []);
+  const appendDebugLog = useCallback(
+    (message: string) => debugLogs.append({ at: new Date(), message }),
+    [debugLogs],
+  );
 
   const handleConnect = () => {
     appendDebugLog('Connect button pressed.');
@@ -154,12 +148,6 @@ export default function DashboardScreen() {
     appendDebugLog('Stop button pressed.');
     session.disconnect();
   };
-
-  useEffect(() => {
-    setDebugLogs([{ stamp: new Date(), message: 'Main screen ready.' }]);
-    appendDebugLog(`Current state: ${session.getSnapshot().state}.`);
-    return session.onDebug(entry => appendDebugLog(entry.message));
-  }, [appendDebugLog, session]);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -324,11 +312,6 @@ export default function DashboardScreen() {
           <Text style={styles.errorHint}>{switchLockNotice}</Text>
         ) : null}
       </View>
-      <View style={styles.logsContainer}>
-        <View style={styles.debugPanel}>
-          <DebugLogsScreen logs={debugLogs} styles={styles} />
-        </View>
-      </View>
       {fabVisible ? (
         <Pressable
           testID="fab"
@@ -354,41 +337,6 @@ export default function DashboardScreen() {
           )}
         </Pressable>
       ) : null}
-    </View>
-  );
-}
-
-type DashboardStyles = ReturnType<typeof createStyles>;
-
-type DebugLogsScreenProps = {
-  logs: DebugLogEntry[];
-  styles: DashboardStyles;
-};
-
-function DebugLogsScreen({ logs, styles }: DebugLogsScreenProps) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Debug Logs</Text>
-      <View style={styles.logScrollContainer}>
-        <ScrollView
-          style={styles.logScroll}
-          contentContainerStyle={styles.logScrollContent}
-          showsVerticalScrollIndicator
-        >
-          {logs.length === 0 ? (
-            <Text style={styles.logEmpty}>No debug logs yet.</Text>
-          ) : null}
-          {logs.map((log, index) => (
-            <View
-              style={styles.debugRow}
-              key={`${log.stamp.toISOString()}-${index}`}
-            >
-              <Text style={styles.logLine}>{log.message}</Text>
-              <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
     </View>
   );
 }
@@ -553,55 +501,11 @@ function createStyles(theme: AppTheme) {
     profileNameSelected: {
       fontWeight: '600',
     },
-    logsContainer: {
-      flex: 1,
-      marginTop: 14,
-      minHeight: 320,
-    },
-    debugPanel: {
-      flex: 1,
-      minHeight: 180,
-    },
-    section: {
-      flex: 1,
-      padding: 16,
-      borderRadius: 12,
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
-      borderWidth: 1,
-    },
-    logScrollContainer: {
-      flex: 1,
-    },
-    logScroll: {
-      flex: 1,
-    },
-    logScrollContent: {
-      paddingBottom: 8,
-    },
     sectionTitle: {
       fontSize: 16,
       fontWeight: '600',
       marginBottom: 12,
       color: theme.colors.textPrimary,
-    },
-    logEmpty: {
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-    },
-    debugRow: {
-      paddingVertical: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.logBorder,
-    },
-    logLine: {
-      fontSize: 12,
-      color: theme.colors.textPrimary,
-    },
-    logTime: {
-      fontSize: 11,
-      color: theme.colors.textSecondary,
-      marginTop: 6,
     },
   });
 }

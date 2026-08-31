@@ -20,6 +20,7 @@ import {
   TunnelSessionProvider,
   useTunnelSession,
 } from './src/context/TunnelSessionContext';
+import { LogsProvider } from './src/context/LogsContext';
 import { displayState } from './src/services/tunnelSession';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -117,7 +118,9 @@ function AppNavigator() {
       <SetupProfileProvider>
         <TunnelSessionProvider>
           <ProfileLinkListener />
-          <Navigation />
+          <LogsProvider>
+            <Navigation />
+          </LogsProvider>
         </TunnelSessionProvider>
       </SetupProfileProvider>
     </>
