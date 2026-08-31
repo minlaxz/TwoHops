@@ -56,6 +56,26 @@ test('notifies subscribers on append; unsubscribe stops', () => {
   expect(listener).toHaveBeenCalledTimes(1);
 });
 
+test('clear empties the buffer and notifies subscribers', () => {
+  const buffer = createLogBuffer<string>({ cap: 10 });
+  buffer.append('a');
+  const listener = jest.fn();
+  buffer.subscribe(listener);
+  buffer.clear();
+  expect(buffer.getRows()).toEqual([]);
+  expect(listener).toHaveBeenCalledTimes(1);
+});
+
+test('clear on an empty buffer keeps the snapshot stable and stays silent', () => {
+  const buffer = createLogBuffer<string>({ cap: 10 });
+  const before = buffer.getRows();
+  const listener = jest.fn();
+  buffer.subscribe(listener);
+  buffer.clear();
+  expect(buffer.getRows()).toBe(before);
+  expect(listener).not.toHaveBeenCalled();
+});
+
 test('getRows is referentially stable until the next append', () => {
   // useSyncExternalStore requires a stable snapshot between changes.
   const buffer = createLogBuffer<string>({ cap: 10 });

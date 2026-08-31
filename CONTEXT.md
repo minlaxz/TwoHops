@@ -75,7 +75,7 @@ The UI-facing collapse of Session State into three values: Stopped (`disconnecte
 _Avoid_: ui state, simple state
 
 **Traffic Logs**:
-The per-connection query rows the native tunnel emits (action, protocol, domain, addresses, time). Collected globally from tunnel start into a capped buffer, independent of which screen is open. Deliberately outside the Tunnel Session.
+The per-connection query rows the native tunnel emits (action, protocol, domain, addresses, time). Collected globally from tunnel start into a capped buffer, independent of which screen is open. Deliberately outside the Tunnel Session. Cleared on each connect command and by hand from the Logs screen; the recovery states never clear them.
 _Avoid_: query log (in UI copy), connection log
 
 **Core Version**:
@@ -83,5 +83,5 @@ The version of the TrustTunnel core library bundled in the build. A build-time f
 _Avoid_: native version, sdk version
 
 **Debug Logs**:
-App-side narration of lifecycle events (commands sent, state changes, profile edits). In-memory only; gone on app restart.
+App-side narration of lifecycle events (commands sent, state changes, profile edits). In-memory only; gone on app restart. Cleared on each connect command and by hand from the Logs screen; the recovery states never clear them.
 _Avoid_: ui debug logs, app logs

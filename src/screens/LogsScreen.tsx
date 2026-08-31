@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useSyncExternalStore } from 'react';
 import { Text, View, ScrollView, StyleSheet, Pressable } from 'react-native';
-import MainScreen from '../components/views';
 import { useLogs } from '../context/LogsContext';
 import type { DebugEntry } from '../services/tunnelSession';
 import type { QueryLogRow } from '../types';
@@ -20,24 +19,39 @@ export default function LogsScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
+  // Not MainScreen: nesting this card's ScrollView inside MainScreen's
+  // same-axis ScrollView unbounds the card, pushing its bottom edge below
+  // the fold. A plain flex View clamps the card to the viewport instead.
   return (
-    <MainScreen>
+    <View style={styles.screen}>
       <View style={styles.section}>
-        <View style={styles.segmentRow}>
-          <SegmentButton
-            label="Traffic"
-            testID="logs-segment-traffic"
-            active={segment === 'traffic'}
-            onPress={() => setSegment('traffic')}
-            styles={styles}
-          />
-          <SegmentButton
-            label="Debug"
-            testID="logs-segment-debug"
-            active={segment === 'debug'}
-            onPress={() => setSegment('debug')}
-            styles={styles}
-          />
+        <View style={styles.toolbar}>
+          <View style={styles.segmentRow}>
+            <SegmentButton
+              label="Traffic"
+              testID="logs-segment-traffic"
+              active={segment === 'traffic'}
+              onPress={() => setSegment('traffic')}
+              styles={styles}
+            />
+            <SegmentButton
+              label="Debug"
+              testID="logs-segment-debug"
+              active={segment === 'debug'}
+              onPress={() => setSegment('debug')}
+              styles={styles}
+            />
+          </View>
+          <Pressable
+            testID="logs-clear"
+            accessibilityRole="button"
+            style={styles.clearButton}
+            onPress={() =>
+              (segment === 'traffic' ? trafficLogs : debugLogs).clear()
+            }
+          >
+            <Text style={styles.clearLabel}>Clear</Text>
+          </Pressable>
         </View>
         <View style={styles.logScrollContainer}>
           <ScrollView
@@ -53,7 +67,7 @@ export default function LogsScreen() {
           </ScrollView>
         </View>
       </View>
-    </MainScreen>
+    </View>
   );
 }
 
@@ -157,6 +171,11 @@ function DebugRows({
 
 function createStyles(theme: AppTheme) {
   return StyleSheet.create({
+    screen: {
+      flex: 1,
+      padding: 24,
+      backgroundColor: theme.colors.background,
+    },
     section: {
       flex: 1,
       padding: 16,
@@ -165,13 +184,32 @@ function createStyles(theme: AppTheme) {
       borderColor: theme.colors.border,
       borderWidth: 1,
     },
-    segmentRow: {
+    toolbar: {
       flexDirection: 'row',
+      alignItems: 'center',
       marginBottom: 12,
+      gap: 8,
+    },
+    segmentRow: {
+      flex: 1,
+      flexDirection: 'row',
       borderRadius: 8,
       borderWidth: 1,
       borderColor: theme.colors.border,
       overflow: 'hidden',
+    },
+    clearButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+    },
+    clearLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
     },
     segment: {
       flex: 1,

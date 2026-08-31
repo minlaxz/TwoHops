@@ -259,12 +259,31 @@ test('debug entries appear in the Debug segment of the Logs tab', async () => {
   await press(renderer, 'logs-segment-debug');
 
   const text = renderedText(renderer);
-  expect(text).toContain('Connect button pressed.');
+  // The accepted connect command clears both logs, so pre-command lines
+  // ("Connect button pressed.") are gone; the session's own lines survive.
+  expect(text).not.toContain('Connect button pressed.');
+  expect(text).toContain('Setup config:');
   expect(text).toContain('Native event: connected.');
 
   await ReactTestRenderer.act(async () => {
     emitNativeState('disconnected');
   });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Clear button empties the visible log segment', async () => {
+  const renderer = await renderApp();
+  await ReactTestRenderer.act(async () => {
+    emitQueryLog('doomedrow.example');
+  });
+  await openLogsTab(renderer);
+  expect(renderedText(renderer)).toContain('*.doomedrow.example');
+
+  await press(renderer, 'logs-clear');
+  expect(renderedText(renderer)).not.toContain('*.doomedrow.example');
+
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
