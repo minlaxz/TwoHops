@@ -6,7 +6,11 @@ import { TouchableOpacityButton } from '../components/buttons';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
 import { parseRules } from '../services/routingRules';
-import { effectiveRules, importRemoteRules } from '../services/setupProfile';
+import {
+  effectiveRules,
+  importRemoteRules,
+  profileLinkErrorMessage,
+} from '../services/setupProfile';
 import { displayState } from '../services/tunnelSession';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme } from '../theme/colors';
@@ -118,9 +122,7 @@ export default function ServerScreen() {
             if (!result.ok) {
               Alert.alert(
                 'Profile Link failed',
-                result.error.kind === 'scheme'
-                  ? 'Link must start with twohops://'
-                  : 'Link is not a valid URL.',
+                profileLinkErrorMessage(result.error),
               );
               return;
             }

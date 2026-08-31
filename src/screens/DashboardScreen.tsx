@@ -22,6 +22,7 @@ import { useTunnelSession } from '../context/TunnelSessionContext';
 import {
   effectiveRules,
   missingFields,
+  profileLinkErrorMessage,
   tunnelStartInput,
 } from '../services/setupProfile';
 import { displayState, type SessionState } from '../services/tunnelSession';
@@ -266,9 +267,7 @@ export default function DashboardScreen() {
                 if (!result.ok) {
                   Alert.alert(
                     'Profile Link failed',
-                    result.error.kind === 'scheme'
-                      ? 'Link must start with twohops://'
-                      : 'Link is not a valid URL.',
+                    profileLinkErrorMessage(result.error),
                   );
                   return;
                 }

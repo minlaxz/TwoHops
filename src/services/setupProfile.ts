@@ -47,6 +47,12 @@ export type StartError = { kind: 'incomplete'; missing: MissingField[] };
 
 export type ProfileLinkError = { kind: 'scheme' } | { kind: 'malformed' };
 
+export function profileLinkErrorMessage(error: ProfileLinkError): string {
+  return error.kind === 'scheme'
+    ? 'Link must start with twohops://'
+    : 'Link is not a valid URL.';
+}
+
 export type ImportError =
   | { kind: 'noURL' }
   | { kind: 'fetch'; message: string };

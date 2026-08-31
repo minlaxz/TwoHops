@@ -741,6 +741,38 @@ test('a twohops: deep link creates and selects while Stopped', async () => {
   });
 });
 
+test('a twohops: deep link while Running creates without selecting', async () => {
+  // Hold the initial URL until the tunnel is Running, then release it.
+  let releaseInitialURL!: (url: string) => void;
+  jest
+    .spyOn(Linking, 'getInitialURL')
+    .mockReturnValue(new Promise(resolve => (releaseInitialURL = resolve)));
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  await ReactTestRenderer.act(async () => {
+    releaseInitialURL('twohops://x?login=bob');
+  });
+
+  const rows = profileRows(renderer);
+  expect(rows).toHaveLength(3);
+  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
+    true,
+    false,
+    false,
+  ]);
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
 test('Settings tab shows theme picker and app version', async () => {
   const renderer = await renderApp();
 
