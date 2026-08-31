@@ -12,8 +12,6 @@ import Config from 'react-native-config';
 import {
   clearProfile as clearProfileIntent,
   defaultProfile,
-  loadProfile,
-  saveProfile,
   updateProfile as updateProfileIntent,
   updateServer as updateServerIntent,
   type ProfileEnv,
@@ -21,10 +19,24 @@ import {
   type ServerCredentials,
   type SetupProfile,
 } from '../services/setupProfile';
+import {
+  defaultProfileList,
+  loadProfileList,
+  saveProfileList,
+  selectProfile as selectProfileIntent,
+  selectedProfile,
+  updateSelected,
+  type ProfileEntry,
+  type ProfileList,
+} from '../services/profileStore';
 
 type SetupProfileContextValue = {
+  profiles: ProfileEntry[];
+  selectedId: string | null;
+  /** The Selected Profile — what the editor edits and tunnel start reads. */
   profile: SetupProfile;
   isHydrated: boolean;
+  selectProfile: (id: string) => void;
   updateProfile: (patch: Partial<Omit<SetupProfile, 'version'>>) => void;
   updateServer: (patch: Partial<ServerCredentials>) => void;
   clearProfile: () => void;
@@ -46,25 +58,23 @@ export function SetupProfileProvider({
   children,
   storage = AsyncStorage,
 }: Props) {
-  const [profile, setProfile] = useState<SetupProfile>(() =>
-    defaultProfile(env),
-  );
+  const [list, setList] = useState<ProfileList>(() => defaultProfileList(env));
   const [isHydrated, setIsHydrated] = useState(false);
   const skipNextSave = useRef(true);
 
   useEffect(() => {
     let cancelled = false;
-    loadProfile(storage, env)
+    loadProfileList(storage, env)
       .catch(error => {
-        console.error('Failed to load Setup Profile:', error);
-        return defaultProfile(env);
+        console.error('Failed to load Profile List:', error);
+        return defaultProfileList(env);
       })
       .then(loaded => {
         if (cancelled) {
           return;
         }
         skipNextSave.current = true;
-        setProfile(loaded);
+        setList(loaded);
         setIsHydrated(true);
       });
     return () => {
@@ -80,30 +90,47 @@ export function SetupProfileProvider({
       skipNextSave.current = false; // the hydrated value is already on disk
       return;
     }
-    saveProfile(storage, profile).catch(error => {
-      console.error('Failed to save Setup Profile:', error);
+    saveProfileList(storage, list).catch(error => {
+      console.error('Failed to save Profile List:', error);
     });
-  }, [isHydrated, profile, storage]);
+  }, [isHydrated, list, storage]);
 
+  const selectProfile = useCallback(
+    (id: string) => setList(prev => selectProfileIntent(prev, id)),
+    [],
+  );
   const updateProfile = useCallback(
     (patch: Partial<Omit<SetupProfile, 'version'>>) =>
-      setProfile(prev => updateProfileIntent(prev, patch)),
+      setList(prev =>
+        updateSelected(prev, profile => updateProfileIntent(profile, patch)),
+      ),
     [],
   );
   const updateServer = useCallback(
     (patch: Partial<ServerCredentials>) =>
-      setProfile(prev => updateServerIntent(prev, patch)),
+      setList(prev =>
+        updateSelected(prev, profile => updateServerIntent(profile, patch)),
+      ),
     [],
   );
   // Persist effect writes the defaults; nothing else to remove.
   const clearProfile = useCallback(
-    () => setProfile(clearProfileIntent(env)),
+    () => setList(prev => updateSelected(prev, () => clearProfileIntent(env))),
     [],
   );
 
   const value = useMemo(
-    () => ({ profile, isHydrated, updateProfile, updateServer, clearProfile }),
-    [profile, isHydrated, updateProfile, updateServer, clearProfile],
+    () => ({
+      profiles: list.profiles,
+      selectedId: list.selectedId,
+      profile: selectedProfile(list) ?? defaultProfile(env),
+      isHydrated,
+      selectProfile,
+      updateProfile,
+      updateServer,
+      clearProfile,
+    }),
+    [list, isHydrated, selectProfile, updateProfile, updateServer, clearProfile],
   );
 
   return (

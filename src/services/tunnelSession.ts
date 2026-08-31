@@ -34,6 +34,19 @@ export type SessionSnapshot = {
 };
 export type DebugEntry = { at: Date; message: string };
 
+/** Display State: the UI-facing collapse of Session State (see CONTEXT.md). */
+export type DisplayState = 'stopped' | 'busy' | 'running';
+
+export function displayState(state: SessionState): DisplayState {
+  if (state === 'disconnected') {
+    return 'stopped';
+  }
+  if (state === 'connecting' || state === 'disconnecting') {
+    return 'busy';
+  }
+  return 'running'; // connected + the recovery states
+}
+
 export type TunnelSession = {
   getSnapshot(): SessionSnapshot;
   subscribe(listener: () => void): () => void;

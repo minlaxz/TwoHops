@@ -4,7 +4,9 @@
 
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import App from '../App';
+import { PROFILES_STORAGE_KEY } from '../src/services/profileStore';
 
 jest.mock('react-native-config', () => ({
   ENV_SERVER_NAME: 'env-server',
@@ -52,6 +54,68 @@ function tabButtons(renderer: ReactTestRenderer.ReactTestRenderer) {
     byLabel.set(node.props.accessibilityLabel, node);
   }
   return [...byLabel.values()];
+}
+
+const { VpnClient } = require('../src/services/vpn');
+
+// The Tunnel Session is created once and shared across renders, so tests
+// change its state through the native event listener, not getCurrentState.
+function emitNativeState(state: string) {
+  for (const [listener] of VpnClient.onState.mock.calls) {
+    listener(state);
+  }
+}
+
+beforeEach(async () => {
+  await AsyncStorage.clear();
+  emitNativeState('disconnected');
+});
+
+function profileEntry(id: string, name: string) {
+  return {
+    version: 1,
+    server: {
+      name,
+      ipAddress: '10.0.0.1',
+      domain: 'vpn.example.com',
+      login: 'user',
+      password: 'pw',
+      vpnProtocol: 'QUIC',
+    },
+    dnsServers: ['1.1.1.1'],
+    routingMode: 'selective',
+    localRulesText: '',
+    remoteRulesURL: '',
+    importedRules: [],
+    importedAt: null,
+    id,
+    name,
+  };
+}
+
+async function seedTwoProfiles() {
+  await AsyncStorage.setItem(
+    PROFILES_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      profiles: [profileEntry('a', 'Alpha'), profileEntry('b', 'Beta')],
+      selectedId: 'a',
+    }),
+  );
+}
+
+// Pressable forwards testID to nested nodes; keep one node per row id.
+function profileRows(renderer: ReactTestRenderer.ReactTestRenderer) {
+  const byId = new Map<string, ReactTestRenderer.ReactTestInstance>();
+  for (const node of renderer.root.findAll(
+    candidate =>
+      typeof candidate.props.onPress === 'function' &&
+      typeof candidate.props.testID === 'string' &&
+      candidate.props.testID.startsWith('profile-row-'),
+  )) {
+    byId.set(node.props.testID, node);
+  }
+  return [...byId.values()];
 }
 
 // The async act flushes the tunnel session's state-seed promise so it does
@@ -110,6 +174,87 @@ test('Profile opens above the tabs from Dashboard', async () => {
   expect(text).toContain('Configurations');
   // The tab bar stays mounted beneath the pushed Profile screen.
   expect(tabButtons(renderer).length).toBe(3);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Profiles card lists profiles and highlights the Selected Profile', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  const text = renderedText(renderer);
+  expect(text).toContain('Profiles');
+  expect(text).toContain('Alpha');
+  expect(text).toContain('Beta');
+  expect(
+    profileRows(renderer).map(row => row.props.accessibilityState.selected),
+  ).toEqual([true, false]);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('tapping a profile while Stopped selects it', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    profileRows(renderer)[1].props.onPress();
+  });
+
+  expect(
+    profileRows(renderer).map(row => row.props.accessibilityState.selected),
+  ).toEqual([false, true]);
+  expect(renderedText(renderer)).not.toContain('Stop the tunnel');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('tapping a profile while Running is locked with a toast', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  await ReactTestRenderer.act(async () => {
+    profileRows(renderer)[1].props.onPress();
+  });
+
+  expect(renderedText(renderer)).toContain(
+    'Stop the tunnel to switch profiles.',
+  );
+  expect(
+    profileRows(renderer).map(row => row.props.accessibilityState.selected),
+  ).toEqual([true, false]);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('tapping a profile in a recovery state is locked too', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('waitingForRecovery');
+  });
+  await ReactTestRenderer.act(async () => {
+    profileRows(renderer)[1].props.onPress();
+  });
+
+  expect(renderedText(renderer)).toContain(
+    'Stop the tunnel to switch profiles.',
+  );
+  expect(
+    profileRows(renderer).map(row => row.props.accessibilityState.selected),
+  ).toEqual([true, false]);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
