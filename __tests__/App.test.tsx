@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { ActivityIndicator, Alert, Linking } from 'react-native';
+import { ActivityIndicator, Linking } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
@@ -289,20 +289,17 @@ test('Clear button empties the visible log segment', async () => {
   });
 });
 
-test('Profile opens above the tabs from Dashboard', async () => {
+test('"+" opens the editor above the tabs in create mode', async () => {
+  await seedTwoProfiles();
   const renderer = await renderApp();
 
-  const profileButton = renderer.root.find(
-    node =>
-      node.props.title === 'Profile' &&
-      typeof node.props.onPress === 'function',
-  );
-  await ReactTestRenderer.act(async () => {
-    profileButton.props.onPress();
-  });
+  await press(renderer, 'profile-add');
 
   const text = renderedText(renderer);
   expect(text).toContain('Configurations');
+  // Create mode leads with the link input; Advanced starts collapsed.
+  expect(textInputByTestID(renderer, 'profile-link-input')).toBeDefined();
+  expect(textInputByTestID(renderer, 'profile-name-input')).toBeUndefined();
   // The tab bar stays mounted beneath the pushed Profile screen.
   expect(tabButtons(renderer).length).toBe(3);
 
@@ -616,15 +613,15 @@ async function press(
   });
 }
 
-test('"+" → New profile opens a blank editor for the new profile', async () => {
+test('"+" creates a blank profile and opens its editor directly', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await press(renderer, 'profile-add');
-  await press(renderer, 'profile-add-new');
 
-  // Editor pushed, loaded with the numbered new profile, no credentials.
+  // Editor pushed in create mode; expand Advanced to reach the fields.
   expect(renderedText(renderer)).toContain('Configurations');
+  await press(renderer, 'profile-advanced-toggle');
   expect(textInputByTestID(renderer, 'profile-name-input').props.value).toBe(
     'Profile 1',
   );
@@ -639,12 +636,11 @@ test('"+" → New profile opens a blank editor for the new profile', async () =>
   });
 });
 
-test('"+" → Paste profile link creates and selects while Stopped', async () => {
+test('create-mode Apply Link populates the new profile in place', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await press(renderer, 'profile-add');
-  await press(renderer, 'profile-add-link');
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
       'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com',
@@ -652,26 +648,30 @@ test('"+" → Paste profile link creates and selects while Stopped', async () =>
   });
   await press(renderer, 'profile-link-apply');
 
-  const rows = profileRows(renderer);
-  expect(rows).toHaveLength(3);
-  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
-    false,
-    false,
-    true,
-  ]);
+  // No second profile: still the two seeded plus the one "+" created.
+  expect(profileRows(renderer)).toHaveLength(3);
+  // Success auto-expands Advanced with the link's fields applied.
+  const username = renderer.root.findAll(
+    node =>
+      node.props.placeholder === 'Username' &&
+      typeof node.props.onChangeText === 'function',
+  )[0];
+  expect(username.props.value).toBe('bob');
+  // Adding is not selecting: Alpha keeps the selection.
+  expect(
+    profileRows(renderer).map(row => row.props.accessibilityState.selected),
+  ).toEqual([true, false, false]);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
 });
 
-test('a bad pasted link alerts and creates nothing', async () => {
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+test('a bad link in create mode shows the alert modal and touches nothing', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await press(renderer, 'profile-add');
-  await press(renderer, 'profile-add-link');
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
       'https://not-a-profile-link',
@@ -679,42 +679,30 @@ test('a bad pasted link alerts and creates nothing', async () => {
   });
   await press(renderer, 'profile-link-apply');
 
-  expect(alert).toHaveBeenCalledWith('Profile Link failed', expect.anything());
-  expect(profileRows(renderer)).toHaveLength(2);
+  // The custom modal renders in the tree — no Alert.alert anywhere.
+  expect(renderedText(renderer)).toContain('Profile Link failed');
+  await press(renderer, 'alert-button-OK');
+  expect(renderedText(renderer)).not.toContain('Profile Link failed');
+  // Advanced stays collapsed and the blank profile is untouched.
+  expect(textInputByTestID(renderer, 'profile-name-input')).toBeUndefined();
+  expect(profileRows(renderer)).toHaveLength(3);
 
-  alert.mockRestore();
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
 });
 
-test('a Profile Link while Running creates without selecting', async () => {
+test('edit mode has no link input and opens Advanced expanded', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await ReactTestRenderer.act(async () => {
-    emitNativeState('connected');
-  });
-  await press(renderer, 'profile-add');
-  await press(renderer, 'profile-add-link');
-  await ReactTestRenderer.act(async () => {
-    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
-      'twohops://x?login=bob',
-    );
-  });
-  await press(renderer, 'profile-link-apply');
+  await press(renderer, 'profile-edit-b');
 
-  const rows = profileRows(renderer);
-  expect(rows).toHaveLength(3);
-  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
-    true,
-    false,
-    false,
-  ]);
+  expect(textInputByTestID(renderer, 'profile-link-input')).toBeUndefined();
+  expect(textInputByTestID(renderer, 'profile-name-input').props.value).toBe(
+    'Beta',
+  );
 
-  await ReactTestRenderer.act(async () => {
-    emitNativeState('disconnected');
-  });
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
@@ -777,7 +765,6 @@ test('pencil edits land on that profile only; tunnel still starts from the Selec
 });
 
 test('deleting the Selected Profile is blocked while Running', async () => {
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   await seedTwoProfiles();
   const renderer = await renderApp();
 
@@ -787,13 +774,12 @@ test('deleting the Selected Profile is blocked while Running', async () => {
   await press(renderer, 'profile-edit-a');
   await press(renderer, 'profile-delete');
 
-  expect(alert).toHaveBeenCalledWith(
-    'Cannot delete',
-    expect.stringContaining('Stop the tunnel'),
-  );
+  const text = renderedText(renderer);
+  expect(text).toContain('Cannot delete');
+  expect(text).toContain('Stop the tunnel to delete the Selected Profile.');
   expect(profileRows(renderer)).toHaveLength(2);
 
-  alert.mockRestore();
+  await press(renderer, 'alert-button-OK');
   await ReactTestRenderer.act(async () => {
     emitNativeState('disconnected');
   });
@@ -803,16 +789,15 @@ test('deleting the Selected Profile is blocked while Running', async () => {
 });
 
 test('deleting the Selected Profile while Stopped reselects the other', async () => {
-  const alert = jest
-    .spyOn(Alert, 'alert')
-    .mockImplementation((_title, _message, buttons) => {
-      buttons?.find(button => button.style === 'destructive')?.onPress?.();
-    });
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await press(renderer, 'profile-edit-a');
   await press(renderer, 'profile-delete');
+
+  // The confirmation modal offers a destructive Delete.
+  expect(renderedText(renderer)).toContain('Delete "Alpha"?');
+  await press(renderer, 'alert-button-Delete');
 
   const rows = profileRows(renderer);
   expect(rows).toHaveLength(1);
@@ -821,7 +806,6 @@ test('deleting the Selected Profile while Stopped reselects the other', async ()
   // The editor for the deleted profile has been popped.
   expect(renderedText(renderer)).not.toContain('Configurations');
 
-  alert.mockRestore();
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
