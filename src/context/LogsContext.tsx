@@ -18,8 +18,9 @@ type LogsContextValue = {
 
 const LogsContext = createContext<LogsContextValue | undefined>(undefined);
 
-// Real buffers, created once at first render (app start) so Traffic rows
-// collect while no screen is open.
+// Real buffers, created once at the provider's first render — before any
+// tunnel can start — so Traffic rows collect while no screen is open.
+// App-lifetime by design: no disposal path.
 let realTraffic: LogBuffer<QueryLogRow> | undefined;
 let realDebug: LogBuffer<DebugEntry> | undefined;
 const defaultTraffic = () =>

@@ -21,4 +21,4 @@ The JS VPN wrapper was a pass-through to the native module; every behaviour that
 - Session takes a Tunnel Start Input and never reads the Setup Profile; the connecting→disconnected flicker on an incomplete profile disappears because the caller derives the input first.
 - Probe delays are injectable so state-machine tests run against a fake port without real timers.
 - On iOS (native stub reports `disconnected` and never emits) every connect ends `disconnected` with a Session Error — correct given native truth; no iOS special-casing.
-- Query log stays outside the session (DebugScreen keeps subscribing directly). Dead `updateConfiguration` JS wrapper is removed.
+- Query log stays outside the session (since #39, the app-lifetime Traffic Log buffer subscribes directly). Dead `updateConfiguration` JS wrapper is removed.
