@@ -6,6 +6,7 @@ export const TouchableOpacityButton: React.FC<CustomButtonProps> = ({
   title,
   onPress,
   disabled,
+  testID,
   touchableOpacityStyles,
   textStyles,
 }) => {
@@ -23,6 +24,7 @@ export const TouchableOpacityButton: React.FC<CustomButtonProps> = ({
       ]}
       onPress={onPress}
       disabled={disabled}
+      testID={testID}
     >
       <Text
         style={[

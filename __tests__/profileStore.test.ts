@@ -1,9 +1,14 @@
 import {
+  addFromProfileLink,
+  addProfile,
   defaultProfileList,
+  deleteProfile,
   loadProfileList,
+  renameProfile,
   saveProfileList,
   selectProfile,
   selectedProfile,
+  updateEntry,
   updateSelected,
   PROFILES_STORAGE_KEY,
   type ProfileList,
@@ -127,6 +132,132 @@ describe('updateSelected', () => {
   test('no selection is a no-op', () => {
     const list: ProfileList = { version: 1, profiles: [], selectedId: null };
     expect(updateSelected(list, () => completeProfile())).toBe(list);
+  });
+});
+
+describe('addProfile', () => {
+  test('appends a blank default entry named "Profile N"; selection unchanged', () => {
+    const { list, id } = addProfile(twoProfileList(), env);
+    expect(list.profiles).toHaveLength(3);
+    const entry = list.profiles[2];
+    expect(entry.id).toBe(id);
+    expect(entry.name).toBe('Profile 1');
+    expect(entry).toEqual({ ...defaultProfile(env), id, name: 'Profile 1' });
+    expect(list.selectedId).toBe('a');
+  });
+
+  test('picks the smallest free "Profile N" name', () => {
+    const base: ProfileList = {
+      version: 1,
+      profiles: [{ ...defaultProfile(env), id: 'x', name: 'Profile 2' }],
+      selectedId: 'x',
+    };
+    expect(addProfile(base, env).list.profiles[1].name).toBe('Profile 1');
+  });
+
+  test('an empty list selects the new profile', () => {
+    const { list, id } = addProfile(
+      { version: 1, profiles: [], selectedId: null },
+      env,
+    );
+    expect(list.selectedId).toBe(id);
+  });
+});
+
+describe('addFromProfileLink', () => {
+  const link =
+    'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com';
+
+  test('creates a new entry from the link; existing profiles untouched', () => {
+    const before = twoProfileList();
+    const result = addFromProfileLink(before, link, env, false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const { list, id } = result.value;
+    expect(list.profiles.slice(0, 2)).toEqual(before.profiles);
+    const entry = list.profiles[2];
+    expect(entry.id).toBe(id);
+    expect(entry.server).toMatchObject({
+      login: 'bob',
+      password: 'pw',
+      ipAddress: '10.9.9.9',
+      domain: 'd.example.com',
+    });
+    expect(list.selectedId).toBe('a'); // not Stopped → selection unchanged
+  });
+
+  test('selects the new entry when asked (Stopped)', () => {
+    const result = addFromProfileLink(twoProfileList(), link, env, true);
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.value.list.selectedId).toBe(result.value.id);
+  });
+
+  test('names the entry from the env server name, else "Profile N"', () => {
+    const withEnvName = addFromProfileLink(twoProfileList(), link, env, false);
+    if (!withEnvName.ok) throw new Error('expected ok');
+    expect(withEnvName.value.list.profiles[2].name).toBe('env-server');
+
+    const noName = addFromProfileLink(twoProfileList(), link, {}, false);
+    if (!noName.ok) throw new Error('expected ok');
+    expect(noName.value.list.profiles[2].name).toBe('Profile 1');
+  });
+
+  test('a bad link returns the error and leaves the list alone', () => {
+    const result = addFromProfileLink(twoProfileList(), 'https://x', env, true);
+    expect(result).toEqual({ ok: false, error: { kind: 'scheme' } });
+  });
+});
+
+describe('updateEntry / renameProfile', () => {
+  test('updateEntry transforms one entry by id, selected or not', () => {
+    const list = updateEntry(twoProfileList(), 'b', profile =>
+      updateProfile(profile, { routingMode: 'general' }),
+    );
+    expect(list.profiles[1]).toMatchObject({
+      id: 'b',
+      name: 'Beta',
+      routingMode: 'general',
+    });
+    expect(list.profiles[0]).toEqual(twoProfileList().profiles[0]);
+  });
+
+  test('updateEntry with an unknown id is a no-op', () => {
+    const list = twoProfileList();
+    expect(updateEntry(list, 'nope', () => completeProfile())).toBe(list);
+  });
+
+  test('renameProfile persists the new name only', () => {
+    const list = renameProfile(twoProfileList(), 'b', 'Backup');
+    expect(list.profiles[1].name).toBe('Backup');
+    expect({ ...list.profiles[1], name: 'Beta' }).toEqual(
+      twoProfileList().profiles[1],
+    );
+  });
+});
+
+describe('deleteProfile', () => {
+  test('removes a non-selected entry; selection unchanged', () => {
+    const list = deleteProfile(twoProfileList(), 'b');
+    expect(list.profiles.map(entry => entry.id)).toEqual(['a']);
+    expect(list.selectedId).toBe('a');
+  });
+
+  test('deleting the Selected Profile selects another', () => {
+    const list = deleteProfile(twoProfileList(), 'a');
+    expect(list.profiles.map(entry => entry.id)).toEqual(['b']);
+    expect(list.selectedId).toBe('b');
+  });
+
+  test('deleting the last profile leaves an empty list with no selection', () => {
+    const one = deleteProfile(twoProfileList(), 'b');
+    const list = deleteProfile(one, 'a');
+    expect(list.profiles).toEqual([]);
+    expect(list.selectedId).toBeNull();
+  });
+
+  test('unknown id is a no-op', () => {
+    const list = twoProfileList();
+    expect(deleteProfile(list, 'nope')).toBe(list);
   });
 });
 
