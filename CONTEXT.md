@@ -78,6 +78,10 @@ _Avoid_: ui state, simple state
 The per-connection query rows the native tunnel emits (action, protocol, domain, addresses, time). Collected globally from tunnel start into a capped buffer, independent of which screen is open. Deliberately outside the Tunnel Session.
 _Avoid_: query log (in UI copy), connection log
 
+**Core Version**:
+The version of the TrustTunnel core library bundled in the build. A build-time fact — the Android Gradle pin is the source of truth; iOS bundles no core today.
+_Avoid_: native version, sdk version
+
 **Debug Logs**:
 App-side narration of lifecycle events (commands sent, state changes, profile edits). In-memory only; gone on app restart.
 _Avoid_: ui debug logs, app logs
