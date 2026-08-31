@@ -168,6 +168,8 @@ test('renders bottom tabs Dashboard / Logs / Settings', async () => {
 
 // The Traffic Log buffer subscribes once at app start; emit parsed rows
 // through every registered onQueryLog listener, like emitNativeState does.
+// The buffer is an app-lifetime singleton, so rows survive across tests in
+// this file — every emitting test must use a domain unique to that test.
 function emitQueryLog(domain: string) {
   for (const [listener] of VpnClient.onQueryLog.mock.calls) {
     listener({
