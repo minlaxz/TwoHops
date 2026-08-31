@@ -6,6 +6,7 @@ import React from 'react';
 import { ActivityIndicator, Alert, Linking } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@react-native-vector-icons/ionicons/static';
 import App from '../App';
 import { PROFILES_STORAGE_KEY } from '../src/services/profileStore';
 
@@ -42,6 +43,10 @@ function renderedText(renderer: ReactTestRenderer.ReactTestRenderer): string {
       ),
     )
     .join('\n');
+}
+
+function iconNames(root: ReactTestRenderer.ReactTestInstance): string[] {
+  return root.findAllByType(Ionicons).map(node => node.props.name);
 }
 
 // The tab bar renders several nested pressables per tab with the same
@@ -410,7 +415,7 @@ test('FAB shows Play when Stopped and starts the tunnel', async () => {
   const node = fab(renderer)!;
   expect(node.props.accessibilityLabel).toBe('Start tunnel');
   expect(renderedText(renderer)).toContain('Stopped');
-  expect(renderedText(renderer)).toContain('▶');
+  expect(iconNames(node)).toContain('play');
 
   await ReactTestRenderer.act(async () => {
     node.props.onPress();
@@ -471,7 +476,7 @@ test('FAB shows Stop when Running and stops the tunnel', async () => {
   const node = fab(renderer)!;
   expect(node.props.accessibilityLabel).toBe('Stop tunnel');
   expect(renderedText(renderer)).toContain('Running');
-  expect(renderedText(renderer)).toContain('■');
+  expect(iconNames(node)).toContain('stop');
 
   await ReactTestRenderer.act(async () => {
     node.props.onPress();

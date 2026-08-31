@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@react-native-vector-icons/ionicons/static';
 import { TouchableOpacityButton } from '../components/buttons';
 import {
   ActivityIndicator,
@@ -331,9 +332,11 @@ export default function DashboardScreen() {
           {display === 'busy' ? (
             <ActivityIndicator color={theme.colors.buttonPrimaryText} />
           ) : (
-            <Text style={styles.fabGlyph}>
-              {display === 'running' ? '■' : '▶'}
-            </Text>
+            <Ionicons
+              name={display === 'running' ? 'stop' : 'play'}
+              size={24}
+              color={theme.colors.buttonPrimaryText}
+            />
           )}
         </Pressable>
       ) : null}
@@ -397,10 +400,6 @@ function createStyles(theme: AppTheme) {
       shadowOpacity: 0.3,
       shadowRadius: 6,
       shadowOffset: { width: 0, height: 3 },
-    },
-    fabGlyph: {
-      fontSize: 24,
-      color: theme.colors.buttonPrimaryText,
     },
     errorHint: {
       marginTop: 4,

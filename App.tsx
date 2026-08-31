@@ -10,7 +10,14 @@ import { Linking, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createStaticNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import {
+  createBottomTabNavigator,
+  type BottomTabNavigationOptions,
+} from '@react-navigation/bottom-tabs';
+import {
+  Ionicons,
+  type IoniconsIconName,
+} from '@react-native-vector-icons/ionicons/static';
 
 import {
   SetupProfileProvider,
@@ -27,6 +34,19 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import LogsScreen from './src/screens/LogsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+
+function tabIcon(
+  focusedName: IoniconsIconName,
+  unfocusedName: IoniconsIconName,
+): NonNullable<BottomTabNavigationOptions['tabBarIcon']> {
+  return ({ focused, color, size }) => (
+    <Ionicons
+      name={focused ? focusedName : unfocusedName}
+      color={color}
+      size={size}
+    />
+  );
+}
 
 // A twohops: deep link is a Profile Link: it creates a new profile and
 // selects it while the Display State is Stopped (ADR 0003). Waits for
@@ -79,15 +99,24 @@ function AppNavigator() {
     screens: {
       Dashboard: {
         screen: DashboardScreen,
-        options: { title: 'Dashboard' },
+        options: {
+          title: 'Dashboard',
+          tabBarIcon: tabIcon('speedometer', 'speedometer-outline'),
+        },
       },
       Logs: {
         screen: LogsScreen,
-        options: { title: 'Logs' },
+        options: {
+          title: 'Logs',
+          tabBarIcon: tabIcon('reader', 'reader-outline'),
+        },
       },
       Settings: {
         screen: SettingsScreen,
-        options: { title: 'Settings' },
+        options: {
+          title: 'Settings',
+          tabBarIcon: tabIcon('settings', 'settings-outline'),
+        },
       },
     },
   });
