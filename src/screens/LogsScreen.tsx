@@ -1,44 +1,93 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Text, View, ScrollView, StyleSheet } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useMemo, useState, useSyncExternalStore } from 'react';
+import { Text, View, ScrollView, StyleSheet, Pressable } from 'react-native';
 import MainScreen from '../components/views';
-import { VpnClient } from '../services/vpn';
+import { useLogs } from '../context/LogsContext';
+import type { DebugEntry } from '../services/tunnelSession';
 import type { QueryLogRow } from '../types';
 import type { AppTheme } from '../theme/colors';
 import { useAppTheme } from '../context/ThemeContext';
 
-const MAX_LOG_ROWS = 250;
+type Segment = 'traffic' | 'debug';
 
 export default function LogsScreen() {
-  const [logs, setLogs] = useState<QueryLogRow[]>([]);
+  const { trafficLogs, debugLogs } = useLogs();
+  const [segment, setSegment] = useState<Segment>('traffic');
+  const traffic = useSyncExternalStore(
+    trafficLogs.subscribe,
+    trafficLogs.getRows,
+  );
+  const debug = useSyncExternalStore(debugLogs.subscribe, debugLogs.getRows);
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  useFocusEffect(
-    useCallback(() => {
-      const unsubscribeLog = VpnClient.onQueryLog(row => {
-        setLogs(prev => [row, ...prev].slice(0, MAX_LOG_ROWS));
-      });
-
-      return () => {
-        unsubscribeLog();
-      };
-    }, []),
-  );
-
   return (
     <MainScreen>
-      <TrafficLogsScreen logs={logs} styles={styles} />
+      <View style={styles.section}>
+        <View style={styles.segmentRow}>
+          <SegmentButton
+            label="Traffic"
+            testID="logs-segment-traffic"
+            active={segment === 'traffic'}
+            onPress={() => setSegment('traffic')}
+            styles={styles}
+          />
+          <SegmentButton
+            label="Debug"
+            testID="logs-segment-debug"
+            active={segment === 'debug'}
+            onPress={() => setSegment('debug')}
+            styles={styles}
+          />
+        </View>
+        <View style={styles.logScrollContainer}>
+          <ScrollView
+            style={styles.logScroll}
+            contentContainerStyle={styles.logScrollContent}
+            showsVerticalScrollIndicator
+          >
+            {segment === 'traffic' ? (
+              <TrafficRows logs={traffic} styles={styles} />
+            ) : (
+              <DebugRows logs={debug} styles={styles} />
+            )}
+          </ScrollView>
+        </View>
+      </View>
     </MainScreen>
   );
 }
 
 type LogsScreenStyles = ReturnType<typeof createStyles>;
 
-type TrafficLogsScreenProps = {
-  logs: QueryLogRow[];
+type SegmentButtonProps = {
+  label: string;
+  testID: string;
+  active: boolean;
+  onPress: () => void;
   styles: LogsScreenStyles;
 };
+
+function SegmentButton({
+  label,
+  testID,
+  active,
+  onPress,
+  styles,
+}: SegmentButtonProps) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      style={[styles.segment, active && styles.segmentActive]}
+      onPress={onPress}
+    >
+      <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
 function toWildcardDomain(domain: string): string {
   const parts = domain.split('.');
@@ -51,40 +100,58 @@ function toWildcardDomain(domain: string): string {
   return `*.${parts.slice(-2).join('.')}`;
 }
 
-function TrafficLogsScreen({ logs, styles }: TrafficLogsScreenProps) {
+function TrafficRows({
+  logs,
+  styles,
+}: {
+  logs: readonly QueryLogRow[];
+  styles: LogsScreenStyles;
+}) {
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Traffic Logs</Text>
-      <View style={styles.logScrollContainer}>
-        <ScrollView
-          style={styles.logScroll}
-          contentContainerStyle={styles.logScrollContent}
-          showsVerticalScrollIndicator
+    <>
+      {logs.length === 0 ? (
+        <Text style={styles.logEmpty}>
+          No Traffic Logs yet. Rows collect while the tunnel is running.
+        </Text>
+      ) : null}
+      {logs.map((log, index) => (
+        <View
+          style={styles.logRow}
+          key={`${log.stamp.toISOString()}-${log.source}-${index}`}
         >
-          {logs.length === 0 ? (
-            <Text style={styles.logEmpty}>
-              No fetched traffic logs yet. Keep this screen open to collect
-              real-time traffic logs.
-            </Text>
-          ) : null}
-          {logs.map((log, index) => (
-            <View
-              style={styles.logRow}
-              key={`${log.stamp.toISOString()}-${log.source}-${index}`}
-            >
-              <Text style={styles.logTitle}>
-                {log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain:{' '}
-                {toWildcardDomain(log.domain ?? '-')}
-              </Text>
-              <Text style={styles.logLine}>
-                {log.source} {'->'} {log.destination ?? 'unknown'}
-              </Text>
-              <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
-    </View>
+          <Text style={styles.logTitle}>
+            {log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain:{' '}
+            {toWildcardDomain(log.domain ?? '-')}
+          </Text>
+          <Text style={styles.logLine}>
+            {log.source} {'->'} {log.destination ?? 'unknown'}
+          </Text>
+          <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
+        </View>
+      ))}
+    </>
+  );
+}
+
+function DebugRows({
+  logs,
+  styles,
+}: {
+  logs: readonly DebugEntry[];
+  styles: LogsScreenStyles;
+}) {
+  return (
+    <>
+      {logs.length === 0 ? (
+        <Text style={styles.logEmpty}>No Debug Logs yet.</Text>
+      ) : null}
+      {logs.map((log, index) => (
+        <View style={styles.logRow} key={`${log.at.toISOString()}-${index}`}>
+          <Text style={styles.logLine}>{log.message}</Text>
+          <Text style={styles.logTime}>{log.at.toISOString()}</Text>
+        </View>
+      ))}
+    </>
   );
 }
 
@@ -98,11 +165,30 @@ function createStyles(theme: AppTheme) {
       borderColor: theme.colors.border,
       borderWidth: 1,
     },
-    sectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
+    segmentRow: {
+      flexDirection: 'row',
       marginBottom: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      overflow: 'hidden',
+    },
+    segment: {
+      flex: 1,
+      paddingVertical: 8,
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    segmentActive: {
+      backgroundColor: theme.colors.buttonPrimary,
+    },
+    segmentLabel: {
+      fontSize: 13,
+      fontWeight: '600',
       color: theme.colors.textPrimary,
+    },
+    segmentLabelActive: {
+      color: theme.colors.buttonPrimaryText,
     },
     logScrollContainer: {
       flex: 1,

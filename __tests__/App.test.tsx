@@ -166,18 +166,97 @@ test('renders bottom tabs Dashboard / Logs / Settings', async () => {
   });
 });
 
-test('Logs tab shows Traffic Logs', async () => {
-  const renderer = await renderApp();
+// The Traffic Log buffer subscribes once at app start; emit parsed rows
+// through every registered onQueryLog listener, like emitNativeState does.
+function emitQueryLog(domain: string) {
+  for (const [listener] of VpnClient.onQueryLog.mock.calls) {
+    listener({
+      action: 'tunnel',
+      protocol: 'tcp',
+      source: '10.0.0.2:1234',
+      destination: '1.2.3.4:443',
+      domain,
+      stamp: new Date('2026-01-01T00:00:00Z'),
+    });
+  }
+}
 
+async function openLogsTab(renderer: ReactTestRenderer.ReactTestRenderer) {
   const logsTab = tabButtons(renderer).find(node =>
     node.props.accessibilityLabel.startsWith('Logs'),
   )!;
   await ReactTestRenderer.act(async () => {
     logsTab.props.onPress();
   });
+}
 
-  expect(renderedText(renderer)).toContain('Traffic Logs');
+// Pressable forwards testID to nested nodes; the innermost one carries the
+// resolved accessibilityState.
+function segmentSelected(
+  renderer: ReactTestRenderer.ReactTestRenderer,
+  testID: string,
+): boolean {
+  const nodes = renderer.root.findAll(
+    node =>
+      node.props.testID === testID && typeof node.props.onPress === 'function',
+  );
+  return nodes[nodes.length - 1].props.accessibilityState.selected;
+}
 
+test('Logs tab shows a Traffic | Debug segmented control, Traffic first', async () => {
+  const renderer = await renderApp();
+  await openLogsTab(renderer);
+
+  expect(segmentSelected(renderer, 'logs-segment-traffic')).toBe(true);
+  expect(segmentSelected(renderer, 'logs-segment-debug')).toBe(false);
+
+  await press(renderer, 'logs-segment-debug');
+  expect(segmentSelected(renderer, 'logs-segment-debug')).toBe(true);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Traffic rows collect while the Logs tab is closed; Dashboard has no debug panel', async () => {
+  const renderer = await renderApp();
+
+  // The Dashboard's inline debug panel is gone.
+  expect(renderedText(renderer)).not.toContain('Debug Logs');
+
+  // Rows arrive while the Dashboard (not Logs) is the open screen.
+  await ReactTestRenderer.act(async () => {
+    emitQueryLog('earlyrow.example');
+  });
+  await openLogsTab(renderer);
+
+  expect(renderedText(renderer)).toContain('*.earlyrow.example');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('debug entries appear in the Debug segment of the Logs tab', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    fab(renderer)!.props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  await openLogsTab(renderer);
+  await press(renderer, 'logs-segment-debug');
+
+  const text = renderedText(renderer);
+  expect(text).toContain('Connect button pressed.');
+  expect(text).toContain('Native event: connected.');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
