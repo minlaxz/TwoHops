@@ -44,11 +44,15 @@ Local Rules merged with Imported Rules, deduplicated, local first. Derived on de
 _Avoid_: merged rules text, rules text
 
 **Profile Link**:
-A `twohops:` URL that carries Server Credentials, DNS Servers and a Remote Rules URL. Applying one creates a new Setup Profile without any network access; it never overwrites an existing Profile — except on the create screen, where applying fills the just-created blank Profile in place (ADR 0004).
+A `twohops:` URL that carries Server Credentials (except the server name), DNS Servers and a Remote Rules URL. Applying one fills profile fields without any network access; it never overwrites a stored Profile — on the profile screen it patches the Profile Draft in place, defaulting the missing server name from the domain.
 _Avoid_: auto fill, import URL
 
+**Profile Draft**:
+The in-memory Setup Profile being created or edited on the profile screen. Not part of the Profile List and never persisted until Create (new) or Save (existing) is pressed; Cancel or navigating away discards it, after a discard confirmation when it has unsaved changes. A new Draft starts blank — no generated name.
+_Avoid_: unsaved profile, pending profile, temp profile
+
 **Profile Completeness**:
-Whether the Setup Profile has every field needed to start the tunnel: name, IP address, domain, login, password. Expressed as the list of missing fields.
+Whether the Setup Profile has every field needed to start the tunnel: name, IP address, domain, login, password. Expressed as the list of missing fields. Create and Save require a complete Profile Draft, so only Profiles stored before that rule can be incomplete — connecting refuses them.
 _Avoid_: is profile complete (boolean only)
 
 **Tunnel Start Input**:
@@ -71,8 +75,12 @@ The window after a connect or disconnect command during which the Tunnel Session
 _Avoid_: state probe, sync
 
 **Display State**:
-The UI-facing collapse of Session State into three values: Stopped (`disconnected`), Busy (`connecting`, `disconnecting`), Running (`connected` and the recovery states, which add a detail label such as "Reconnecting…"). The play/stop control and profile-switch lock follow the Display State, never a raw Session State.
-_Avoid_: ui state, simple state
+The UI-facing collapse of Session State into three values: Stopped (`disconnected`), Busy (`connecting`, `disconnecting`), Running (`connected` and the recovery states, which add a detail label such as "Reconnecting…"). The play/stop control and profile-switch lock follow the Display State, never a raw Session State. Never rendered as a status caption: the connect control's appearance carries the persistent state, Toasts announce transitions, and only the recovery detail label stays on screen while recovery lasts.
+_Avoid_: ui state, simple state, status label
+
+**Toast**:
+A transient, self-dismissing notice announcing a state transition or a refused action ("Connected", "Stop the tunnel to switch profiles"). Global — any screen can raise one. Not for persistent state: anything the user must still know a minute later belongs elsewhere.
+_Avoid_: snackbar, inline notice, hint
 
 **Traffic Logs**:
 The per-connection query rows the native tunnel emits (action, protocol, domain, addresses, time). Collected globally from tunnel start into a capped buffer, independent of which screen is open. Deliberately outside the Tunnel Session. Cleared on each connect command and by hand from the Logs screen; the recovery states never clear them.
