@@ -154,6 +154,13 @@ test('saveProfile commits an edit draft: name and fields in one write', async ()
   const stored = storedList(map).profiles[1];
   expect(stored).toMatchObject({ id: 'b', name: 'Backup' });
   expect(stored.server.login).toBe('bob');
+
+  // A cleared name falls back to the server name, like createProfile does.
+  await ReactTestRenderer.act(async () => {
+    ctx().saveProfile('b', '   ', ctx().profiles[1]);
+  });
+  await flush();
+  expect(storedList(map).profiles[1].name).toBe('Beta');
 });
 
 test('addFromProfileLink creates + selects; errors reported', async () => {

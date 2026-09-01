@@ -142,7 +142,12 @@ export function SetupProfileProvider({
   const saveProfile = useCallback(
     (id: string, name: string, profile: SetupProfile) =>
       setList(prev =>
-        renameProfileIntent(updateEntry(prev, id, () => profile), id, name),
+        renameProfileIntent(
+          updateEntry(prev, id, () => profile),
+          id,
+          // Blank falls back to the server name, mirroring createProfile.
+          name.trim() || profile.server.name,
+        ),
       ),
     [],
   );

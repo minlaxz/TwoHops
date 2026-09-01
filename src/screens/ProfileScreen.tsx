@@ -63,7 +63,7 @@ export default function ServerScreen() {
   const [isDirty, setIsDirty] = useState(false);
   const committedRef = useRef(false);
 
-  const profile = !isCreateMode && !entry ? undefined : draft.profile;
+  const profile = isCreateMode || entry ? draft.profile : undefined;
   const profileName = draft.name;
 
   // DNS text is only a display of the DNS Servers list; local state keeps
