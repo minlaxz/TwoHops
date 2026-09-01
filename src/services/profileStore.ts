@@ -50,16 +50,6 @@ export function defaultProfileList(env: ProfileEnv): ProfileList {
   return wrapAsList(defaultProfile(env));
 }
 
-// Smallest "Profile N" not already taken, so deletes free their numbers.
-function nextProfileName(list: ProfileList): string {
-  const taken = new Set(list.profiles.map(entry => entry.name));
-  let n = 1;
-  while (taken.has(`Profile ${n}`)) {
-    n += 1;
-  }
-  return `Profile ${n}`;
-}
-
 // Appending never steals the selection — editing and selecting are separate
 // acts — except when nothing is selected yet.
 function appendProfile(
@@ -71,7 +61,7 @@ function appendProfile(
   const entry: ProfileEntry = {
     ...profile,
     id: newProfileId(),
-    name: name ?? (profile.server.name.trim() || nextProfileName(list)),
+    name: name ?? profileName(profile),
   };
   return {
     list: {
@@ -84,12 +74,15 @@ function appendProfile(
   };
 }
 
-export function addProfile(
+// Commits a Profile Draft (ADR 0005): appends it under the user's chosen
+// name, falling back to the server name — the Completeness gate guarantees
+// one exists on this path.
+export function createProfile(
   list: ProfileList,
-  env: ProfileEnv,
+  name: string,
+  profile: SetupProfile,
 ): { list: ProfileList; id: string } {
-  // "New profile" is numbered, not named after the env server.
-  return appendProfile(list, defaultProfile(env), false, nextProfileName(list));
+  return appendProfile(list, profile, false, name.trim() || undefined);
 }
 
 // Profile Link rule (ADR 0003): always creates, never overwrites; selected

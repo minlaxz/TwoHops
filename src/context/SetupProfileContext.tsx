@@ -22,7 +22,7 @@ import {
 } from '../services/setupProfile';
 import {
   addFromProfileLink as addFromProfileLinkIntent,
-  addProfile as addProfileIntent,
+  createProfile as createProfileIntent,
   defaultProfileList,
   deleteProfile as deleteProfileIntent,
   loadProfileList,
@@ -42,8 +42,8 @@ type SetupProfileContextValue = {
   profile: SetupProfile;
   isHydrated: boolean;
   selectProfile: (id: string) => void;
-  /** Appends a blank profile and returns its id (for opening its editor). */
-  addProfile: () => string;
+  /** Commits a Profile Draft to the Profile List; returns the new id. */
+  createProfile: (name: string, profile: SetupProfile) => string;
   /** Creates a profile from a Profile Link; selects it when `select`. */
   addFromProfileLink: (
     link: string,
@@ -120,8 +120,8 @@ export function SetupProfileProvider({
   // which React defers.
   const listRef = useRef(list);
   listRef.current = list;
-  const addProfile = useCallback(() => {
-    const result = addProfileIntent(listRef.current, env);
+  const createProfile = useCallback((name: string, profile: SetupProfile) => {
+    const result = createProfileIntent(listRef.current, name, profile);
     listRef.current = result.list;
     setList(result.list);
     return result.id;
@@ -177,7 +177,7 @@ export function SetupProfileProvider({
       profile: selectedProfile(list) ?? defaultProfile(env),
       isHydrated,
       selectProfile,
-      addProfile,
+      createProfile,
       addFromProfileLink,
       updateEntryProfile,
       updateEntryServer,
@@ -188,7 +188,7 @@ export function SetupProfileProvider({
       list,
       isHydrated,
       selectProfile,
-      addProfile,
+      createProfile,
       addFromProfileLink,
       updateEntryProfile,
       updateEntryServer,
