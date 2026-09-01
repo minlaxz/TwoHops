@@ -48,11 +48,11 @@ A `twohops:` URL that carries Server Credentials (except the server name), DNS S
 _Avoid_: auto fill, import URL
 
 **Profile Draft**:
-The in-memory Setup Profile being created or edited on the profile screen. Not part of the Profile List and never persisted until Create (new) or Save (existing) is pressed; Cancel or navigating away discards it, after a discard confirmation when it has unsaved changes. A new Draft starts blank — no generated name.
+The in-memory Setup Profile being created or edited on the profile screen. Not part of the Profile List and never persisted until Create (new) or Save (existing) is pressed; navigating away (header or Android back — there is no Cancel control, #71) discards it, after a discard confirmation when it has been touched. A new Draft starts blank — no generated name.
 _Avoid_: unsaved profile, pending profile, temp profile
 
 **Profile Completeness**:
-Whether the Setup Profile has every field needed to start the tunnel: name, IP address, domain, login, password. Expressed as the list of missing fields. Create and Save require a complete Profile Draft, so only Profiles stored before that rule can be incomplete — connecting refuses them. The connect control stays visible for an incomplete legacy profile (superseding the hide-when-incomplete rule from #40): with no Dashboard hint left to explain a hidden control, the connect-refusal alert is the only guard.
+Whether the Setup Profile has every field needed to start the tunnel: name, IP address, domain, login, password. Expressed as the list of missing fields. Create and Save require a complete Profile Draft (Save additionally requires a touched Draft — touched-flag semantics, not value-diff, #71), so only Profiles stored before that rule can be incomplete — connecting refuses them. The connect control stays visible for an incomplete legacy profile (superseding the hide-when-incomplete rule from #40): with no Dashboard hint left to explain a hidden control, the connect-refusal alert is the only guard.
 _Avoid_: is profile complete (boolean only)
 
 **Tunnel Start Input**:

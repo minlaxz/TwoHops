@@ -60,7 +60,7 @@ export default function ServerScreen() {
         ? { name: entry.name, profile: entry }
         : { name: '', profile: defaultProfile(Config as ProfileEnv) },
   );
-  const [isDirty, setIsDirty] = useState(false);
+  const [isTouched, setIsTouched] = useState(false);
   const committedRef = useRef(false);
 
   const profile = isCreateMode || entry ? draft.profile : undefined;
@@ -80,8 +80,8 @@ export default function ServerScreen() {
   const placeholderTextColor = theme.colors.placeholder;
 
   // Header back and Android hardware back both funnel through here: a
-  // dirty Draft asks before discarding; a committed one passes through.
-  usePreventRemove(isDirty, ({ data }) => {
+  // touched Draft asks before discarding; a committed one passes through.
+  usePreventRemove(isTouched, ({ data }) => {
     if (committedRef.current) {
       navigation.dispatch(data.action);
       return;
@@ -111,10 +111,11 @@ export default function ServerScreen() {
   const { server, routingMode, localRulesText, remoteRulesURL, importedAt } =
     profile;
   const display = displayState(state);
-  // Every Draft edit marks it dirty — the discard confirmation keys off this.
+  // Every Draft edit marks it touched — the discard confirmation and the
+  // Save gate both key off this flag (touched semantics, not value-diff).
   const patchDraft = (transform: (prev: typeof draft) => typeof draft) => {
     setDraft(transform);
-    setIsDirty(true);
+    setIsTouched(true);
   };
   const updateProfile = (patch: Parameters<typeof updateProfileIntent>[1]) =>
     patchDraft(prev => ({
@@ -133,7 +134,7 @@ export default function ServerScreen() {
   // Save is additionally gated on the touched flag (issue #71): an untouched
   // edit draft has nothing to save, however complete it is.
   const canCommit =
-    missingFields(profile).length === 0 && (isCreateMode || isDirty);
+    missingFields(profile).length === 0 && (isCreateMode || isTouched);
   const handleCommit = () => {
     if (committedRef.current) {
       return; // a second tap before the pop lands must not commit twice
@@ -168,10 +169,10 @@ export default function ServerScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            // A dirty draft is moot once its entry is gone — let the pop
+            // A touched draft is moot once its entry is gone — let the pop
             // through instead of raising the discard confirmation.
             committedRef.current = true;
-            setIsDirty(false);
+            setIsTouched(false);
             deleteProfile(entry.id);
             navigation.goBack();
           },
