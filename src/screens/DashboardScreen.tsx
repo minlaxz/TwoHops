@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
 import {
@@ -15,6 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useAppAlert } from '../components/AppAlert';
+import { useAppToast } from '../components/AppToast';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
 import { useLogs } from '../context/LogsContext';
@@ -50,18 +45,7 @@ export default function DashboardScreen() {
     isHydrated,
   } = useSetupProfile();
   const alert = useAppAlert();
-  // ponytail: inline transient notice as the "toast"; RN has no cross-platform
-  // toast and this is the only caller — extract if a second one shows up
-  const [switchLockNotice, setSwitchLockNotice] = useState<string | null>(null);
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (noticeTimer.current) {
-        clearTimeout(noticeTimer.current);
-      }
-    },
-    [],
-  );
+  const toast = useAppToast();
 
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const didLogSetupChangeRef = useRef(false);
@@ -115,11 +99,7 @@ export default function DashboardScreen() {
     // Recovery states collapse to Running; Busy is locked too — honest either way.
     if (display !== 'stopped') {
       appendDebugLog('Profile switch refused: tunnel is not stopped.');
-      setSwitchLockNotice('Stop the tunnel to switch profiles.');
-      if (noticeTimer.current) {
-        clearTimeout(noticeTimer.current);
-      }
-      noticeTimer.current = setTimeout(() => setSwitchLockNotice(null), 2500);
+      toast('Stop the tunnel to switch profiles.');
       return;
     }
     if (id !== selectedId) {
@@ -236,9 +216,6 @@ export default function DashboardScreen() {
         })}
         {profiles.length === 0 && isHydrated ? (
           <Text style={styles.hint}>No profiles yet. Tap + to add one.</Text>
-        ) : null}
-        {switchLockNotice ? (
-          <Text style={styles.errorHint}>{switchLockNotice}</Text>
         ) : null}
       </View>
       {fabVisible ? (

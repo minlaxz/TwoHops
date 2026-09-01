@@ -343,27 +343,44 @@ test('tapping a profile while Stopped selects it', async () => {
   });
 });
 
-test('tapping a profile while Running is locked with a toast', async () => {
-  await seedTwoProfiles();
-  const renderer = await renderApp();
+test('tapping a profile while Running raises a Toast that auto-dismisses', async () => {
+  jest.useFakeTimers();
+  try {
+    await seedTwoProfiles();
+    const renderer = await renderApp();
 
-  await ReactTestRenderer.act(async () => {
-    emitNativeState('connected');
-  });
-  await ReactTestRenderer.act(async () => {
-    profileRows(renderer)[1].props.onPress();
-  });
+    await ReactTestRenderer.act(async () => {
+      emitNativeState('connected');
+    });
+    await ReactTestRenderer.act(async () => {
+      profileRows(renderer)[1].props.onPress();
+    });
 
-  expect(renderedText(renderer)).toContain(
-    'Stop the tunnel to switch profiles.',
-  );
-  expect(
-    profileRows(renderer).map(row => row.props.accessibilityState.selected),
-  ).toEqual([true, false]);
+    const toast = renderer.root.findByProps({ testID: 'app-toast' });
+    expect(renderedText(renderer)).toContain(
+      'Stop the tunnel to switch profiles.',
+    );
+    expect(toast).toBeTruthy();
+    expect(
+      profileRows(renderer).map(row => row.props.accessibilityState.selected),
+    ).toEqual([true, false]);
 
-  await ReactTestRenderer.act(async () => {
-    renderer.unmount();
-  });
+    await ReactTestRenderer.act(async () => {
+      jest.advanceTimersByTime(2500);
+    });
+    expect(renderer.root.findAllByProps({ testID: 'app-toast' })).toHaveLength(
+      0,
+    );
+    expect(renderedText(renderer)).not.toContain(
+      'Stop the tunnel to switch profiles.',
+    );
+
+    await ReactTestRenderer.act(async () => {
+      renderer.unmount();
+    });
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test('tapping a profile in a recovery state is locked too', async () => {

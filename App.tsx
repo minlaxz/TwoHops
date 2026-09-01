@@ -36,6 +36,7 @@ import { LogsProvider } from './src/context/LogsContext';
 import { displayState } from './src/services/tunnelSession';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import { AlertProvider } from './src/components/AppAlert';
+import { ToastProvider } from './src/components/AppToast';
 import { getAppTheme, type AppTheme } from './src/theme/colors';
 import DashboardScreen from './src/screens/DashboardScreen';
 import LogsScreen from './src/screens/LogsScreen';
@@ -199,14 +200,16 @@ function AppNavigator() {
         backgroundColor={theme.colors.surface}
       />
       <AlertProvider>
-        <SetupProfileProvider>
-          <TunnelSessionProvider>
-            <ProfileLinkListener />
-            <LogsProvider>
-              <Navigation theme={navigationTheme} />
-            </LogsProvider>
-          </TunnelSessionProvider>
-        </SetupProfileProvider>
+        <ToastProvider>
+          <SetupProfileProvider>
+            <TunnelSessionProvider>
+              <ProfileLinkListener />
+              <LogsProvider>
+                <Navigation theme={navigationTheme} />
+              </LogsProvider>
+            </TunnelSessionProvider>
+          </SetupProfileProvider>
+        </ToastProvider>
       </AlertProvider>
     </>
   );
