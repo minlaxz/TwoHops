@@ -36,14 +36,8 @@ export default function DashboardScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const {
-    profile,
-    profiles,
-    selectedId,
-    selectProfile,
-    addProfile,
-    isHydrated,
-  } = useSetupProfile();
+  const { profile, profiles, selectedId, selectProfile, isHydrated } =
+    useSetupProfile();
   const alert = useAppAlert();
   const toast = useAppToast();
 
@@ -167,11 +161,9 @@ export default function DashboardScreen() {
             accessibilityRole="button"
             accessibilityLabel="Add profile"
             style={styles.addButton}
-            onPress={() => {
-              const id = addProfile();
-              appendDebugLog('New profile created.');
-              navigation.navigate('Profile', { profileId: id, mode: 'create' });
-            }}
+            // Opens a blank Profile Draft (ADR 0005) — nothing is persisted
+            // until the create screen commits it.
+            onPress={() => navigation.navigate('Profile', { mode: 'create' })}
           >
             <Text style={styles.addGlyph}>＋</Text>
           </Pressable>

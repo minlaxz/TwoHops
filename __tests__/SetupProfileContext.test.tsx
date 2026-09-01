@@ -97,16 +97,22 @@ test('edits land on the addressed profile only, selected or not', async () => {
   expect(storedList(map).profiles[1].server.login).toBe('bob');
 });
 
-test('addProfile returns the new id; rename and delete persist', async () => {
+// The Profile Draft lives in screen state, so draft edits never reach this
+// provider; persistence happens only when createProfile commits the draft.
+test('createProfile commits a draft: nothing persisted before, entry after', async () => {
   const { storage, map } = memoryStorage();
   const ctx = await mount(storage);
+  await flush();
+  expect(map.has(PROFILES_STORAGE_KEY)).toBe(false);
+
+  const draft = defaultsProfile('server');
   let id = '';
   await ReactTestRenderer.act(async () => {
-    id = ctx().addProfile();
+    id = ctx().createProfile('My VPN', draft);
   });
   await flush();
   expect(ctx().profiles).toHaveLength(2);
-  expect(storedList(map).profiles[1].id).toBe(id);
+  expect(storedList(map).profiles[1]).toMatchObject({ id, name: 'My VPN' });
 
   await ReactTestRenderer.act(async () => {
     ctx().renameProfile(id, 'Backup');
@@ -167,7 +173,7 @@ test('selectProfile switches the Selected Profile and persists', async () => {
   expect(storedList(map).selectedId).toBe('b');
 });
 
-function defaultsEntry(id: string, name: string) {
+function defaultsProfile(name: string) {
   return {
     version: 1 as const,
     server: {
@@ -184,7 +190,9 @@ function defaultsEntry(id: string, name: string) {
     remoteRulesURL: '',
     importedRules: [],
     importedAt: null,
-    id,
-    name,
   };
+}
+
+function defaultsEntry(id: string, name: string) {
+  return { ...defaultsProfile(name), id, name };
 }

@@ -1,6 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, StyleSheet, View, TextInput } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {
+  useNavigation,
+  usePreventRemove,
+  useRoute,
+} from '@react-navigation/native';
+import Config from 'react-native-config';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useAppAlert } from '../components/AppAlert';
@@ -9,9 +14,14 @@ import { useTunnelSession } from '../context/TunnelSessionContext';
 import { parseRules } from '../services/routingRules';
 import {
   applyProfileLink,
+  defaultProfile,
   effectiveRules,
   importRemoteRules,
+  missingFields,
   profileLinkErrorMessage,
+  updateProfile as updateProfileIntent,
+  updateServer as updateServerIntent,
+  type ProfileEnv,
 } from '../services/setupProfile';
 import { displayState } from '../services/tunnelSession';
 import { useAppTheme } from '../context/ThemeContext';
@@ -24,6 +34,7 @@ export default function ServerScreen() {
   const {
     profiles,
     selectedId,
+    createProfile,
     updateEntryProfile,
     updateEntryServer,
     renameProfile,
@@ -35,19 +46,30 @@ export default function ServerScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const alert = useAppAlert();
-  // The editor is always addressed by id (pencil / ＋); `mode: 'create'`
-  // rides along from ＋ and shapes the whole screen session (issue #55).
+  // Edit is addressed by id (pencil); ＋ passes `mode: 'create'` and the
+  // screen edits a Profile Draft instead of a Profile List entry (ADR 0005).
   const params = route.params as ProfileScreenParams | undefined;
-  const profileId = params?.profileId;
   const isCreateMode = params?.mode === 'create';
-  const entry = profiles.find(candidate => candidate.id === profileId);
+  const entry = profiles.find(candidate => candidate.id === params?.profileId);
   const [url, setURL] = useState<string>('');
   // Create mode collapses Advanced (the link is the expected path); edit
   // mode opens it (the fields are what the pencil came for).
   const [advancedOpen, setAdvancedOpen] = useState(!isCreateMode);
+  // The Profile Draft: in-memory until Create commits it. Its profile name
+  // starts blank — no generated "Profile n".
+  const [draft, setDraft] = useState(() => ({
+    name: '',
+    profile: defaultProfile(Config as ProfileEnv),
+  }));
+  const [isDirty, setIsDirty] = useState(false);
+  const committedRef = useRef(false);
+
+  const profile = isCreateMode ? draft.profile : entry;
+  const profileName = isCreateMode ? draft.name : entry?.name ?? '';
+
   // DNS text is only a display of the DNS Servers list; local state keeps
   // the user's in-progress punctuation while the list is the source of truth.
-  const dnsList = (entry?.dnsServers ?? []).join(',');
+  const dnsList = (profile?.dnsServers ?? []).join(',');
   const [dnsText, setDnsText] = useState(dnsList);
   useEffect(() => {
     setDnsText(prev =>
@@ -58,8 +80,25 @@ export default function ServerScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const placeholderTextColor = theme.colors.placeholder;
 
+  // Cancel, header back and Android hardware back all funnel through here:
+  // a dirty Draft asks before discarding; a committed one passes through.
+  usePreventRemove(isCreateMode && isDirty, ({ data }) => {
+    if (committedRef.current) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    alert('Discard changes?', 'Your changes will not be saved.', [
+      { text: 'Keep Editing', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => navigation.dispatch(data.action),
+      },
+    ]);
+  });
+
   // Deleted underneath us, or opened with nothing to edit.
-  if (!entry) {
+  if (!profile) {
     return (
       <MainScreen>
         <Text style={styles.title}>Configurations</Text>
@@ -70,16 +109,52 @@ export default function ServerScreen() {
     );
   }
 
-  const profile = entry;
   const { server, routingMode, localRulesText, remoteRulesURL, importedAt } =
     profile;
   const display = displayState(state);
-  const updateProfile = (patch: Parameters<typeof updateEntryProfile>[1]) =>
-    updateEntryProfile(entry.id, patch);
-  const updateServer = (patch: Parameters<typeof updateEntryServer>[1]) =>
-    updateEntryServer(entry.id, patch);
+  const updateProfile = (patch: Parameters<typeof updateEntryProfile>[1]) => {
+    if (isCreateMode) {
+      setDraft(prev => ({
+        ...prev,
+        profile: updateProfileIntent(prev.profile, patch),
+      }));
+      setIsDirty(true);
+    } else if (entry) {
+      updateEntryProfile(entry.id, patch);
+    }
+  };
+  const updateServer = (patch: Parameters<typeof updateEntryServer>[1]) => {
+    if (isCreateMode) {
+      setDraft(prev => ({
+        ...prev,
+        profile: updateServerIntent(prev.profile, patch),
+      }));
+      setIsDirty(true);
+    } else if (entry) {
+      updateEntryServer(entry.id, patch);
+    }
+  };
+  const setProfileName = (value: string) => {
+    if (isCreateMode) {
+      setDraft(prev => ({ ...prev, name: value }));
+      setIsDirty(true);
+    } else if (entry) {
+      renameProfile(entry.id, value);
+    }
+  };
+
+  // The Completeness gate: Create can never mint an incomplete profile.
+  const canCreate = missingFields(profile).length === 0;
+  const handleCreate = () => {
+    committedRef.current = true;
+    createProfile(draft.name, draft.profile);
+    navigation.goBack();
+  };
 
   const handleDelete = () => {
+    if (!entry) {
+      return;
+    }
     if (entry.id === selectedId && display !== 'stopped') {
       alert('Cannot delete', 'Stop the tunnel to delete the Selected Profile.');
       return;
@@ -129,8 +204,8 @@ export default function ServerScreen() {
               title="Apply Link"
               testID="profile-link-apply"
               onPress={() => {
-                // Create-mode carve-out to ADR 0003 (ADR 0004): the link
-                // populates this just-created blank profile in place.
+                // ADR 0005: the link patches the Profile Draft in place —
+                // nothing reaches the Profile List until Create.
                 const result = applyProfileLink(profile, url);
                 if (!result.ok) {
                   alert(
@@ -139,7 +214,8 @@ export default function ServerScreen() {
                   );
                   return;
                 }
-                updateEntryProfile(entry.id, result.value);
+                setDraft(prev => ({ ...prev, profile: result.value }));
+                setIsDirty(true);
                 setURL('');
                 setAdvancedOpen(true);
               }}
@@ -165,8 +241,8 @@ export default function ServerScreen() {
               style={styles.input}
               placeholder="Profile name"
               placeholderTextColor={placeholderTextColor}
-              value={entry.name}
-              onChangeText={value => renameProfile(entry.id, value)}
+              value={profileName}
+              onChangeText={setProfileName}
               autoCapitalize="none"
             />
             <TextInput
@@ -349,16 +425,41 @@ export default function ServerScreen() {
                 }}
               />
             </View>
-            <TouchableOpacityButton
-              touchableOpacityStyles={[styles.modeButton, styles.clearButton]}
-              textStyles={styles.modeButtonText}
-              title="Delete Profile"
-              testID="profile-delete"
-              onPress={handleDelete}
-            />
+            {!isCreateMode ? (
+              <TouchableOpacityButton
+                touchableOpacityStyles={[styles.modeButton, styles.clearButton]}
+                textStyles={styles.modeButtonText}
+                title="Delete Profile"
+                testID="profile-delete"
+                onPress={handleDelete}
+              />
+            ) : null}
           </>
         ) : null}
       </View>
+      {isCreateMode ? (
+        <View style={styles.actionRow}>
+          <TouchableOpacityButton
+            touchableOpacityStyles={[
+              styles.actionButton,
+              styles.cancelActionButton,
+            ]}
+            title="Cancel"
+            testID="profile-cancel"
+            onPress={() => navigation.goBack()}
+          />
+          <TouchableOpacityButton
+            touchableOpacityStyles={[
+              styles.actionButton,
+              !canCreate && styles.actionButtonDisabled,
+            ]}
+            title="Create"
+            testID="profile-create"
+            disabled={!canCreate}
+            onPress={handleCreate}
+          />
+        </View>
+      ) : null}
     </MainScreen>
   );
 }
@@ -463,6 +564,22 @@ function createStyles(theme: AppTheme) {
       width: '100%',
       backgroundColor: theme.colors.danger,
       marginTop: 8,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginBottom: 24,
+    },
+    actionButton: {
+      flex: 1,
+      width: 'auto',
+      height: 44,
+    },
+    cancelActionButton: {
+      backgroundColor: theme.colors.buttonInactive,
+    },
+    actionButtonDisabled: {
+      backgroundColor: theme.colors.buttonInactive,
     },
     protocolButton: {
       width: 60,

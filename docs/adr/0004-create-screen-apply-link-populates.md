@@ -4,7 +4,11 @@ Date: 2026-08-31
 
 ## Status
 
-Accepted. Carves an exception out of [ADR 0003](0003-multiple-setup-profiles.md).
+Superseded by [ADR 0005](0005-draft-based-profile-create.md): the create
+screen now edits an unpersisted Profile Draft, so the carve-out below is moot.
+
+Was: Accepted. Carves an exception out of
+[ADR 0003](0003-multiple-setup-profiles.md).
 
 ## Context
 

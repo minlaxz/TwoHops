@@ -1,6 +1,6 @@
 import {
   addFromProfileLink,
-  addProfile,
+  createProfile,
   defaultProfileList,
   deleteProfile,
   loadProfileList,
@@ -135,30 +135,27 @@ describe('updateSelected', () => {
   });
 });
 
-describe('addProfile', () => {
-  test('appends a blank default entry named "Profile N"; selection unchanged', () => {
-    const { list, id } = addProfile(twoProfileList(), env);
+describe('createProfile', () => {
+  test('appends the committed draft under the given name; selection unchanged', () => {
+    const draft = completeProfile();
+    const { list, id } = createProfile(twoProfileList(), '  My VPN  ', draft);
     expect(list.profiles).toHaveLength(3);
     const entry = list.profiles[2];
     expect(entry.id).toBe(id);
-    expect(entry.name).toBe('Profile 1');
-    expect(entry).toEqual({ ...defaultProfile(env), id, name: 'Profile 1' });
+    expect(entry).toEqual({ ...draft, id, name: 'My VPN' });
     expect(list.selectedId).toBe('a');
   });
 
-  test('picks the smallest free "Profile N" name', () => {
-    const base: ProfileList = {
-      version: 1,
-      profiles: [{ ...defaultProfile(env), id: 'x', name: 'Profile 2' }],
-      selectedId: 'x',
-    };
-    expect(addProfile(base, env).list.profiles[1].name).toBe('Profile 1');
+  test('a blank name falls back to the server name', () => {
+    const { list } = createProfile(twoProfileList(), '  ', completeProfile());
+    expect(list.profiles[2].name).toBe('env-server');
   });
 
   test('an empty list selects the new profile', () => {
-    const { list, id } = addProfile(
+    const { list, id } = createProfile(
       { version: 1, profiles: [], selectedId: null },
-      env,
+      'Solo',
+      completeProfile(),
     );
     expect(list.selectedId).toBe(id);
   });
@@ -192,14 +189,15 @@ describe('addFromProfileLink', () => {
     expect(result.value.list.selectedId).toBe(result.value.id);
   });
 
-  test('names the entry from the env server name, else "Profile N"', () => {
+  test('names the entry from the env server name, else the link domain', () => {
     const withEnvName = addFromProfileLink(twoProfileList(), link, env, false);
     if (!withEnvName.ok) throw new Error('expected ok');
     expect(withEnvName.value.list.profiles[2].name).toBe('env-server');
 
+    // No env name: applyProfileLink defaulted the server name from the domain.
     const noName = addFromProfileLink(twoProfileList(), link, {}, false);
     if (!noName.ok) throw new Error('expected ok');
-    expect(noName.value.list.profiles[2].name).toBe('Profile 1');
+    expect(noName.value.list.profiles[2].name).toBe('d.example.com');
   });
 
   test('a bad link returns the error and leaves the list alone', () => {

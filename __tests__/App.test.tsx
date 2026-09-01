@@ -631,7 +631,7 @@ async function press(
   });
 }
 
-test('"+" creates a blank profile and opens its editor directly', async () => {
+test('"+" opens a blank Profile Draft without touching the Profile List', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
@@ -640,21 +640,22 @@ test('"+" creates a blank profile and opens its editor directly', async () => {
   // Editor pushed in create mode; expand Advanced to reach the fields.
   expect(renderedText(renderer)).toContain('Configurations');
   await press(renderer, 'profile-advanced-toggle');
+  // The name field starts blank — no generated "Profile n".
   expect(textInputByTestID(renderer, 'profile-name-input').props.value).toBe(
-    'Profile 1',
+    '',
   );
-  expect(profileRows(renderer)).toHaveLength(3);
-  // Selection stays on Alpha — adding is not selecting.
+  // Nothing was added to the list or persisted.
+  expect(profileRows(renderer)).toHaveLength(2);
   expect(
-    profileRows(renderer).map(row => row.props.accessibilityState.selected),
-  ).toEqual([true, false, false]);
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles,
+  ).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
 });
 
-test('create-mode Apply Link populates the new profile in place', async () => {
+test('Apply Link patches the Profile Draft; the Profile List is untouched', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
@@ -666,19 +667,120 @@ test('create-mode Apply Link populates the new profile in place', async () => {
   });
   await press(renderer, 'profile-link-apply');
 
-  // No second profile: still the two seeded plus the one "+" created.
-  expect(profileRows(renderer)).toHaveLength(3);
-  // Success auto-expands Advanced with the link's fields applied.
+  // Success auto-expands Advanced with the link's fields applied to the draft.
   const username = renderer.root.findAll(
     node =>
       node.props.placeholder === 'Username' &&
       typeof node.props.onChangeText === 'function',
   )[0];
   expect(username.props.value).toBe('bob');
-  // Adding is not selecting: Alpha keeps the selection.
+  // The draft is not a Profile List entry: still just the two seeded rows.
+  expect(profileRows(renderer)).toHaveLength(2);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Create is gated on Profile Completeness and commits exactly one profile', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-add');
+  // Blank draft: Create renders (outside Advanced) but stays disabled.
+  expect(pressableByTestID(renderer, 'profile-create')!.props.disabled).toBe(
+    true,
+  );
+
+  await ReactTestRenderer.act(async () => {
+    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
+      'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com',
+    );
+  });
+  await press(renderer, 'profile-link-apply');
+
+  // Env server name + the link's fields satisfy the Completeness gate.
+  expect(pressableByTestID(renderer, 'profile-create')!.props.disabled).toBe(
+    false,
+  );
+
+  await ReactTestRenderer.act(async () => {
+    textInputByTestID(renderer, 'profile-name-input').props.onChangeText(
+      'My VPN',
+    );
+  });
+  await press(renderer, 'profile-create');
+
+  // Editor closed; the committed profile is on the card, unselected, persisted.
+  expect(renderedText(renderer)).not.toContain('Configurations');
+  expect(renderedText(renderer)).toContain('My VPN');
+  const rows = profileRows(renderer);
+  expect(rows).toHaveLength(3);
+  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
+    true,
+    false,
+    false,
+  ]);
+  const stored = JSON.parse(
+    (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
+  );
+  expect(stored.profiles).toHaveLength(3);
+  expect(stored.profiles[2]).toMatchObject({
+    name: 'My VPN',
+    server: expect.objectContaining({ login: 'bob', ipAddress: '10.9.9.9' }),
+  });
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Cancel on an untouched draft exits silently', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-add');
+  await press(renderer, 'profile-cancel');
+
+  expect(renderedText(renderer)).not.toContain('Discard changes?');
+  expect(renderedText(renderer)).not.toContain('Configurations');
+  expect(profileRows(renderer)).toHaveLength(2);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Cancel on a dirty draft asks; Keep Editing stays, Discard drops it', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-add');
+  await press(renderer, 'profile-advanced-toggle');
+  await ReactTestRenderer.act(async () => {
+    textInputByTestID(renderer, 'profile-name-input').props.onChangeText(
+      'Half-typed',
+    );
+  });
+  await press(renderer, 'profile-cancel');
+
+  expect(renderedText(renderer)).toContain('Discard changes?');
+  expect(renderedText(renderer)).toContain('Your changes will not be saved.');
+  await press(renderer, 'alert-button-Keep Editing');
+  // Still editing: the screen and the typed name survive.
+  expect(renderedText(renderer)).toContain('Configurations');
+  expect(textInputByTestID(renderer, 'profile-name-input').props.value).toBe(
+    'Half-typed',
+  );
+
+  await press(renderer, 'profile-cancel');
+  await press(renderer, 'alert-button-Discard');
+  // Editor closed; nothing was created or persisted.
+  expect(renderedText(renderer)).not.toContain('Configurations');
+  expect(profileRows(renderer)).toHaveLength(2);
   expect(
-    profileRows(renderer).map(row => row.props.accessibilityState.selected),
-  ).toEqual([true, false, false]);
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles,
+  ).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -701,9 +803,9 @@ test('a bad link in create mode shows the alert modal and touches nothing', asyn
   expect(renderedText(renderer)).toContain('Profile Link failed');
   await press(renderer, 'alert-button-OK');
   expect(renderedText(renderer)).not.toContain('Profile Link failed');
-  // Advanced stays collapsed and the blank profile is untouched.
+  // Advanced stays collapsed and the Profile List is untouched.
   expect(textInputByTestID(renderer, 'profile-name-input')).toBeUndefined();
-  expect(profileRows(renderer)).toHaveLength(3);
+  expect(profileRows(renderer)).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();

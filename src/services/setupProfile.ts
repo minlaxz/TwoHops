@@ -126,7 +126,9 @@ export function updateServer(
 }
 
 // Profile Link: twohops://…?login=&password=&ip=&domain=&protocol=&dns=&remoteRules=
-// Overwrites only the fields the link carries. Pure — no network.
+// Overwrites only the fields the link carries; a link cannot carry the server
+// name, so an empty one defaults from the link's domain (user can overwrite).
+// Pure — no network.
 // ponytail: hand parser; RN's URLSearchParams lacks get(), and this is 15 lines.
 export function applyProfileLink(
   profile: SetupProfile,
@@ -167,6 +169,9 @@ export function applyProfileLink(
   }
   const protocol = pick(params.get('protocol'), PROTOCOLS);
   if (protocol !== undefined) server.vpnProtocol = protocol;
+  if (profile.server.name.trim() === '' && server.domain) {
+    server.name = server.domain;
+  }
   const patch: Partial<SetupProfile> = {};
   const dns = params.get('dns');
   if (dns !== undefined) patch.dnsServers = parseRules(dns);

@@ -323,6 +323,37 @@ describe('applyProfileLink', () => {
     const result = applyProfileLink(base, 'twohops://x?protocol=bogus');
     expect(result).toEqual({ ok: true, value: base });
   });
+
+  // A Profile Link cannot carry the server name; an empty one defaults from
+  // the link's domain so the link alone reaches Profile Completeness.
+  describe('server name defaulting', () => {
+    const nameless = updateServer(base, { name: '' });
+
+    test('empty server name defaults from the link domain', () => {
+      const result = applyProfileLink(
+        nameless,
+        'twohops://x?domain=tls.example.com',
+      );
+      if (!result.ok) throw new Error('expected ok');
+      expect(result.value.server.name).toBe('tls.example.com');
+      expect(result.value.server.domain).toBe('tls.example.com');
+    });
+
+    test('a link without a domain leaves the empty name alone', () => {
+      const result = applyProfileLink(nameless, 'twohops://x?login=bob');
+      if (!result.ok) throw new Error('expected ok');
+      expect(result.value.server.name).toBe('');
+    });
+
+    test('an existing server name is never overwritten', () => {
+      const result = applyProfileLink(
+        base,
+        'twohops://x?domain=tls.example.com',
+      );
+      if (!result.ok) throw new Error('expected ok');
+      expect(result.value.server.name).toBe(base.server.name);
+    });
+  });
 });
 
 describe('importRemoteRules', () => {
