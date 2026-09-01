@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Text, StyleSheet, View } from 'react-native';
 import Config from 'react-native-config';
 import MainScreen from '../components/views';
+import CollapsibleSection from '../components/CollapsibleSection';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme, ThemePreference } from '../theme/colors';
@@ -34,8 +35,11 @@ export default function SettingsScreen() {
 
   return (
     <MainScreen>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Appearance</Text>
+      <CollapsibleSection
+        title="Appearance"
+        initialExpanded={false}
+        testID="settings-section-appearance"
+      >
         <View style={styles.row}>
           <Text style={styles.rowLabel}>Theme: {themePreference}</Text>
         </View>
@@ -60,36 +64,29 @@ export default function SettingsScreen() {
         <Text style={styles.description}>
           Use "System" to follow your phone appearance settings.
         </Text>
-      </View>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
+      </CollapsibleSection>
+      <CollapsibleSection
+        title="About"
+        initialExpanded
+        testID="settings-section-about"
+      >
         {aboutRows.map(([label, value]) => (
           <View key={label} style={styles.row}>
             <Text style={styles.rowLabel}>{label}</Text>
             <Text style={styles.rowValue}>{value}</Text>
           </View>
         ))}
-      </View>
+        <Text style={styles.description}>
+          TwoHops is developed by Min. The core is developed by AdGuard under
+          the name TrustTunnel.
+        </Text>
+      </CollapsibleSection>
     </MainScreen>
   );
 }
 
 function createStyles(theme: AppTheme) {
   return StyleSheet.create({
-    section: {
-      marginBottom: 16,
-      padding: 16,
-      borderRadius: 12,
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
-      borderWidth: 1,
-    },
-    sectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      marginBottom: 12,
-      color: theme.colors.textPrimary,
-    },
     row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     rowLabel: {
       flex: 1,
