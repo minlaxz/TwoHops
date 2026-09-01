@@ -46,7 +46,7 @@ export default function ServerScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const alert = useAppAlert();
-  // Edit is addressed by id (pencil); ＋ passes `mode: 'create'` and the
+  // Edit is addressed by id (pencil); Add passes `mode: 'create'` and the
   // screen edits a Profile Draft instead of a Profile List entry (ADR 0005).
   const params = route.params as ProfileScreenParams | undefined;
   const isCreateMode = params?.mode === 'create';

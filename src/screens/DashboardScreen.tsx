@@ -165,7 +165,11 @@ export default function DashboardScreen() {
             // until the create screen commits it.
             onPress={() => navigation.navigate('Profile', { mode: 'create' })}
           >
-            <Text style={styles.addGlyph}>＋</Text>
+            <Ionicons
+              name="add"
+              size={18}
+              color={theme.colors.buttonPrimaryText}
+            />
           </Pressable>
         </View>
         {profiles.map(entry => {
@@ -200,7 +204,11 @@ export default function DashboardScreen() {
                     navigation.navigate('Profile', { profileId: entry.id })
                   }
                 >
-                  <Text style={styles.pencil}>✎</Text>
+                  <Ionicons
+                    name="pencil"
+                    size={16}
+                    color={theme.colors.textSecondary}
+                  />
                 </Pressable>
               </View>
             </Pressable>
@@ -315,18 +323,10 @@ function createStyles(theme: AppTheme) {
       backgroundColor: theme.colors.buttonPrimary,
       marginBottom: 12,
     },
-    addGlyph: {
-      fontSize: 18,
-      color: theme.colors.buttonPrimaryText,
-    },
     rowRight: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-    },
-    pencil: {
-      fontSize: 16,
-      color: theme.colors.textSecondary,
     },
     profilesCard: {
       marginTop: 14,
