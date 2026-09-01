@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
 import App from '../App';
 import { PROFILES_STORAGE_KEY } from '../src/services/profileStore';
+import { TOAST_DURATION_MS } from '../src/components/AppToast';
 
 jest.mock('react-native-config', () => ({
   ENV_SERVER_NAME: 'env-server',
@@ -366,7 +367,7 @@ test('tapping a profile while Running raises a Toast that auto-dismisses', async
     ).toEqual([true, false]);
 
     await ReactTestRenderer.act(async () => {
-      jest.advanceTimersByTime(2500);
+      jest.advanceTimersByTime(TOAST_DURATION_MS);
     });
     expect(renderer.root.findAllByProps({ testID: 'app-toast' })).toHaveLength(
       0,

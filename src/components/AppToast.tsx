@@ -15,7 +15,7 @@ import type { AppTheme } from '../theme/colors';
 // A new toast replaces the current one and restarts the dismiss timer.
 type ToastFn = (message: string) => void;
 
-const TOAST_DURATION_MS = 2500;
+export const TOAST_DURATION_MS = 2500;
 
 const ToastContext = createContext<ToastFn | null>(null);
 
