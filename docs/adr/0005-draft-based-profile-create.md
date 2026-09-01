@@ -48,3 +48,8 @@ editable) so the link alone reaches Profile Completeness.
   commits name and fields in one write, and write-through per keystroke is
   gone. Saving the Running tunnel's profile is allowed; a "Changes apply on
   next connect" Toast says the live tunnel keeps its config.
+- Amended by #71: the Cancel control is gone — header back and Android back
+  are the discard paths (same confirmation). The edit footer is Delete +
+  Save, and Save adds a touched-Draft gate on top of Completeness
+  (touched-flag semantics, not value-diff). Create mode keeps a single
+  Create button.

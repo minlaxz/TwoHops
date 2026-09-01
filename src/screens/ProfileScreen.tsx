@@ -60,7 +60,7 @@ export default function ServerScreen() {
         ? { name: entry.name, profile: entry }
         : { name: '', profile: defaultProfile(Config as ProfileEnv) },
   );
-  const [isDirty, setIsDirty] = useState(false);
+  const [isTouched, setIsTouched] = useState(false);
   const committedRef = useRef(false);
 
   const profile = isCreateMode || entry ? draft.profile : undefined;
@@ -79,9 +79,9 @@ export default function ServerScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const placeholderTextColor = theme.colors.placeholder;
 
-  // Cancel, header back and Android hardware back all funnel through here:
-  // a dirty Draft asks before discarding; a committed one passes through.
-  usePreventRemove(isDirty, ({ data }) => {
+  // Header back and Android hardware back both funnel through here: a
+  // touched Draft asks before discarding; a committed one passes through.
+  usePreventRemove(isTouched, ({ data }) => {
     if (committedRef.current) {
       navigation.dispatch(data.action);
       return;
@@ -111,10 +111,11 @@ export default function ServerScreen() {
   const { server, routingMode, localRulesText, remoteRulesURL, importedAt } =
     profile;
   const display = displayState(state);
-  // Every Draft edit marks it dirty — the discard confirmation keys off this.
+  // Every Draft edit marks it touched — the discard confirmation and the
+  // Save gate both key off this flag (touched semantics, not value-diff).
   const patchDraft = (transform: (prev: typeof draft) => typeof draft) => {
     setDraft(transform);
-    setIsDirty(true);
+    setIsTouched(true);
   };
   const updateProfile = (patch: Parameters<typeof updateProfileIntent>[1]) =>
     patchDraft(prev => ({
@@ -130,7 +131,10 @@ export default function ServerScreen() {
     patchDraft(prev => ({ ...prev, name: value }));
 
   // The Completeness gate: Create/Save can never mint an incomplete profile.
-  const canCommit = missingFields(profile).length === 0;
+  // Save is additionally gated on the touched flag (issue #71): an untouched
+  // edit draft has nothing to save, however complete it is.
+  const canCommit =
+    missingFields(profile).length === 0 && (isCreateMode || isTouched);
   const handleCommit = () => {
     if (committedRef.current) {
       return; // a second tap before the pop lands must not commit twice
@@ -165,10 +169,10 @@ export default function ServerScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            // A dirty draft is moot once its entry is gone — let the pop
+            // A touched draft is moot once its entry is gone — let the pop
             // through instead of raising the discard confirmation.
             committedRef.current = true;
-            setIsDirty(false);
+            setIsTouched(false);
             deleteProfile(entry.id);
             navigation.goBack();
           },
@@ -425,28 +429,21 @@ export default function ServerScreen() {
                 }}
               />
             </View>
-            {!isCreateMode ? (
-              <TouchableOpacityButton
-                touchableOpacityStyles={[styles.modeButton, styles.clearButton]}
-                textStyles={styles.modeButtonText}
-                title="Delete Profile"
-                testID="profile-delete"
-                onPress={handleDelete}
-              />
-            ) : null}
           </>
         ) : null}
       </View>
       <View style={styles.actionRow}>
-        <TouchableOpacityButton
-          touchableOpacityStyles={[
-            styles.actionButton,
-            styles.cancelActionButton,
-          ]}
-          title="Cancel"
-          testID="profile-cancel"
-          onPress={() => navigation.goBack()}
-        />
+        {!isCreateMode ? (
+          <TouchableOpacityButton
+            touchableOpacityStyles={[
+              styles.actionButton,
+              styles.deleteActionButton,
+            ]}
+            title="Delete"
+            testID="profile-delete"
+            onPress={handleDelete}
+          />
+        ) : null}
         <TouchableOpacityButton
           touchableOpacityStyles={[
             styles.actionButton,
@@ -558,11 +555,6 @@ function createStyles(theme: AppTheme) {
     modeButtonWide: {
       width: 80,
     },
-    clearButton: {
-      width: '100%',
-      backgroundColor: theme.colors.danger,
-      marginTop: 8,
-    },
     actionRow: {
       flexDirection: 'row',
       gap: 12,
@@ -573,8 +565,8 @@ function createStyles(theme: AppTheme) {
       width: 'auto',
       height: 44,
     },
-    cancelActionButton: {
-      backgroundColor: theme.colors.buttonInactive,
+    deleteActionButton: {
+      backgroundColor: theme.colors.danger,
     },
     actionButtonDisabled: {
       backgroundColor: theme.colors.buttonInactive,
