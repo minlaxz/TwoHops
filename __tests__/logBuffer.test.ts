@@ -83,6 +83,35 @@ test('getRows is referentially stable until the next append', () => {
   expect(buffer.getRows()).toBe(buffer.getRows());
 });
 
+test('capture disabled: append drops the row silently', () => {
+  const buffer = createLogBuffer<string>({ cap: 10 });
+  buffer.append('kept');
+  const listener = jest.fn();
+  buffer.subscribe(listener);
+  buffer.setCaptureEnabled(false);
+  buffer.append('dropped');
+  expect(buffer.getRows()).toEqual(['kept']);
+  expect(listener).not.toHaveBeenCalled();
+});
+
+test('capture re-enabled: earlier rows kept, new rows collect again', () => {
+  const buffer = createLogBuffer<string>({ cap: 10 });
+  buffer.append('before');
+  buffer.setCaptureEnabled(false);
+  buffer.append('gap');
+  buffer.setCaptureEnabled(true);
+  buffer.append('after');
+  expect(buffer.getRows()).toEqual(['after', 'before']);
+});
+
+test('clear still works while capture is disabled', () => {
+  const buffer = createLogBuffer<string>({ cap: 10 });
+  buffer.append('a');
+  buffer.setCaptureEnabled(false);
+  buffer.clear();
+  expect(buffer.getRows()).toEqual([]);
+});
+
 test('traffic buffer collects from creation, with no subscriber attached', () => {
   const { port, emit } = fakeQueryLogPort();
   const buffer = createTrafficLogBuffer(port);

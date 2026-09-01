@@ -27,7 +27,7 @@ following the convention set by `trusttunnel-client-0.99.64-to-latest.md`.
 ## 2. What this repo builds
 
 - `android/app/build.gradle:129-135` — ABI splits `include "arm64-v8a", "armeabi-v7a",
-  "x86_64"` with `universalApk true` (no `x86` split, even though
+"x86_64"` with `universalApk true` (no `x86` split, even though
   `android/gradle.properties:29` lists `x86` in `reactNativeArchitectures`).
 - `.github/workflows/android.yaml:119-157` — `./gradlew assembleRelease` on a `[release]`
   commit, renames the four outputs to `app-universal.apk` / `app-arm64-v8a.apk` /

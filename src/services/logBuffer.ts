@@ -6,15 +6,24 @@ export type LogBuffer<T> = {
   clear(): void;
   getRows(): readonly T[];
   subscribe(listener: () => void): () => void;
+  /** Capture gate (issue #69): disabled drops appends; existing rows stay. */
+  setCaptureEnabled(enabled: boolean): void;
 };
 
 export function createLogBuffer<T>({ cap }: { cap: number }): LogBuffer<T> {
   let rows: readonly T[] = [];
+  let captureEnabled = true;
   const listeners = new Set<() => void>();
   return {
     append: row => {
+      if (!captureEnabled) {
+        return;
+      }
       rows = [row, ...rows].slice(0, cap);
       listeners.forEach(l => l());
+    },
+    setCaptureEnabled: enabled => {
+      captureEnabled = enabled;
     },
     clear: () => {
       // No-op on empty keeps the snapshot referentially stable.

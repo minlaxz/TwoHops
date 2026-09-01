@@ -8,6 +8,7 @@ import {
 import type { DebugEntry } from '../services/tunnelSession';
 import type { QueryLogRow } from '../types';
 import { useTunnelSession } from './TunnelSessionContext';
+import { useLogSettings } from './LogSettingsContext';
 
 const DEBUG_LOG_CAP = 200;
 
@@ -41,10 +42,18 @@ export function LogsProvider({
   debugLogs = defaultDebug(),
 }: Props) {
   const { session } = useTunnelSession();
+  const { debugLoggingEnabled, trafficLoggingEnabled } = useLogSettings();
   useEffect(
     () => session.onDebug(entry => debugLogs.append(entry)),
     [session, debugLogs],
   );
+  // Capture gates (issue #69): OFF stops collecting; buffered rows stay.
+  useEffect(() => {
+    debugLogs.setCaptureEnabled(debugLoggingEnabled);
+  }, [debugLogs, debugLoggingEnabled]);
+  useEffect(() => {
+    trafficLogs.setCaptureEnabled(trafficLoggingEnabled);
+  }, [trafficLogs, trafficLoggingEnabled]);
   const value = useMemo(
     () => ({ trafficLogs, debugLogs }),
     [trafficLogs, debugLogs],

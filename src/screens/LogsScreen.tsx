@@ -1,6 +1,9 @@
 import React, { useMemo, useState, useSyncExternalStore } from 'react';
 import { Text, View, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { useLogs } from '../context/LogsContext';
+import { useLogSettings } from '../context/LogSettingsContext';
+import { useTunnelSession } from '../context/TunnelSessionContext';
+import { displayState } from '../services/tunnelSession';
 import type { DebugEntry } from '../services/tunnelSession';
 import type { QueryLogRow } from '../types';
 import type { AppTheme } from '../theme/colors';
@@ -16,8 +19,34 @@ export default function LogsScreen() {
     trafficLogs.getRows,
   );
   const debug = useSyncExternalStore(debugLogs.subscribe, debugLogs.getRows);
+  const { debugLoggingEnabled, trafficLoggingEnabled } = useLogSettings();
+  const { snapshot } = useTunnelSession();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+
+  // A segment tab hides when its logging toggle is OFF (issue #69); fall
+  // back to the visible one so the sticky selection never shows a hidden tab.
+  const noneEnabled = !debugLoggingEnabled && !trafficLoggingEnabled;
+  const shownSegment: Segment =
+    segment === 'traffic' && !trafficLoggingEnabled
+      ? 'debug'
+      : segment === 'debug' && !debugLoggingEnabled
+      ? 'traffic'
+      : segment;
+
+  if (noneEnabled) {
+    return (
+      <View style={styles.screen}>
+        <View style={styles.section}>
+          <Text style={styles.logEmpty} testID="logs-disabled-placeholder">
+            {displayState(snapshot.state) === 'running'
+              ? 'Here I stand :)'
+              : 'Logging is turned off. Enable Debug or Traffic Logging in Settings.'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   // Not MainScreen: nesting this card's ScrollView inside MainScreen's
   // same-axis ScrollView unbounds the card, pushing its bottom edge below
@@ -27,27 +56,31 @@ export default function LogsScreen() {
       <View style={styles.section}>
         <View style={styles.toolbar}>
           <View style={styles.segmentRow}>
-            <SegmentButton
-              label="Traffic"
-              testID="logs-segment-traffic"
-              active={segment === 'traffic'}
-              onPress={() => setSegment('traffic')}
-              styles={styles}
-            />
-            <SegmentButton
-              label="Debug"
-              testID="logs-segment-debug"
-              active={segment === 'debug'}
-              onPress={() => setSegment('debug')}
-              styles={styles}
-            />
+            {trafficLoggingEnabled ? (
+              <SegmentButton
+                label="Traffic"
+                testID="logs-segment-traffic"
+                active={shownSegment === 'traffic'}
+                onPress={() => setSegment('traffic')}
+                styles={styles}
+              />
+            ) : null}
+            {debugLoggingEnabled ? (
+              <SegmentButton
+                label="Debug"
+                testID="logs-segment-debug"
+                active={shownSegment === 'debug'}
+                onPress={() => setSegment('debug')}
+                styles={styles}
+              />
+            ) : null}
           </View>
           <Pressable
             testID="logs-clear"
             accessibilityRole="button"
             style={styles.clearButton}
             onPress={() =>
-              (segment === 'traffic' ? trafficLogs : debugLogs).clear()
+              (shownSegment === 'traffic' ? trafficLogs : debugLogs).clear()
             }
           >
             <Text style={styles.clearLabel}>Clear</Text>
@@ -59,7 +92,7 @@ export default function LogsScreen() {
             contentContainerStyle={styles.logScrollContent}
             showsVerticalScrollIndicator
           >
-            {segment === 'traffic' ? (
+            {shownSegment === 'traffic' ? (
               <TrafficRows logs={traffic} styles={styles} />
             ) : (
               <DebugRows logs={debug} styles={styles} />
