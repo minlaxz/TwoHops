@@ -466,6 +466,33 @@ test('FAB shows Play when Stopped and starts the tunnel', async () => {
   });
 });
 
+test('add and edit-pencil controls render Ionicons glyphs', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  expect(iconNames(pressableByTestID(renderer, 'profile-add')!)).toContain(
+    'add',
+  );
+
+  const editButtons = renderer.root.findAll(
+    node =>
+      typeof node.props.testID === 'string' &&
+      node.props.testID.startsWith('profile-edit-') &&
+      typeof node.props.onPress === 'function',
+  );
+  expect(editButtons.length).toBeGreaterThan(0);
+  for (const button of editButtons) {
+    expect(iconNames(button)).toContain('pencil');
+  }
+
+  expect(renderedText(renderer)).not.toContain('＋');
+  expect(renderedText(renderer)).not.toContain('✎');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
 test('FAB is a disabled spinner while Busy', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
