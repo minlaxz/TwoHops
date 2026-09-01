@@ -33,6 +33,7 @@ import {
   useTunnelSession,
 } from './src/context/TunnelSessionContext';
 import { LogsProvider } from './src/context/LogsContext';
+import { LogSettingsProvider } from './src/context/LogSettingsContext';
 import { displayState } from './src/services/tunnelSession';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import { AlertProvider } from './src/components/AppAlert';
@@ -235,9 +236,11 @@ function AppNavigator() {
             <TunnelSessionProvider>
               <ProfileLinkListener />
               <SessionToastListener />
-              <LogsProvider>
-                <Navigation theme={navigationTheme} />
-              </LogsProvider>
+              <LogSettingsProvider>
+                <LogsProvider>
+                  <Navigation theme={navigationTheme} />
+                </LogsProvider>
+              </LogSettingsProvider>
             </TunnelSessionProvider>
           </SetupProfileProvider>
         </ToastProvider>

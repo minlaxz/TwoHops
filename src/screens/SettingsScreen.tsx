@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Text, StyleSheet, View } from 'react-native';
+import { Text, StyleSheet, Switch, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Config from 'react-native-config';
 import MainScreen from '../components/views';
 import CollapsibleSection from '../components/CollapsibleSection';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useAppTheme } from '../context/ThemeContext';
+import { useLogSettings } from '../context/LogSettingsContext';
 import type { AppTheme, ThemePreference } from '../theme/colors';
 
 // ponytail: package.json is this repo's release version source of truth;
@@ -32,6 +33,12 @@ const themeOptions: ThemePreference[] = ['system', 'light', 'dark'];
 
 export default function SettingsScreen() {
   const { theme, themePreference, setThemePreference } = useAppTheme();
+  const {
+    debugLoggingEnabled,
+    trafficLoggingEnabled,
+    setDebugLoggingEnabled,
+    setTrafficLoggingEnabled,
+  } = useLogSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
   // Bottom tabs keep this screen mounted across tab switches, but issue #68
   // wants collapse defaults reset on every visit: bump the key on blur so
@@ -91,6 +98,34 @@ export default function SettingsScreen() {
         <Text style={styles.description}>
           TwoHops is developed by Min. The core is developed by AdGuard under
           the name TrustTunnel.
+        </Text>
+      </CollapsibleSection>
+      <CollapsibleSection
+        key={`debug-${visitKey}`}
+        title="Debug"
+        initialExpanded={false}
+        testID="settings-section-debug"
+      >
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Debug Logging</Text>
+          <Switch
+            testID="settings-debug-logging"
+            value={debugLoggingEnabled}
+            onValueChange={setDebugLoggingEnabled}
+          />
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Traffic Logging</Text>
+          <Switch
+            testID="settings-traffic-logging"
+            value={trafficLoggingEnabled}
+            onValueChange={setTrafficLoggingEnabled}
+          />
+        </View>
+        <Text style={styles.description}>
+          Most users don't need these. Debug Logs narrate the app lifecycle for
+          troubleshooting; Traffic Logs record tunnel query activity. Turning a
+          toggle off stops capture but keeps what was already captured.
         </Text>
       </CollapsibleSection>
     </MainScreen>

@@ -109,6 +109,18 @@ function profileEntry(id: string, name: string, ipAddress = '10.0.0.1') {
   };
 }
 
+// Logging toggles default OFF (issue #69); tests that expect log capture
+// or the Logs tabs seed them ON before rendering.
+async function seedLogSettings({ debug = true, traffic = true } = {}) {
+  await AsyncStorage.setItem(
+    '@twohops/logs/settings',
+    JSON.stringify({
+      debugLoggingEnabled: debug,
+      trafficLoggingEnabled: traffic,
+    }),
+  );
+}
+
 async function seedTwoProfiles() {
   await AsyncStorage.setItem(
     PROFILES_STORAGE_KEY,
@@ -213,6 +225,7 @@ function segmentSelected(
 }
 
 test('Logs tab shows a Traffic | Debug segmented control, Traffic first', async () => {
+  await seedLogSettings();
   const renderer = await renderApp();
   await openLogsTab(renderer);
 
@@ -228,6 +241,7 @@ test('Logs tab shows a Traffic | Debug segmented control, Traffic first', async 
 });
 
 test('Traffic rows collect while the Logs tab is closed; Dashboard has no debug panel', async () => {
+  await seedLogSettings();
   const renderer = await renderApp();
 
   // The Dashboard's inline debug panel is gone.
@@ -247,6 +261,7 @@ test('Traffic rows collect while the Logs tab is closed; Dashboard has no debug 
 });
 
 test('debug entries appear in the Debug segment of the Logs tab', async () => {
+  await seedLogSettings();
   await seedTwoProfiles();
   const renderer = await renderApp();
 
@@ -275,6 +290,7 @@ test('debug entries appear in the Debug segment of the Logs tab', async () => {
 });
 
 test('Clear button empties the visible log segment', async () => {
+  await seedLogSettings();
   const renderer = await renderApp();
   await ReactTestRenderer.act(async () => {
     emitQueryLog('doomedrow.example');
@@ -284,6 +300,74 @@ test('Clear button empties the visible log segment', async () => {
 
   await press(renderer, 'logs-clear');
   expect(renderedText(renderer)).not.toContain('*.doomedrow.example');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('both toggles OFF: Logs hides tabs and Clear, placeholder tracks Display State', async () => {
+  const renderer = await renderApp();
+  await openLogsTab(renderer);
+
+  // Defaults are OFF: no segment tabs, no Clear, neutral placeholder.
+  expect(
+    renderer.root.findAll(n => n.props.testID === 'logs-segment-traffic'),
+  ).toHaveLength(0);
+  expect(
+    renderer.root.findAll(n => n.props.testID === 'logs-segment-debug'),
+  ).toHaveLength(0);
+  expect(
+    renderer.root.findAll(n => n.props.testID === 'logs-clear'),
+  ).toHaveLength(0);
+  expect(renderedText(renderer)).toContain('Logging is turned off.');
+
+  // While Running the placeholder switches to the standing line.
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  expect(renderedText(renderer)).toContain('Here I stand :)');
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('one toggle OFF hides only its tab; buffered rows return on re-enable', async () => {
+  await seedLogSettings({ debug: true, traffic: false });
+  const renderer = await renderApp();
+  await openLogsTab(renderer);
+
+  // Traffic tab hidden, Debug tab shown and selected by fallback.
+  expect(
+    renderer.root.findAll(n => n.props.testID === 'logs-segment-traffic'),
+  ).toHaveLength(0);
+  expect(segmentSelected(renderer, 'logs-segment-debug')).toBe(true);
+
+  // Flip Traffic Logging ON from Settings; its tab reappears on Logs.
+  const settingsTab = tabButtons(renderer).find(node =>
+    node.props.accessibilityLabel.startsWith('Settings'),
+  )!;
+  await ReactTestRenderer.act(async () => {
+    settingsTab.props.onPress();
+  });
+  await press(renderer, 'settings-section-debug');
+  const trafficSwitch = renderer.root.findAll(
+    n =>
+      n.props.testID === 'settings-traffic-logging' &&
+      typeof n.props.onValueChange === 'function',
+  )[0];
+  await ReactTestRenderer.act(async () => {
+    trafficSwitch.props.onValueChange(true);
+  });
+  await openLogsTab(renderer);
+  expect(
+    renderer.root.findAll(n => n.props.testID === 'logs-segment-traffic')
+      .length,
+  ).toBeGreaterThan(0);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -1230,6 +1314,7 @@ test('a twohops: deep link while Running creates without selecting', async () =>
 });
 
 test('theme change stays on Settings and keeps Debug Logs (issue #49)', async () => {
+  await seedLogSettings();
   await seedTwoProfiles();
   const renderer = await renderApp();
 
