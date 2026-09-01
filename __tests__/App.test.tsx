@@ -317,6 +317,8 @@ test('Profiles card lists profiles and highlights the Selected Profile', async (
   expect(text).toContain('Profiles');
   expect(text).toContain('Alpha');
   expect(text).toContain('Beta');
+  // The empty-state hint only renders with an empty Profile List.
+  expect(text).not.toContain('No profiles yet.');
   expect(
     profileRows(renderer).map(row => row.props.accessibilityState.selected),
   ).toEqual([true, false]);
@@ -449,7 +451,8 @@ test('FAB shows Play when Stopped and starts the tunnel', async () => {
 
   const node = fab(renderer)!;
   expect(node.props.accessibilityLabel).toBe('Start tunnel');
-  expect(renderedText(renderer)).toContain('Stopped');
+  // The control alone carries the Display State — no status caption (#61).
+  expect(renderedText(renderer)).not.toContain('Stopped');
   expect(iconNames(node)).toContain('play');
 
   await ReactTestRenderer.act(async () => {
@@ -505,7 +508,7 @@ test('FAB is a disabled spinner while Busy', async () => {
   const node = fab(renderer)!;
   expect(node.props.accessibilityState.disabled).toBe(true);
   expect(renderer.root.findAllByType(ActivityIndicator).length).toBe(1);
-  expect(renderedText(renderer)).toContain('Busy');
+  expect(renderedText(renderer)).not.toContain('Busy');
 
   await ReactTestRenderer.act(async () => {
     emitNativeState('connected');
@@ -517,7 +520,7 @@ test('FAB is a disabled spinner while Busy', async () => {
   });
   expect(fab(renderer)!.props.accessibilityState.disabled).toBe(true);
   expect(renderer.root.findAllByType(ActivityIndicator).length).toBe(1);
-  expect(renderedText(renderer)).toContain('Busy');
+  expect(renderedText(renderer)).not.toContain('Busy');
 
   await ReactTestRenderer.act(async () => {
     emitNativeState('disconnected');
@@ -537,7 +540,7 @@ test('FAB shows Stop when Running and stops the tunnel', async () => {
 
   const node = fab(renderer)!;
   expect(node.props.accessibilityLabel).toBe('Stop tunnel');
-  expect(renderedText(renderer)).toContain('Running');
+  expect(renderedText(renderer)).not.toContain('Running');
   expect(iconNames(node)).toContain('stop');
 
   await ReactTestRenderer.act(async () => {
@@ -553,7 +556,65 @@ test('FAB shows Stop when Running and stops the tunnel', async () => {
   });
 });
 
-test('recovery states show Running plus a detail label with Stop available', async () => {
+test('Toasts announce Connected and Disconnected transitions, never Busy', async () => {
+  jest.useFakeTimers();
+  try {
+    await seedTwoProfiles();
+    const renderer = await renderApp();
+
+    // Mounting announces nothing.
+    expect(renderer.root.findAllByProps({ testID: 'app-toast' })).toHaveLength(
+      0,
+    );
+
+    // Busy (connecting) raises no toast — the FAB spinner covers it.
+    await ReactTestRenderer.act(async () => {
+      fab(renderer)!.props.onPress();
+    });
+    expect(renderer.root.findAllByProps({ testID: 'app-toast' })).toHaveLength(
+      0,
+    );
+
+    await ReactTestRenderer.act(async () => {
+      emitNativeState('connected');
+    });
+    expect(renderedText(renderer)).toContain('Connected');
+
+    // The toast auto-dismisses; no permanent status chrome replaces it.
+    await ReactTestRenderer.act(async () => {
+      jest.advanceTimersByTime(TOAST_DURATION_MS);
+    });
+    expect(renderedText(renderer)).not.toContain('Connected');
+
+    // Busy again (disconnecting): still no toast.
+    await ReactTestRenderer.act(async () => {
+      fab(renderer)!.props.onPress();
+    });
+    expect(renderer.root.findAllByProps({ testID: 'app-toast' })).toHaveLength(
+      0,
+    );
+
+    await ReactTestRenderer.act(async () => {
+      emitNativeState('disconnected');
+    });
+    expect(renderedText(renderer)).toContain('Disconnected');
+
+    await ReactTestRenderer.act(async () => {
+      jest.advanceTimersByTime(TOAST_DURATION_MS);
+    });
+    expect(renderer.root.findAllByProps({ testID: 'app-toast' })).toHaveLength(
+      0,
+    );
+
+    await ReactTestRenderer.act(async () => {
+      renderer.unmount();
+    });
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('recovery states keep a persistent detail label that clears on recovery', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
@@ -561,24 +622,29 @@ test('recovery states show Running plus a detail label with Stop available', asy
     emitNativeState('waitingForNetwork');
   });
   let text = renderedText(renderer);
-  expect(text).toContain('Running');
   expect(text).toContain('Waiting for network…');
+  expect(text).not.toContain('Running');
   expect(fab(renderer)!.props.accessibilityLabel).toBe('Stop tunnel');
 
   await ReactTestRenderer.act(async () => {
     emitNativeState('recovering');
   });
-  text = renderedText(renderer);
-  expect(text).toContain('Running');
-  expect(text).toContain('Reconnecting…');
+  expect(renderedText(renderer)).toContain('Reconnecting…');
 
   await ReactTestRenderer.act(async () => {
     emitNativeState('waitingForRecovery');
   });
-  text = renderedText(renderer);
-  expect(text).toContain('Running');
-  expect(text).toContain('Reconnecting…');
+  expect(renderedText(renderer)).toContain('Reconnecting…');
   expect(fab(renderer)!.props.accessibilityLabel).toBe('Stop tunnel');
+
+  // The labels are tied to the recovery Session States: recovery succeeding
+  // removes them; nothing else persistent takes their place.
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  text = renderedText(renderer);
+  expect(text).not.toContain('Reconnecting…');
+  expect(text).not.toContain('Waiting for network…');
 
   await ReactTestRenderer.act(async () => {
     emitNativeState('disconnected');
@@ -605,7 +671,7 @@ test('empty Profile List hides the FAB and hints to create a profile', async () 
   });
 });
 
-test('incomplete Selected Profile hides the FAB and lists missing fields', async () => {
+test('incomplete legacy profile shows no hint; connect refuses with the alert', async () => {
   const incomplete = profileEntry('a', 'Alpha');
   incomplete.server.login = '';
   incomplete.server.password = '';
@@ -615,11 +681,22 @@ test('incomplete Selected Profile hides the FAB and lists missing fields', async
   );
   const renderer = await renderApp();
 
-  expect(fabIsHidden(renderer)).toBe(true);
+  // No persistent nag (#61): the connect-refusal alert is the only guard.
+  expect(renderedText(renderer)).not.toContain('Profile incomplete');
+  expect(fabIsHidden(renderer)).toBe(false);
+
+  await ReactTestRenderer.act(async () => {
+    fab(renderer)!.props.onPress();
+  });
+  expect(VpnClient.start).not.toHaveBeenCalled();
   const text = renderedText(renderer);
+  expect(text).toContain('Connect refused');
+  expect(text).toContain('Profile incomplete:');
   expect(text).toContain('login');
   expect(text).toContain('password');
-  expect(text).toContain('Profile incomplete');
+
+  await press(renderer, 'alert-button-OK');
+  expect(renderedText(renderer)).not.toContain('Connect refused');
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -1050,8 +1127,8 @@ test('theme change stays on Settings and keeps Debug Logs (issue #49)', async ()
       )
       .some(node => node.props.accessibilityState.selected === true),
   ).toBe(true);
-  // Tunnel Session state survived too: Dashboard still shows Running.
-  expect(text).toContain('Running');
+  // Tunnel Session state survived too: the FAB still offers Stop.
+  expect(fab(renderer)!.props.accessibilityLabel).toBe('Stop tunnel');
 
   // Debug Logs survived the theme change.
   await openLogsTab(renderer);

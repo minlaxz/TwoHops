@@ -36,7 +36,7 @@ import { LogsProvider } from './src/context/LogsContext';
 import { displayState } from './src/services/tunnelSession';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import { AlertProvider } from './src/components/AppAlert';
-import { ToastProvider } from './src/components/AppToast';
+import { ToastProvider, useAppToast } from './src/components/AppToast';
 import { getAppTheme, type AppTheme } from './src/theme/colors';
 import DashboardScreen from './src/screens/DashboardScreen';
 import LogsScreen from './src/screens/LogsScreen';
@@ -85,6 +85,36 @@ function ProfileLinkListener() {
     );
     return () => subscription.remove();
   }, [isHydrated, addFromProfileLink]);
+  return null;
+}
+
+// Announces Session State transitions globally (issue #61): Connected and
+// Disconnected get a Toast. Busy is carried by the connect control's spinner
+// and the recovery states by the Dashboard's persistent detail label, so
+// neither toasts. Mounted app-wide so a transition lands on any screen.
+function SessionToastListener() {
+  const {
+    snapshot: { state },
+  } = useTunnelSession();
+  const toast = useAppToast();
+  // Seeded with the initial state so mounting never announces anything.
+  const previousRef = React.useRef(state);
+
+  React.useEffect(() => {
+    const previous = previousRef.current;
+    previousRef.current = state;
+    if (state === previous) {
+      return;
+    }
+    if (state === 'connected') {
+      toast('Connected');
+    } else if (state === 'disconnected') {
+      // Also fires when a connect fails (connecting → disconnected): the
+      // toast announces where the tunnel landed, not how it got there; the
+      // Dashboard's error hint carries the Session Error.
+      toast('Disconnected');
+    }
+  }, [state, toast]);
   return null;
 }
 
@@ -204,6 +234,7 @@ function AppNavigator() {
           <SetupProfileProvider>
             <TunnelSessionProvider>
               <ProfileLinkListener />
+              <SessionToastListener />
               <LogsProvider>
                 <Navigation theme={navigationTheme} />
               </LogsProvider>
