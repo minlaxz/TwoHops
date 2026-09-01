@@ -43,6 +43,8 @@ editable) so the link alone reaches Profile Completeness.
   back to the server name (the Completeness gate guarantees one exists).
 - The Profile List can no longer gain incomplete entries; only profiles
   stored before the gate can be incomplete, and connect keeps refusing them.
-- Editing an existing profile still writes through per keystroke; moving edit
-  mode onto the same draft (Cancel / Save) is follow-up work on the same
-  machinery.
+- Edit mode moved onto the same draft (#62): opening a profile seeds the
+  draft from its entry, **Save** — gated on the same Completeness rule —
+  commits name and fields in one write, and write-through per keystroke is
+  gone. Saving the Running tunnel's profile is allowed; a "Changes apply on
+  next connect" Toast says the live tunnel keeps its config.

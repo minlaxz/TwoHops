@@ -55,14 +55,16 @@ const flush = () => ReactTestRenderer.act(() => Promise.resolve());
 const storedList = (map: Map<string, string>): ProfileList =>
   JSON.parse(map.get(PROFILES_STORAGE_KEY)!);
 
-test('hydrates from storage and persists edits', async () => {
+test('hydrates from storage and persists a saved draft', async () => {
   const { storage, map } = memoryStorage();
   const ctx = await mount(storage);
   expect(ctx().isHydrated).toBe(true);
   expect(ctx().profile.dnsServers).toEqual(['1.1.1.1']);
 
   await ReactTestRenderer.act(async () => {
-    ctx().updateEntryProfile(ctx().selectedId!, { dnsServers: ['9.9.9.9'] });
+    const id = ctx().selectedId!;
+    const entry = ctx().profiles[0];
+    ctx().saveProfile(id, entry.name, { ...entry, dnsServers: ['9.9.9.9'] });
   });
   await flush();
   expect(storedList(map).profiles[0].dnsServers).toEqual(['9.9.9.9']);
@@ -79,7 +81,7 @@ test('does not write before hydration completes', async () => {
   expect(map.has(PROFILES_STORAGE_KEY)).toBe(false);
 });
 
-test('edits land on the addressed profile only, selected or not', async () => {
+test('saves land on the addressed profile only, selected or not', async () => {
   const seed: ProfileList = {
     version: 1,
     profiles: [defaultsEntry('a', 'Alpha'), defaultsEntry('b', 'Beta')],
@@ -90,7 +92,11 @@ test('edits land on the addressed profile only, selected or not', async () => {
   });
   const ctx = await mount(storage);
   await ReactTestRenderer.act(async () => {
-    ctx().updateEntryServer('b', { login: 'bob' });
+    const beta = ctx().profiles[1];
+    ctx().saveProfile('b', beta.name, {
+      ...beta,
+      server: { ...beta.server, login: 'bob' },
+    });
   });
   await flush();
   expect(ctx().profile.server.login).toBe(''); // Selected Profile untouched
@@ -115,16 +121,46 @@ test('createProfile commits a draft: nothing persisted before, entry after', asy
   expect(storedList(map).profiles[1]).toMatchObject({ id, name: 'My VPN' });
 
   await ReactTestRenderer.act(async () => {
-    ctx().renameProfile(id, 'Backup');
-  });
-  await flush();
-  expect(storedList(map).profiles[1].name).toBe('Backup');
-
-  await ReactTestRenderer.act(async () => {
     ctx().deleteProfile(id);
   });
   await flush();
   expect(storedList(map).profiles).toHaveLength(1);
+});
+
+// The edit Draft also lives in screen state; saveProfile is its single
+// commit point — one write carrying both the name and the profile.
+test('saveProfile commits an edit draft: name and fields in one write', async () => {
+  const seed: ProfileList = {
+    version: 1,
+    profiles: [defaultsEntry('a', 'Alpha'), defaultsEntry('b', 'Beta')],
+    selectedId: 'a',
+  };
+  const { storage, map } = memoryStorage({
+    [PROFILES_STORAGE_KEY]: JSON.stringify(seed),
+  });
+  const ctx = await mount(storage);
+  await flush();
+  // Hydration alone writes nothing back.
+  expect(storedList(map).profiles[1].name).toBe('Beta');
+
+  await ReactTestRenderer.act(async () => {
+    const beta = ctx().profiles[1];
+    ctx().saveProfile('b', 'Backup', {
+      ...beta,
+      server: { ...beta.server, login: 'bob' },
+    });
+  });
+  await flush();
+  const stored = storedList(map).profiles[1];
+  expect(stored).toMatchObject({ id: 'b', name: 'Backup' });
+  expect(stored.server.login).toBe('bob');
+
+  // A cleared name falls back to the server name, like createProfile does.
+  await ReactTestRenderer.act(async () => {
+    ctx().saveProfile('b', '   ', ctx().profiles[1]);
+  });
+  await flush();
+  expect(storedList(map).profiles[1].name).toBe('Beta');
 });
 
 test('addFromProfileLink creates + selects; errors reported', async () => {

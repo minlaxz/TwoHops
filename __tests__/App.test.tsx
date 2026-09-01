@@ -932,7 +932,7 @@ test('edit mode has no link input and opens Advanced expanded', async () => {
   });
 });
 
-test('pencil opens the editor for that profile; rename shows on the card', async () => {
+test('edit mode holds a draft: rename reaches the card and storage only on Save', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
@@ -944,20 +944,41 @@ test('pencil opens the editor for that profile; rename shows on the card', async
     nameInput.props.onChangeText('Backup');
   });
 
-  // The Dashboard stays mounted beneath the pushed editor.
+  // The rename lives in the draft: the card beneath still says Beta and
+  // storage is untouched.
+  expect(renderedText(renderer)).toContain('Beta');
+  expect(renderedText(renderer)).not.toContain('Backup');
+  expect(
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[1]
+      .name,
+  ).toBe('Beta');
+
+  // Cancel and Save sit outside Advanced: collapsing it keeps them around.
+  await press(renderer, 'profile-advanced-toggle');
+  expect(pressableByTestID(renderer, 'profile-save')).toBeTruthy();
+  expect(pressableByTestID(renderer, 'profile-cancel')).toBeTruthy();
+
+  await press(renderer, 'profile-save');
+
+  // Editor closed; the committed rename is on the card and persisted.
+  expect(renderedText(renderer)).not.toContain('Configurations');
   expect(renderedText(renderer)).toContain('Backup');
   expect(renderedText(renderer)).not.toContain('Beta');
   // Editing is not selecting: Alpha keeps the selection.
   expect(
     profileRows(renderer).map(row => row.props.accessibilityState.selected),
   ).toEqual([true, false]);
+  expect(
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[1]
+      .name,
+  ).toBe('Backup');
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
 });
 
-test('pencil edits land on that profile only; tunnel still starts from the Selected Profile', async () => {
+test('saved edits land on that profile only; tunnel still starts from the Selected Profile', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
@@ -970,6 +991,13 @@ test('pencil edits land on that profile only; tunnel still starts from the Selec
   await ReactTestRenderer.act(async () => {
     username.props.onChangeText('edited-user');
   });
+  await press(renderer, 'profile-save');
+
+  const stored = JSON.parse(
+    (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
+  );
+  expect(stored.profiles[1].server.login).toBe('edited-user');
+  expect(stored.profiles[0].server.login).toBe('user');
 
   await ReactTestRenderer.act(async () => {
     fab(renderer)!.props.onPress();
@@ -986,6 +1014,120 @@ test('pencil edits land on that profile only; tunnel still starts from the Selec
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
+});
+
+test('Save is disabled while the edit draft violates Profile Completeness', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-edit-b');
+  const ipInput = renderer.root.findAll(
+    node =>
+      node.props.placeholder === 'Server IP Address' &&
+      typeof node.props.onChangeText === 'function',
+  )[0];
+  await ReactTestRenderer.act(async () => {
+    ipInput.props.onChangeText('');
+  });
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
+  );
+
+  await ReactTestRenderer.act(async () => {
+    ipInput.props.onChangeText('10.0.0.2');
+  });
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    false,
+  );
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('edit Cancel: clean exit is silent; dirty asks and Discard restores nothing', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  // Untouched draft: Cancel closes without a confirmation.
+  await press(renderer, 'profile-edit-b');
+  await press(renderer, 'profile-cancel');
+  expect(renderedText(renderer)).not.toContain('Discard changes?');
+  expect(renderedText(renderer)).not.toContain('Configurations');
+
+  // Dirty draft: Cancel asks; Discard drops the draft, storage keeps the
+  // old values (nothing was written to restore).
+  await press(renderer, 'profile-edit-b');
+  const username = renderer.root.findAll(
+    node =>
+      node.props.placeholder === 'Username' &&
+      typeof node.props.onChangeText === 'function',
+  )[0];
+  await ReactTestRenderer.act(async () => {
+    username.props.onChangeText('typo-user');
+  });
+  await press(renderer, 'profile-cancel');
+  expect(renderedText(renderer)).toContain('Discard changes?');
+  await press(renderer, 'alert-button-Discard');
+
+  expect(renderedText(renderer)).not.toContain('Configurations');
+  expect(
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[1]
+      .server.login,
+  ).toBe('user');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test("saving the Running tunnel's profile raises the applies-on-next-connect Toast", async () => {
+  jest.useFakeTimers();
+  try {
+    await seedTwoProfiles();
+    const renderer = await renderApp();
+
+    await ReactTestRenderer.act(async () => {
+      emitNativeState('connected');
+    });
+    // Edit the Selected (Running) profile — allowed.
+    await press(renderer, 'profile-edit-a');
+    const username = renderer.root.findAll(
+      node =>
+        node.props.placeholder === 'Username' &&
+        typeof node.props.onChangeText === 'function',
+    )[0];
+    await ReactTestRenderer.act(async () => {
+      username.props.onChangeText('next-user');
+    });
+    await press(renderer, 'profile-save');
+
+    // The change is persisted, announced, and the live tunnel untouched.
+    expect(renderedText(renderer)).toContain('Changes apply on next connect');
+    expect(renderer.root.findByProps({ testID: 'app-toast' })).toBeTruthy();
+    expect(
+      JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!)
+        .profiles[0].server.login,
+    ).toBe('next-user');
+    expect(VpnClient.stop).not.toHaveBeenCalled();
+    expect(VpnClient.start).not.toHaveBeenCalled();
+
+    await ReactTestRenderer.act(async () => {
+      jest.advanceTimersByTime(TOAST_DURATION_MS);
+    });
+    expect(renderedText(renderer)).not.toContain(
+      'Changes apply on next connect',
+    );
+
+    await ReactTestRenderer.act(async () => {
+      emitNativeState('disconnected');
+    });
+    await ReactTestRenderer.act(async () => {
+      renderer.unmount();
+    });
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test('deleting the Selected Profile is blocked while Running', async () => {
