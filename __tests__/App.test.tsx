@@ -306,6 +306,33 @@ test('Clear button empties the visible log segment', async () => {
   });
 });
 
+test('Clear hides while the visible segment is empty', async () => {
+  await seedLogSettings();
+  const renderer = await renderApp();
+  await openLogsTab(renderer);
+
+  // Traffic segment starts empty: no dead Clear over an empty list.
+  expect(
+    renderer.root.findAll(n => n.props.testID === 'logs-clear'),
+  ).toHaveLength(0);
+
+  await ReactTestRenderer.act(async () => {
+    emitQueryLog('freshrow.example');
+  });
+  expect(
+    renderer.root.findAll(n => n.props.testID === 'logs-clear').length,
+  ).toBeGreaterThan(0);
+
+  await press(renderer, 'logs-clear');
+  expect(
+    renderer.root.findAll(n => n.props.testID === 'logs-clear'),
+  ).toHaveLength(0);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
 test('both toggles OFF: Logs hides tabs and Clear, placeholder tracks Display State', async () => {
   const renderer = await renderApp();
   await openLogsTab(renderer);

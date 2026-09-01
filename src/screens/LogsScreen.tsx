@@ -1,5 +1,18 @@
-import React, { useMemo, useState, useSyncExternalStore } from 'react';
-import { Text, View, ScrollView, StyleSheet, Pressable } from 'react-native';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import {
+  Animated,
+  Text,
+  View,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+} from 'react-native';
 import { useLogs } from '../context/LogsContext';
 import { useLogSettings } from '../context/LogSettingsContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
@@ -75,16 +88,18 @@ export default function LogsScreen() {
               />
             ) : null}
           </View>
-          <Pressable
-            testID="logs-clear"
-            accessibilityRole="button"
-            style={styles.clearButton}
-            onPress={() =>
-              (shownSegment === 'traffic' ? trafficLogs : debugLogs).clear()
-            }
-          >
-            <Text style={styles.clearLabel}>Clear</Text>
-          </Pressable>
+          {(shownSegment === 'traffic' ? traffic : debug).length > 0 ? (
+            <Pressable
+              testID="logs-clear"
+              accessibilityRole="button"
+              style={styles.clearButton}
+              onPress={() =>
+                (shownSegment === 'traffic' ? trafficLogs : debugLogs).clear()
+              }
+            >
+              <Text style={styles.clearLabel}>Clear</Text>
+            </Pressable>
+          ) : null}
         </View>
         <View style={styles.logScrollContainer}>
           <ScrollView
@@ -136,6 +151,58 @@ function SegmentButton({
   );
 }
 
+// The buffers prepend (newest-first) and rows carry no id, so index-based
+// keys would shift on every append and remount (re-animate) the whole list.
+// Identity of the row object is stable inside the buffer; key off that.
+let nextRowKey = 1;
+const rowKeys = new WeakMap<object, number>();
+function rowKey(row: object): number {
+  let key = rowKeys.get(row);
+  if (key === undefined) {
+    key = nextRowKey++;
+    rowKeys.set(row, key);
+  }
+  return key;
+}
+
+/** Fades and slides a freshly mounted log row into place (issue #70). */
+function AnimatedLogRow({
+  style,
+  children,
+}: {
+  style: LogsScreenStyles['logRow'];
+  children: React.ReactNode;
+}) {
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [progress]);
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          opacity: progress,
+          transform: [
+            {
+              translateY: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [8, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 function toWildcardDomain(domain: string): string {
   const parts = domain.split('.');
 
@@ -161,11 +228,8 @@ function TrafficRows({
           No Traffic Logs yet. Rows collect while the tunnel is running.
         </Text>
       ) : null}
-      {logs.map((log, index) => (
-        <View
-          style={styles.logRow}
-          key={`${log.stamp.toISOString()}-${log.source}-${index}`}
-        >
+      {logs.map(log => (
+        <AnimatedLogRow style={styles.logRow} key={rowKey(log)}>
           <Text style={styles.logTitle}>
             {log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain:{' '}
             {toWildcardDomain(log.domain ?? '-')}
@@ -174,7 +238,7 @@ function TrafficRows({
             {log.source} {'->'} {log.destination ?? 'unknown'}
           </Text>
           <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
-        </View>
+        </AnimatedLogRow>
       ))}
     </>
   );
@@ -192,11 +256,11 @@ function DebugRows({
       {logs.length === 0 ? (
         <Text style={styles.logEmpty}>No Debug Logs yet.</Text>
       ) : null}
-      {logs.map((log, index) => (
-        <View style={styles.logRow} key={`${log.at.toISOString()}-${index}`}>
+      {logs.map(log => (
+        <AnimatedLogRow style={styles.logRow} key={rowKey(log)}>
           <Text style={styles.logLine}>{log.message}</Text>
           <Text style={styles.logTime}>{log.at.toISOString()}</Text>
-        </View>
+        </AnimatedLogRow>
       ))}
     </>
   );
