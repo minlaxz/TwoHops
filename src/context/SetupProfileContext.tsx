@@ -11,13 +11,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from 'react-native-config';
 import {
   defaultProfile,
-  updateProfile as updateProfileIntent,
-  updateServer as updateServerIntent,
   type ProfileEnv,
   type ProfileLinkError,
   type ProfileStorage,
   type Result,
-  type ServerCredentials,
   type SetupProfile,
 } from '../services/setupProfile';
 import {
@@ -49,12 +46,8 @@ type SetupProfileContextValue = {
     link: string,
     select: boolean,
   ) => Result<{ id: string }, ProfileLinkError>;
-  updateEntryProfile: (
-    id: string,
-    patch: Partial<Omit<SetupProfile, 'version'>>,
-  ) => void;
-  updateEntryServer: (id: string, patch: Partial<ServerCredentials>) => void;
-  renameProfile: (id: string, name: string) => void;
+  /** Commits an edit Draft back onto its entry: name + profile in one write. */
+  saveProfile: (id: string, name: string, profile: SetupProfile) => void;
   deleteProfile: (id: string) => void;
 };
 
@@ -146,23 +139,11 @@ export function SetupProfileProvider({
     },
     [],
   );
-  const updateEntryProfile = useCallback(
-    (id: string, patch: Partial<Omit<SetupProfile, 'version'>>) =>
+  const saveProfile = useCallback(
+    (id: string, name: string, profile: SetupProfile) =>
       setList(prev =>
-        updateEntry(prev, id, profile => updateProfileIntent(profile, patch)),
+        renameProfileIntent(updateEntry(prev, id, () => profile), id, name),
       ),
-    [],
-  );
-  const updateEntryServer = useCallback(
-    (id: string, patch: Partial<ServerCredentials>) =>
-      setList(prev =>
-        updateEntry(prev, id, profile => updateServerIntent(profile, patch)),
-      ),
-    [],
-  );
-  const renameProfile = useCallback(
-    (id: string, name: string) =>
-      setList(prev => renameProfileIntent(prev, id, name)),
     [],
   );
   const deleteProfile = useCallback(
@@ -179,9 +160,7 @@ export function SetupProfileProvider({
       selectProfile,
       createProfile,
       addFromProfileLink,
-      updateEntryProfile,
-      updateEntryServer,
-      renameProfile,
+      saveProfile,
       deleteProfile,
     }),
     [
@@ -190,9 +169,7 @@ export function SetupProfileProvider({
       selectProfile,
       createProfile,
       addFromProfileLink,
-      updateEntryProfile,
-      updateEntryServer,
-      renameProfile,
+      saveProfile,
       deleteProfile,
     ],
   );

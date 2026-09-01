@@ -9,6 +9,7 @@ import Config from 'react-native-config';
 import MainScreen from '../components/views';
 import { TouchableOpacityButton } from '../components/buttons';
 import { useAppAlert } from '../components/AppAlert';
+import { useAppToast } from '../components/AppToast';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
 import { parseRules } from '../services/routingRules';
@@ -22,6 +23,7 @@ import {
   updateProfile as updateProfileIntent,
   updateServer as updateServerIntent,
   type ProfileEnv,
+  type SetupProfile,
 } from '../services/setupProfile';
 import { displayState } from '../services/tunnelSession';
 import { useAppTheme } from '../context/ThemeContext';
@@ -31,21 +33,15 @@ import type { AppTheme } from '../theme/colors';
 export type ProfileScreenParams = { profileId?: string; mode?: 'create' };
 
 export default function ServerScreen() {
-  const {
-    profiles,
-    selectedId,
-    createProfile,
-    updateEntryProfile,
-    updateEntryServer,
-    renameProfile,
-    deleteProfile,
-  } = useSetupProfile();
+  const { profiles, selectedId, createProfile, saveProfile, deleteProfile } =
+    useSetupProfile();
   const {
     snapshot: { state },
   } = useTunnelSession();
   const navigation = useNavigation();
   const route = useRoute();
   const alert = useAppAlert();
+  const toast = useAppToast();
   // Edit is addressed by id (pencil); Add passes `mode: 'create'` and the
   // screen edits a Profile Draft instead of a Profile List entry (ADR 0005).
   const params = route.params as ProfileScreenParams | undefined;
@@ -55,17 +51,20 @@ export default function ServerScreen() {
   // Create mode collapses Advanced (the link is the expected path); edit
   // mode opens it (the fields are what the pencil came for).
   const [advancedOpen, setAdvancedOpen] = useState(!isCreateMode);
-  // The Profile Draft: in-memory until Create commits it. Its profile name
-  // starts blank — no generated "Profile n".
-  const [draft, setDraft] = useState(() => ({
-    name: '',
-    profile: defaultProfile(Config as ProfileEnv),
-  }));
+  // The Profile Draft: in-memory until Create (blank) or Save (loaded from
+  // the entry) commits it. A create draft's name starts blank — no generated
+  // "Profile n". Edit mode never writes through; the entry is only a seed.
+  const [draft, setDraft] = useState<{ name: string; profile: SetupProfile }>(
+    () =>
+      entry && !isCreateMode
+        ? { name: entry.name, profile: entry }
+        : { name: '', profile: defaultProfile(Config as ProfileEnv) },
+  );
   const [isDirty, setIsDirty] = useState(false);
   const committedRef = useRef(false);
 
-  const profile = isCreateMode ? draft.profile : entry;
-  const profileName = isCreateMode ? draft.name : entry?.name ?? '';
+  const profile = !isCreateMode && !entry ? undefined : draft.profile;
+  const profileName = draft.name;
 
   // DNS text is only a display of the DNS Servers list; local state keeps
   // the user's in-progress punctuation while the list is the source of truth.
@@ -82,7 +81,7 @@ export default function ServerScreen() {
 
   // Cancel, header back and Android hardware back all funnel through here:
   // a dirty Draft asks before discarding; a committed one passes through.
-  usePreventRemove(isCreateMode && isDirty, ({ data }) => {
+  usePreventRemove(isDirty, ({ data }) => {
     if (committedRef.current) {
       navigation.dispatch(data.action);
       return;
@@ -117,42 +116,35 @@ export default function ServerScreen() {
     setDraft(transform);
     setIsDirty(true);
   };
-  const updateProfile = (patch: Parameters<typeof updateEntryProfile>[1]) => {
-    if (isCreateMode) {
-      patchDraft(prev => ({
-        ...prev,
-        profile: updateProfileIntent(prev.profile, patch),
-      }));
-    } else if (entry) {
-      updateEntryProfile(entry.id, patch);
-    }
-  };
-  const updateServer = (patch: Parameters<typeof updateEntryServer>[1]) => {
-    if (isCreateMode) {
-      patchDraft(prev => ({
-        ...prev,
-        profile: updateServerIntent(prev.profile, patch),
-      }));
-    } else if (entry) {
-      updateEntryServer(entry.id, patch);
-    }
-  };
-  const setProfileName = (value: string) => {
-    if (isCreateMode) {
-      patchDraft(prev => ({ ...prev, name: value }));
-    } else if (entry) {
-      renameProfile(entry.id, value);
-    }
-  };
+  const updateProfile = (patch: Parameters<typeof updateProfileIntent>[1]) =>
+    patchDraft(prev => ({
+      ...prev,
+      profile: updateProfileIntent(prev.profile, patch),
+    }));
+  const updateServer = (patch: Parameters<typeof updateServerIntent>[1]) =>
+    patchDraft(prev => ({
+      ...prev,
+      profile: updateServerIntent(prev.profile, patch),
+    }));
+  const setProfileName = (value: string) =>
+    patchDraft(prev => ({ ...prev, name: value }));
 
-  // The Completeness gate: Create can never mint an incomplete profile.
-  const canCreate = missingFields(profile).length === 0;
-  const handleCreate = () => {
+  // The Completeness gate: Create/Save can never mint an incomplete profile.
+  const canCommit = missingFields(profile).length === 0;
+  const handleCommit = () => {
     if (committedRef.current) {
       return; // a second tap before the pop lands must not commit twice
     }
     committedRef.current = true;
-    createProfile(draft.name, draft.profile);
+    if (isCreateMode) {
+      createProfile(draft.name, draft.profile);
+    } else if (entry) {
+      saveProfile(entry.id, draft.name, draft.profile);
+      // The live tunnel keeps its config; only the next connect reads this.
+      if (entry.id === selectedId && display !== 'stopped') {
+        toast('Changes apply on next connect');
+      }
+    }
     navigation.goBack();
   };
 
@@ -173,6 +165,10 @@ export default function ServerScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            // A dirty draft is moot once its entry is gone — let the pop
+            // through instead of raising the discard confirmation.
+            committedRef.current = true;
+            setIsDirty(false);
             deleteProfile(entry.id);
             navigation.goBack();
           },
@@ -441,29 +437,27 @@ export default function ServerScreen() {
           </>
         ) : null}
       </View>
-      {isCreateMode ? (
-        <View style={styles.actionRow}>
-          <TouchableOpacityButton
-            touchableOpacityStyles={[
-              styles.actionButton,
-              styles.cancelActionButton,
-            ]}
-            title="Cancel"
-            testID="profile-cancel"
-            onPress={() => navigation.goBack()}
-          />
-          <TouchableOpacityButton
-            touchableOpacityStyles={[
-              styles.actionButton,
-              !canCreate && styles.actionButtonDisabled,
-            ]}
-            title="Create"
-            testID="profile-create"
-            disabled={!canCreate}
-            onPress={handleCreate}
-          />
-        </View>
-      ) : null}
+      <View style={styles.actionRow}>
+        <TouchableOpacityButton
+          touchableOpacityStyles={[
+            styles.actionButton,
+            styles.cancelActionButton,
+          ]}
+          title="Cancel"
+          testID="profile-cancel"
+          onPress={() => navigation.goBack()}
+        />
+        <TouchableOpacityButton
+          touchableOpacityStyles={[
+            styles.actionButton,
+            !canCommit && styles.actionButtonDisabled,
+          ]}
+          title={isCreateMode ? 'Create' : 'Save'}
+          testID={isCreateMode ? 'profile-create' : 'profile-save'}
+          disabled={!canCommit}
+          onPress={handleCommit}
+        />
+      </View>
     </MainScreen>
   );
 }
