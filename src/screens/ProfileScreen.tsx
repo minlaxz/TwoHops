@@ -112,32 +112,34 @@ export default function ServerScreen() {
   const { server, routingMode, localRulesText, remoteRulesURL, importedAt } =
     profile;
   const display = displayState(state);
+  // Every Draft edit marks it dirty — the discard confirmation keys off this.
+  const patchDraft = (transform: (prev: typeof draft) => typeof draft) => {
+    setDraft(transform);
+    setIsDirty(true);
+  };
   const updateProfile = (patch: Parameters<typeof updateEntryProfile>[1]) => {
     if (isCreateMode) {
-      setDraft(prev => ({
+      patchDraft(prev => ({
         ...prev,
         profile: updateProfileIntent(prev.profile, patch),
       }));
-      setIsDirty(true);
     } else if (entry) {
       updateEntryProfile(entry.id, patch);
     }
   };
   const updateServer = (patch: Parameters<typeof updateEntryServer>[1]) => {
     if (isCreateMode) {
-      setDraft(prev => ({
+      patchDraft(prev => ({
         ...prev,
         profile: updateServerIntent(prev.profile, patch),
       }));
-      setIsDirty(true);
     } else if (entry) {
       updateEntryServer(entry.id, patch);
     }
   };
   const setProfileName = (value: string) => {
     if (isCreateMode) {
-      setDraft(prev => ({ ...prev, name: value }));
-      setIsDirty(true);
+      patchDraft(prev => ({ ...prev, name: value }));
     } else if (entry) {
       renameProfile(entry.id, value);
     }
@@ -146,6 +148,9 @@ export default function ServerScreen() {
   // The Completeness gate: Create can never mint an incomplete profile.
   const canCreate = missingFields(profile).length === 0;
   const handleCreate = () => {
+    if (committedRef.current) {
+      return; // a second tap before the pop lands must not commit twice
+    }
     committedRef.current = true;
     createProfile(draft.name, draft.profile);
     navigation.goBack();
@@ -214,8 +219,7 @@ export default function ServerScreen() {
                   );
                   return;
                 }
-                setDraft(prev => ({ ...prev, profile: result.value }));
-                setIsDirty(true);
+                patchDraft(prev => ({ ...prev, profile: result.value }));
                 setURL('');
                 setAdvancedOpen(true);
               }}
