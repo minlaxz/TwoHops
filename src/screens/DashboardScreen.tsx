@@ -13,11 +13,7 @@ import { useAppToast } from '../components/AppToast';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
 import { useLogs } from '../context/LogsContext';
-import {
-  effectiveRules,
-  missingFields,
-  tunnelStartInput,
-} from '../services/setupProfile';
+import { effectiveRules, tunnelStartInput } from '../services/setupProfile';
 import { displayState, type SessionState } from '../services/tunnelSession';
 import type { AppTheme } from '../theme/colors';
 import type { ProfileScreenParams } from './ProfileScreen';
@@ -53,8 +49,6 @@ export default function DashboardScreen() {
     }; routeMode=${routingMode}; rules=${effectiveRules(profile).length};`;
   }, [profile]);
 
-  const missing = missingFields(profile);
-
   const appendDebugLog = useCallback(
     (message: string) => debugLogs.append({ at: new Date(), message }),
     [debugLogs],
@@ -79,10 +73,8 @@ export default function DashboardScreen() {
   };
 
   const display = displayState(state);
-  const displayTitle = { stopped: 'Stopped', busy: 'Busy', running: 'Running' }[
-    display
-  ];
-  // Recovery states collapse to Running; the detail label carries the nuance.
+  // No status caption (issue #61): the connect control carries the Display
+  // State; only a recovery Session State keeps a persistent detail label.
   const recoveryDetail: Partial<Record<SessionState, string>> = {
     waitingForRecovery: 'Reconnecting…',
     recovering: 'Reconnecting…',
@@ -102,13 +94,10 @@ export default function DashboardScreen() {
     }
   };
 
-  // Hidden with no Profile List or an incomplete Selected Profile (see #40).
-  // Incompleteness only blocks starting — a Running/Busy tunnel keeps its
-  // Stop control even if the profile is edited to incompleteness meanwhile.
-  const fabVisible =
-    isHydrated &&
-    profiles.length > 0 &&
-    (display !== 'stopped' || missing.length === 0);
+  // Hidden only with no Profile List. An incomplete legacy Selected Profile
+  // keeps the control; its only guard is the connect-refusal alert (#61) —
+  // there is no Dashboard hint to explain a hidden control anymore.
+  const fabVisible = isHydrated && profiles.length > 0;
 
   const onFabPress = () => {
     if (display === 'stopped') {
@@ -135,7 +124,6 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{displayTitle}</Text>
       {recoveryDetail[state] ? (
         <Text style={styles.detailLabel}>{recoveryDetail[state]}</Text>
       ) : null}
@@ -143,11 +131,6 @@ export default function DashboardScreen() {
         <View style={styles.hintArea}>
           {!isHydrated ? (
             <Text style={styles.hint}>Loading saved profile...</Text>
-          ) : profiles.length > 0 && missing.length > 0 ? (
-            <Text style={styles.hint}>
-              Profile incomplete. Missing: {missing.join(', ')}. Open Profile to
-              finish setup.
-            </Text>
           ) : lastError ? (
             <Text style={styles.errorHint}>{lastError.message}</Text>
           ) : null}
@@ -256,13 +239,6 @@ function createStyles(theme: AppTheme) {
       padding: 16,
       backgroundColor: theme.colors.background,
     },
-    title: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      marginBottom: 12,
-      textAlign: 'center',
-      color: theme.colors.textPrimary,
-    },
     controlsRow: {
       flexDirection: 'row',
       alignItems: 'stretch',
@@ -276,7 +252,6 @@ function createStyles(theme: AppTheme) {
       fontSize: 14,
       color: theme.colors.textSecondary,
       textAlign: 'center',
-      marginTop: -8,
       marginBottom: 12,
     },
     hint: {
