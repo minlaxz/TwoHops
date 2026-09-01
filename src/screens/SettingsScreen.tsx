@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Text, StyleSheet, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Config from 'react-native-config';
 import MainScreen from '../components/views';
 import CollapsibleSection from '../components/CollapsibleSection';
@@ -32,10 +33,20 @@ const themeOptions: ThemePreference[] = ['system', 'light', 'dark'];
 export default function SettingsScreen() {
   const { theme, themePreference, setThemePreference } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  // Bottom tabs keep this screen mounted across tab switches, but issue #68
+  // wants collapse defaults reset on every visit: bump the key on blur so
+  // the sections remount (while hidden) with their defaults.
+  const [visitKey, setVisitKey] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      return () => setVisitKey(key => key + 1);
+    }, []),
+  );
 
   return (
     <MainScreen>
       <CollapsibleSection
+        key={`appearance-${visitKey}`}
         title="Appearance"
         initialExpanded={false}
         testID="settings-section-appearance"
@@ -66,6 +77,7 @@ export default function SettingsScreen() {
         </Text>
       </CollapsibleSection>
       <CollapsibleSection
+        key={`about-${visitKey}`}
         title="About"
         initialExpanded
         testID="settings-section-about"

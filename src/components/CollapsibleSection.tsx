@@ -11,8 +11,9 @@ type CollapsibleSectionProps = {
 };
 
 // Shared collapsible section card (extracted from the profile screen's inline
-// Advanced pattern, issue #68). State is deliberately local and unpersisted:
-// defaults reset on every visit.
+// Advanced pattern, issue #68). State is deliberately local and unpersisted;
+// a screen that must reset defaults per visit remounts the section via key
+// (see SettingsScreen).
 // ponytail: uncontrolled only; add expanded/onToggle props when a caller
 // needs to open it programmatically (e.g. profile Apply Link).
 export default function CollapsibleSection({

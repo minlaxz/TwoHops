@@ -1328,6 +1328,26 @@ test('Settings tab shows theme picker and app version', async () => {
   text = renderedText(renderer);
   expect(text).toContain('Theme:');
 
+  // Leave and return: bottom tabs keep the screen mounted, but issue #68
+  // says collapse defaults reset on every visit.
+  const dashboardTab = tabButtons(renderer).find(node =>
+    node.props.accessibilityLabel.startsWith('Dashboard'),
+  )!;
+  await ReactTestRenderer.act(async () => {
+    dashboardTab.props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    settingsTab.props.onPress();
+  });
+  expect(
+    pressableByTestID(renderer, 'settings-section-appearance')!.props
+      .accessibilityState.expanded,
+  ).toBe(false);
+  expect(
+    pressableByTestID(renderer, 'settings-section-about')!.props
+      .accessibilityState.expanded,
+  ).toBe(true);
+
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
