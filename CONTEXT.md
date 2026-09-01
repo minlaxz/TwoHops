@@ -86,6 +86,14 @@ _Avoid_: snackbar, inline notice, hint
 The per-connection query rows the native tunnel emits (action, protocol, domain, addresses, time). Collected globally from tunnel start into a capped buffer, independent of which screen is open. Deliberately outside the Tunnel Session. Cleared on each connect command and by hand from the Logs screen; the recovery states never clear them.
 _Avoid_: query log (in UI copy), connection log
 
+**Traffic Logging**:
+Whether Traffic Logs are being captured. A persisted app setting, off by default, switched from the Settings screen. Off stops capture and hides the traffic tab on the Logs screen; already-captured rows are kept, not cleared.
+_Avoid_: traffic debug, traffic debug mode
+
+**Debug Logging**:
+Whether Debug Logs are being captured. A persisted app setting, off by default, switched from the Settings screen. Off stops capture and hides the debug tab on the Logs screen; already-captured rows are kept, not cleared.
+_Avoid_: ui debug, debug mode
+
 **Core Version**:
 The version of the TrustTunnel core library bundled in the build. A build-time fact — the Android Gradle pin is the source of truth; iOS bundles no core today.
 _Avoid_: native version, sdk version

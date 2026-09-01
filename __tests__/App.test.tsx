@@ -1244,6 +1244,8 @@ test('theme change stays on Settings and keeps Debug Logs (issue #49)', async ()
     settingsTab.props.onPress();
   });
 
+  // Appearance starts collapsed (issue #68); open it to reach the buttons.
+  await press(renderer, 'settings-section-appearance');
   const darkButton = renderer.root.findAll(
     node =>
       node.props.title === 'Dark' && typeof node.props.onPress === 'function',
@@ -1295,8 +1297,19 @@ test('Settings tab shows theme picker and app version', async () => {
     settingsTab.props.onPress();
   });
 
-  const text = renderedText(renderer);
+  // Issue #68: Appearance starts collapsed, About starts expanded.
+  let text = renderedText(renderer);
   expect(text).toContain('Appearance');
+  expect(text).not.toContain('Theme:');
+  const appearanceHeader = pressableByTestID(
+    renderer,
+    'settings-section-appearance',
+  )!;
+  expect(appearanceHeader.props.accessibilityState.expanded).toBe(false);
+  expect(
+    pressableByTestID(renderer, 'settings-section-about')!.props
+      .accessibilityState.expanded,
+  ).toBe(true);
   // About section (issue #50): version + build from CI env, core pin, licenses.
   expect(text).toContain('About');
   expect(text).toContain(`${require('../package.json').version} (2025010100)`);
@@ -1305,6 +1318,35 @@ test('Settings tab shows theme picker and app version', async () => {
   expect(text).toContain('App License');
   expect(text).toContain('Core License');
   expect(text).toContain('Apache-2.0');
+  // Developer copy (issue #68).
+  expect(text).toContain('developed by Min');
+  expect(text).toContain('AdGuard');
+  expect(text).toContain('TrustTunnel');
+
+  // Expanding Appearance reveals the theme picker.
+  await press(renderer, 'settings-section-appearance');
+  text = renderedText(renderer);
+  expect(text).toContain('Theme:');
+
+  // Leave and return: bottom tabs keep the screen mounted, but issue #68
+  // says collapse defaults reset on every visit.
+  const dashboardTab = tabButtons(renderer).find(node =>
+    node.props.accessibilityLabel.startsWith('Dashboard'),
+  )!;
+  await ReactTestRenderer.act(async () => {
+    dashboardTab.props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    settingsTab.props.onPress();
+  });
+  expect(
+    pressableByTestID(renderer, 'settings-section-appearance')!.props
+      .accessibilityState.expanded,
+  ).toBe(false);
+  expect(
+    pressableByTestID(renderer, 'settings-section-about')!.props
+      .accessibilityState.expanded,
+  ).toBe(true);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
