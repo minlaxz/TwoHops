@@ -35,6 +35,39 @@ jest.mock(
   'react-native-safe-area-context',
   () => require('react-native-safe-area-context/jest/mock').default,
 );
+// The iOS BackHandler is a no-op stub, so react-navigation's hardware-back
+// listener never registers under jest. This mock makes back navigation
+// testable: mockPressBack() runs listeners newest-first like Android does.
+jest.mock('react-native/Libraries/Utilities/BackHandler', () => {
+  const handlers: Array<() => boolean | null | undefined> = [];
+  return {
+    __esModule: true,
+    default: {
+      exitApp: jest.fn(),
+      addEventListener: (
+        _event: string,
+        handler: () => boolean | null | undefined,
+      ) => {
+        handlers.push(handler);
+        return {
+          remove: () => {
+            const at = handlers.indexOf(handler);
+            if (at !== -1) {
+              handlers.splice(at, 1);
+            }
+          },
+        };
+      },
+      mockPressBack: () => {
+        for (const handler of [...handlers].reverse()) {
+          if (handler()) {
+            break;
+          }
+        }
+      },
+    },
+  };
+});
 
 function renderedText(renderer: ReactTestRenderer.ReactTestRenderer): string {
   return renderer.root
@@ -846,6 +879,15 @@ async function press(
   });
 }
 
+// Android hardware back / header back: both run the same navigation pop,
+// which is what raises the Profile Draft discard confirmation.
+async function pressBack() {
+  const { BackHandler } = require('react-native');
+  await ReactTestRenderer.act(async () => {
+    (BackHandler as unknown as { mockPressBack: () => void }).mockPressBack();
+  });
+}
+
 test('"+" opens a blank Profile Draft without touching the Profile List', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
@@ -950,12 +992,16 @@ test('Create is gated on Profile Completeness and commits exactly one profile', 
   });
 });
 
-test('Cancel on an untouched draft exits silently', async () => {
+test('back on an untouched create draft exits silently; footer is Create only', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await press(renderer, 'profile-add');
-  await press(renderer, 'profile-cancel');
+  // Create mode footer: Create only — no Cancel, no Delete (issue #71).
+  expect(pressableByTestID(renderer, 'profile-create')).toBeTruthy();
+  expect(pressableByTestID(renderer, 'profile-cancel')).toBeNull();
+  expect(pressableByTestID(renderer, 'profile-delete')).toBeNull();
+  await pressBack();
 
   expect(renderedText(renderer)).not.toContain('Discard changes?');
   expect(renderedText(renderer)).not.toContain('Configurations');
@@ -966,7 +1012,7 @@ test('Cancel on an untouched draft exits silently', async () => {
   });
 });
 
-test('Cancel on a dirty draft asks; Keep Editing stays, Discard drops it', async () => {
+test('back on a dirty draft asks; Keep Editing stays, Discard drops it', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
@@ -977,7 +1023,7 @@ test('Cancel on a dirty draft asks; Keep Editing stays, Discard drops it', async
       'Half-typed',
     );
   });
-  await press(renderer, 'profile-cancel');
+  await pressBack();
 
   expect(renderedText(renderer)).toContain('Discard changes?');
   expect(renderedText(renderer)).toContain('Your changes will not be saved.');
@@ -988,7 +1034,7 @@ test('Cancel on a dirty draft asks; Keep Editing stays, Discard drops it', async
     'Half-typed',
   );
 
-  await press(renderer, 'profile-cancel');
+  await pressBack();
   await press(renderer, 'alert-button-Discard');
   // Editor closed; nothing was created or persisted.
   expect(renderedText(renderer)).not.toContain('Configurations');
@@ -1064,10 +1110,11 @@ test('edit mode holds a draft: rename reaches the card and storage only on Save'
       .name,
   ).toBe('Beta');
 
-  // Cancel and Save sit outside Advanced: collapsing it keeps them around.
+  // Delete and Save sit outside Advanced: collapsing it keeps them around.
   await press(renderer, 'profile-advanced-toggle');
   expect(pressableByTestID(renderer, 'profile-save')).toBeTruthy();
-  expect(pressableByTestID(renderer, 'profile-cancel')).toBeTruthy();
+  expect(pressableByTestID(renderer, 'profile-delete')).toBeTruthy();
+  expect(pressableByTestID(renderer, 'profile-cancel')).toBeNull();
 
   await press(renderer, 'profile-save');
 
@@ -1156,17 +1203,42 @@ test('Save is disabled while the edit draft violates Profile Completeness', asyn
   });
 });
 
-test('edit Cancel: clean exit is silent; dirty asks and Discard restores nothing', async () => {
+test('Save on an edit draft is disabled until touched (issue #71)', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  // Untouched draft: Cancel closes without a confirmation.
   await press(renderer, 'profile-edit-b');
-  await press(renderer, 'profile-cancel');
+  // The seeded profile is complete, but the draft is untouched: Save waits.
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
+  );
+
+  // Any edit flips the touched flag — even one restoring the same value
+  // (touched semantics, not value-diff).
+  const nameInput = textInputByTestID(renderer, 'profile-name-input');
+  await ReactTestRenderer.act(async () => {
+    nameInput.props.onChangeText('Beta');
+  });
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    false,
+  );
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('edit back: clean exit is silent; dirty asks and Discard restores nothing', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  // Untouched draft: back closes without a confirmation.
+  await press(renderer, 'profile-edit-b');
+  await pressBack();
   expect(renderedText(renderer)).not.toContain('Discard changes?');
   expect(renderedText(renderer)).not.toContain('Configurations');
 
-  // Dirty draft: Cancel asks; Discard drops the draft, storage keeps the
+  // Dirty draft: back asks; Discard drops the draft, storage keeps the
   // old values (nothing was written to restore).
   await press(renderer, 'profile-edit-b');
   const username = renderer.root.findAll(
@@ -1177,7 +1249,7 @@ test('edit Cancel: clean exit is silent; dirty asks and Discard restores nothing
   await ReactTestRenderer.act(async () => {
     username.props.onChangeText('typo-user');
   });
-  await press(renderer, 'profile-cancel');
+  await pressBack();
   expect(renderedText(renderer)).toContain('Discard changes?');
   await press(renderer, 'alert-button-Discard');
 

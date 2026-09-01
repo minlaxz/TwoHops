@@ -79,8 +79,8 @@ export default function ServerScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const placeholderTextColor = theme.colors.placeholder;
 
-  // Cancel, header back and Android hardware back all funnel through here:
-  // a dirty Draft asks before discarding; a committed one passes through.
+  // Header back and Android hardware back both funnel through here: a
+  // dirty Draft asks before discarding; a committed one passes through.
   usePreventRemove(isDirty, ({ data }) => {
     if (committedRef.current) {
       navigation.dispatch(data.action);
@@ -130,7 +130,10 @@ export default function ServerScreen() {
     patchDraft(prev => ({ ...prev, name: value }));
 
   // The Completeness gate: Create/Save can never mint an incomplete profile.
-  const canCommit = missingFields(profile).length === 0;
+  // Save is additionally gated on the touched flag (issue #71): an untouched
+  // edit draft has nothing to save, however complete it is.
+  const canCommit =
+    missingFields(profile).length === 0 && (isCreateMode || isDirty);
   const handleCommit = () => {
     if (committedRef.current) {
       return; // a second tap before the pop lands must not commit twice
@@ -425,28 +428,21 @@ export default function ServerScreen() {
                 }}
               />
             </View>
-            {!isCreateMode ? (
-              <TouchableOpacityButton
-                touchableOpacityStyles={[styles.modeButton, styles.clearButton]}
-                textStyles={styles.modeButtonText}
-                title="Delete Profile"
-                testID="profile-delete"
-                onPress={handleDelete}
-              />
-            ) : null}
           </>
         ) : null}
       </View>
       <View style={styles.actionRow}>
-        <TouchableOpacityButton
-          touchableOpacityStyles={[
-            styles.actionButton,
-            styles.cancelActionButton,
-          ]}
-          title="Cancel"
-          testID="profile-cancel"
-          onPress={() => navigation.goBack()}
-        />
+        {!isCreateMode ? (
+          <TouchableOpacityButton
+            touchableOpacityStyles={[
+              styles.actionButton,
+              styles.deleteActionButton,
+            ]}
+            title="Delete"
+            testID="profile-delete"
+            onPress={handleDelete}
+          />
+        ) : null}
         <TouchableOpacityButton
           touchableOpacityStyles={[
             styles.actionButton,
@@ -558,11 +554,6 @@ function createStyles(theme: AppTheme) {
     modeButtonWide: {
       width: 80,
     },
-    clearButton: {
-      width: '100%',
-      backgroundColor: theme.colors.danger,
-      marginTop: 8,
-    },
     actionRow: {
       flexDirection: 'row',
       gap: 12,
@@ -573,8 +564,8 @@ function createStyles(theme: AppTheme) {
       width: 'auto',
       height: 44,
     },
-    cancelActionButton: {
-      backgroundColor: theme.colors.buttonInactive,
+    deleteActionButton: {
+      backgroundColor: theme.colors.danger,
     },
     actionButtonDisabled: {
       backgroundColor: theme.colors.buttonInactive,
