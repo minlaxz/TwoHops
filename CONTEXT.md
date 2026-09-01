@@ -52,7 +52,7 @@ The in-memory Setup Profile being created or edited on the profile screen. Not p
 _Avoid_: unsaved profile, pending profile, temp profile
 
 **Profile Completeness**:
-Whether the Setup Profile has every field needed to start the tunnel: name, IP address, domain, login, password. Expressed as the list of missing fields. Create and Save require a complete Profile Draft, so only Profiles stored before that rule can be incomplete — connecting refuses them.
+Whether the Setup Profile has every field needed to start the tunnel: name, IP address, domain, login, password. Expressed as the list of missing fields. Create and Save require a complete Profile Draft, so only Profiles stored before that rule can be incomplete — connecting refuses them. The connect control stays visible for an incomplete legacy profile (superseding the hide-when-incomplete rule from #40): with no Dashboard hint left to explain a hidden control, the connect-refusal alert is the only guard.
 _Avoid_: is profile complete (boolean only)
 
 **Tunnel Start Input**:

@@ -109,6 +109,9 @@ function SessionToastListener() {
     if (state === 'connected') {
       toast('Connected');
     } else if (state === 'disconnected') {
+      // Also fires when a connect fails (connecting → disconnected): the
+      // toast announces where the tunnel landed, not how it got there; the
+      // Dashboard's error hint carries the Session Error.
       toast('Disconnected');
     }
   }, [state, toast]);
