@@ -7,7 +7,10 @@
 
 import * as React from 'react';
 import { Linking, StatusBar } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  initialWindowMetrics,
+  SafeAreaProvider,
+} from 'react-native-safe-area-context';
 import {
   createStaticNavigation,
   DarkTheme,
@@ -251,7 +254,7 @@ function AppNavigator() {
 
 function App() {
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <ThemeProvider>
         <AppNavigator />
       </ThemeProvider>
