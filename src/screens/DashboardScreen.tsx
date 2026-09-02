@@ -1,18 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
-import {
-  ActivityIndicator,
-  Pressable,
-  View,
-  Text,
-  StyleSheet,
-} from 'react-native';
+import { Pressable, View, Text, StyleSheet } from 'react-native';
 import { useAppAlert } from '../components/AppAlert';
+import ConnectControl from '../components/ConnectControl';
 import { useAppToast } from '../components/AppToast';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
 import { useLogs } from '../context/LogsContext';
+import { trigger as hapticTick } from 'react-native-haptic-feedback';
 import { effectiveRules, tunnelStartInput } from '../services/setupProfile';
 import { displayState, type SessionState } from '../services/tunnelSession';
 import type { AppTheme } from '../theme/colors';
@@ -69,6 +65,8 @@ export default function DashboardScreen() {
     trafficLogs.clear();
     debugLogs.clear();
     appendDebugLog(`Setup config: ${setupSummary}`);
+    // Haptic tick only when a command is actually issued (#79).
+    hapticTick('impactLight');
     session.connect(input.value);
   };
 
@@ -105,6 +103,7 @@ export default function DashboardScreen() {
       return;
     }
     appendDebugLog('Stop button pressed.');
+    hapticTick('impactLight');
     session.disconnect();
   };
 
@@ -202,31 +201,7 @@ export default function DashboardScreen() {
         ) : null}
       </View>
       {fabVisible ? (
-        <Pressable
-          testID="fab"
-          accessibilityRole="button"
-          accessibilityLabel={
-            display === 'stopped'
-              ? 'Start tunnel'
-              : display === 'busy'
-              ? 'Tunnel busy'
-              : 'Stop tunnel'
-          }
-          accessibilityState={{ disabled: display === 'busy' }}
-          disabled={display === 'busy'}
-          onPress={onFabPress}
-          style={styles.fab}
-        >
-          {display === 'busy' ? (
-            <ActivityIndicator color={theme.colors.buttonPrimaryText} />
-          ) : (
-            <Ionicons
-              name={display === 'running' ? 'stop' : 'play'}
-              size={24}
-              color={theme.colors.buttonPrimaryText}
-            />
-          )}
-        </Pressable>
+        <ConnectControl display={display} onPress={onFabPress} />
       ) : null}
     </View>
   );
@@ -261,18 +236,6 @@ function createStyles(theme: AppTheme) {
       color: colors.textSecondary,
       textAlign: 'center',
       paddingHorizontal: spacing.sm,
-    },
-    fab: {
-      position: 'absolute',
-      right: spacing.xl,
-      bottom: spacing.xl,
-      width: 64,
-      height: 64,
-      borderRadius: radius.pill,
-      backgroundColor: colors.buttonPrimary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      ...elevation.level2,
     },
     errorHint: {
       ...typography.caption,
