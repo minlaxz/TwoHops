@@ -313,7 +313,11 @@ export default function ServerScreen() {
                       ? styles.modeButtonActive
                       : styles.modeButtonInactive,
                   ]}
-                  textStyles={styles.modeButtonText}
+                  textStyles={[
+                    styles.modeButtonText,
+                    server.vpnProtocol !== 'Http/2' &&
+                      styles.modeButtonTextInactive,
+                  ]}
                   title="Http/2"
                   onPress={() => updateServer({ vpnProtocol: 'Http/2' })}
                 />
@@ -325,7 +329,11 @@ export default function ServerScreen() {
                       ? styles.modeButtonActive
                       : styles.modeButtonInactive,
                   ]}
-                  textStyles={styles.modeButtonText}
+                  textStyles={[
+                    styles.modeButtonText,
+                    server.vpnProtocol !== 'QUIC' &&
+                      styles.modeButtonTextInactive,
+                  ]}
                   title="QUIC"
                   onPress={() => updateServer({ vpnProtocol: 'QUIC' })}
                 />
@@ -342,7 +350,10 @@ export default function ServerScreen() {
                       ? styles.modeButtonActive
                       : styles.modeButtonInactive,
                   ]}
-                  textStyles={styles.modeButtonText}
+                  textStyles={[
+                    styles.modeButtonText,
+                    routingMode !== 'general' && styles.modeButtonTextInactive,
+                  ]}
                   title="General"
                   onPress={() => updateProfile({ routingMode: 'general' })}
                 />
@@ -355,7 +366,11 @@ export default function ServerScreen() {
                       ? styles.modeButtonActive
                       : styles.modeButtonInactive,
                   ]}
-                  textStyles={styles.modeButtonText}
+                  textStyles={[
+                    styles.modeButtonText,
+                    routingMode !== 'selective' &&
+                      styles.modeButtonTextInactive,
+                  ]}
                   title="Selective"
                   onPress={() => updateProfile({ routingMode: 'selective' })}
                 />
@@ -460,20 +475,32 @@ export default function ServerScreen() {
 }
 
 function createStyles(theme: AppTheme) {
+  const { colors, spacing, radius, typography, elevation } = theme;
+  const input = {
+    ...typography.body,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+    backgroundColor: colors.inputBackground,
+    color: colors.textPrimary,
+  } as const;
   return StyleSheet.create({
     section: {
-      marginBottom: 16,
-      padding: 16,
-      borderRadius: 12,
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
+      marginBottom: spacing.lg,
+      padding: spacing.lg,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
       borderWidth: 1,
+      ...elevation.level1,
     },
     sectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      marginBottom: 12,
-      color: theme.colors.textPrimary,
+      ...typography.title,
+      marginBottom: spacing.md,
+      color: colors.textPrimary,
     },
     advancedHeader: {
       flexDirection: 'row',
@@ -481,84 +508,70 @@ function createStyles(theme: AppTheme) {
       alignItems: 'center',
     },
     advancedChevron: {
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-      marginBottom: 12,
+      ...typography.body,
+      color: colors.textSecondary,
+      marginBottom: spacing.md,
     },
     title: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      marginBottom: 8,
+      ...typography.title,
+      marginBottom: spacing.sm,
       textAlign: 'center',
-      color: theme.colors.textPrimary,
+      color: colors.textPrimary,
     },
     inputLabel: {
-      fontSize: 12,
-      marginBottom: 4,
-      color: theme.colors.textSecondary,
+      ...typography.caption,
+      marginBottom: spacing.xs,
+      color: colors.textSecondary,
     },
-    input: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      marginBottom: 12,
-      backgroundColor: theme.colors.inputBackground,
-      color: theme.colors.textPrimary,
-    },
+    input,
     inputDescription: {
-      fontSize: 12,
-      color: theme.colors.textSecondary,
-      marginBottom: 12,
+      ...typography.caption,
+      color: colors.textSecondary,
+      marginBottom: spacing.md,
       textAlign: 'justify',
     },
     passwordInput: {
-      backgroundColor: theme.colors.inputBackgroundStrong,
-      color: theme.colors.textPrimary,
+      backgroundColor: colors.inputBackgroundStrong,
+      color: colors.textPrimary,
     },
     multilineInput: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      marginBottom: 12,
-      backgroundColor: theme.colors.inputBackground,
-      color: theme.colors.textPrimary,
+      ...input,
       minHeight: 100,
     },
-    row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
     rowLabel: {
+      ...typography.body,
       flex: 1,
-      fontSize: 14,
-      fontWeight: '500',
-      color: theme.colors.textPrimary,
+      color: colors.textPrimary,
     },
     rowButtons: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderRadius: 8,
+      borderRadius: radius.sm,
       overflow: 'hidden',
     },
-    rowSpacer: { width: 8 },
+    rowSpacer: { width: spacing.sm },
     line: {
       height: 1,
-      backgroundColor: theme.colors.divider,
-      marginVertical: 12,
+      backgroundColor: colors.divider,
+      marginVertical: spacing.md,
     },
     modeButton: {
       width: 70,
       height: 40,
-      padding: 4,
+      padding: spacing.xs,
     },
     modeButtonWide: {
       width: 80,
     },
     actionRow: {
       flexDirection: 'row',
-      gap: 12,
-      marginBottom: 24,
+      gap: spacing.md,
+      marginBottom: spacing.xl,
     },
     actionButton: {
       flex: 1,
@@ -566,25 +579,29 @@ function createStyles(theme: AppTheme) {
       height: 44,
     },
     deleteActionButton: {
-      backgroundColor: theme.colors.danger,
+      backgroundColor: colors.danger,
     },
     actionButtonDisabled: {
-      backgroundColor: theme.colors.buttonInactive,
+      backgroundColor: colors.buttonInactive,
     },
     protocolButton: {
       width: 60,
       height: 40,
-      padding: 4,
+      padding: spacing.xs,
     },
     modeButtonActive: {
-      backgroundColor: theme.colors.buttonPrimary,
+      backgroundColor: colors.buttonPrimary,
     },
     modeButtonInactive: {
-      backgroundColor: theme.colors.buttonInactive,
+      backgroundColor: colors.buttonInactive,
     },
     modeButtonText: {
-      color: theme.colors.buttonPrimaryText,
-      fontSize: 12,
+      ...typography.caption,
+      fontWeight: '600',
+      color: colors.buttonPrimaryText,
+    },
+    modeButtonTextInactive: {
+      color: colors.buttonInactiveText,
     },
   });
 }

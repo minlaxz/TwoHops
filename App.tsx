@@ -136,7 +136,7 @@ function toNavigationTheme(theme: AppTheme): NavigationAppTheme {
     dark: theme.isDark,
     colors: {
       ...base.colors,
-      primary: theme.colors.buttonPrimary,
+      primary: theme.colors.accent,
       background: theme.colors.background,
       card: theme.colors.surface,
       text: theme.colors.textPrimary,
@@ -168,7 +168,7 @@ const MainTabs = createBottomTabNavigator({
     return {
       ...headerOptions(theme),
       tabBarStyle: { backgroundColor: theme.colors.surface },
-      tabBarActiveTintColor: theme.colors.buttonPrimary,
+      tabBarActiveTintColor: theme.colors.accent,
       tabBarInactiveTintColor: theme.colors.textSecondary,
       sceneStyle: { backgroundColor: theme.colors.background },
     };

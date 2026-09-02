@@ -71,7 +71,10 @@ export default function SettingsScreen() {
                     ? styles.themeButtonActive
                     : styles.themeButtonInactive,
                 ]}
-                textStyles={styles.themeButtonText}
+                textStyles={[
+                  styles.themeButtonText,
+                  themePreference !== option && styles.themeButtonTextInactive,
+                ]}
                 title={option[0].toUpperCase() + option.slice(1)}
                 onPress={() => setThemePreference(option)}
               />
@@ -133,44 +136,52 @@ export default function SettingsScreen() {
 }
 
 function createStyles(theme: AppTheme) {
+  const { colors, spacing, radius, typography } = theme;
   return StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
     rowLabel: {
+      ...typography.body,
       flex: 1,
-      fontSize: 14,
-      fontWeight: '500',
-      color: theme.colors.textPrimary,
+      color: colors.textPrimary,
     },
     rowButtons: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderRadius: 8,
+      borderRadius: radius.sm,
       overflow: 'hidden',
     },
-    rowSpacer: { width: 8 },
+    rowSpacer: { width: spacing.sm },
     description: {
-      fontSize: 12,
-      color: theme.colors.textSecondary,
-      marginTop: 12,
+      ...typography.caption,
+      color: colors.textSecondary,
+      marginTop: spacing.md,
     },
     themeButton: {
       width: 90,
       height: 40,
-      padding: 4,
+      padding: spacing.xs,
     },
     themeButtonActive: {
-      backgroundColor: theme.colors.buttonPrimary,
+      backgroundColor: colors.buttonPrimary,
     },
     themeButtonInactive: {
-      backgroundColor: theme.colors.buttonInactive,
+      backgroundColor: colors.buttonInactive,
     },
     themeButtonText: {
-      color: theme.colors.buttonPrimaryText,
-      fontSize: 12,
+      ...typography.caption,
+      fontWeight: '600',
+      color: colors.buttonPrimaryText,
+    },
+    themeButtonTextInactive: {
+      color: colors.buttonInactiveText,
     },
     rowValue: {
-      fontSize: 14,
-      color: theme.colors.textSecondary,
+      ...typography.body,
+      color: colors.textSecondary,
     },
   });
 }
