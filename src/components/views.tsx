@@ -12,7 +12,10 @@ export default function MainScrollView({ children }: MainScreenProps) {
     <ScrollView
       contentContainerStyle={[
         styles.container,
-        { backgroundColor: theme.colors.background },
+        {
+          padding: theme.spacing.lg,
+          backgroundColor: theme.colors.background,
+        },
       ]}
     >
       {children}
@@ -23,7 +26,6 @@ export default function MainScrollView({ children }: MainScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    padding: 24,
     alignItems: 'stretch',
   },
 });

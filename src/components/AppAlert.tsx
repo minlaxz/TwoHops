@@ -109,54 +109,55 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
 }
 
 function createStyles(theme: AppTheme) {
+  const { colors, spacing, radius, type, elevation } = theme;
   return StyleSheet.create({
     overlay: {
       flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
-      padding: 32,
+      padding: spacing.xxl,
     },
     card: {
       width: '100%',
       maxWidth: 400,
-      borderRadius: 20,
-      padding: 20,
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
+      borderRadius: radius.lg,
+      padding: spacing.xl,
+      backgroundColor: colors.surfaceElevated,
+      borderColor: colors.border,
       borderWidth: 1,
+      ...elevation.level2,
     },
     title: {
-      fontSize: 17,
-      fontWeight: '600',
-      marginBottom: 8,
-      color: theme.colors.textPrimary,
+      ...type.title,
+      marginBottom: spacing.sm,
+      color: colors.textPrimary,
     },
     message: {
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-      marginBottom: 8,
+      ...type.body,
+      color: colors.textSecondary,
+      marginBottom: spacing.sm,
     },
     buttonRow: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
-      marginTop: 8,
+      marginTop: spacing.sm,
     },
     button: {
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      marginLeft: 8,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      marginLeft: spacing.sm,
     },
     buttonText: {
-      fontSize: 15,
+      ...type.body,
       fontWeight: '600',
-      color: theme.colors.buttonPrimary,
+      color: colors.accent,
     },
     cancelText: {
-      color: theme.colors.textSecondary,
+      color: colors.textSecondary,
     },
     destructiveText: {
-      color: theme.colors.danger,
+      color: colors.danger,
     },
   });
 }

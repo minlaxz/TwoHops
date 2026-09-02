@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { CustomButtonProps } from '../types';
 import { useAppTheme } from '../context/ThemeContext';
+import type { AppTheme } from '../theme/colors';
 
 export const TouchableOpacityButton: React.FC<CustomButtonProps> = ({
   title,
@@ -11,30 +13,16 @@ export const TouchableOpacityButton: React.FC<CustomButtonProps> = ({
   textStyles,
 }) => {
   const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
     <TouchableOpacity
-      style={[
-        styles.button,
-        {
-          backgroundColor: theme.colors.buttonPrimary,
-          borderColor: theme.colors.border,
-        },
-        touchableOpacityStyles,
-      ]}
+      style={[styles.button, touchableOpacityStyles]}
       onPress={onPress}
       disabled={disabled}
       testID={testID}
     >
-      <Text
-        style={[
-          styles.buttonText,
-          { color: theme.colors.buttonPrimaryText },
-          textStyles,
-        ]}
-      >
-        {title}
-      </Text>
+      <Text style={[styles.buttonText, textStyles]}>{title}</Text>
     </TouchableOpacity>
   );
 };
@@ -46,38 +34,37 @@ export const TouchableOpacityLink: React.FC<CustomButtonProps> = ({
   textStyles,
 }) => {
   const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
     <TouchableOpacity onPress={onPress} disabled={disabled}>
-      <Text
-        style={[
-          styles.link,
-          {
-            color: theme.colors.link,
-            textDecorationColor: theme.colors.link,
-          },
-          textStyles,
-        ]}
-      >
-        {title}
-      </Text>
+      <Text style={[styles.link, textStyles]}>{title}</Text>
     </TouchableOpacity>
   );
 };
 
-const styles = StyleSheet.create({
-  button: {
-    height: 50,
-    width: '50%',
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-    padding: 10,
-  },
-  buttonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  link: { textDecorationLine: 'underline' },
-});
+function createStyles(theme: AppTheme) {
+  const { colors, spacing, radius, type } = theme;
+  return StyleSheet.create({
+    button: {
+      height: 50,
+      width: '50%',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: radius.sm,
+      padding: spacing.sm,
+      backgroundColor: colors.buttonPrimary,
+    },
+    buttonText: {
+      ...type.body,
+      fontWeight: '600',
+      color: colors.buttonPrimaryText,
+    },
+    link: {
+      ...type.body,
+      textDecorationLine: 'underline',
+      color: colors.link,
+      textDecorationColor: colors.link,
+    },
+  });
+}

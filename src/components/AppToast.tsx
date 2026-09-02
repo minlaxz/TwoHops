@@ -65,31 +65,29 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 function createStyles(theme: AppTheme) {
+  const { colors, spacing, radius, type, elevation } = theme;
   return StyleSheet.create({
     wrap: {
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: 96,
+      // Clears the floating connect control (FAB 64 + its xl inset).
+      bottom: spacing.xxl * 3,
       alignItems: 'center',
     },
     toast: {
       maxWidth: '85%',
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      borderRadius: 20,
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.pill,
+      backgroundColor: colors.surfaceElevated,
+      borderColor: colors.border,
       borderWidth: 1,
-      elevation: 4,
-      shadowColor: '#000',
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 2 },
+      ...elevation.level2,
     },
     text: {
-      fontSize: 13,
-      color: theme.colors.textPrimary,
+      ...type.caption,
+      color: colors.textPrimary,
       textAlign: 'center',
     },
   });

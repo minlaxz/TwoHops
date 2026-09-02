@@ -44,14 +44,16 @@ export default function CollapsibleSection({
 }
 
 function createStyles(theme: AppTheme) {
+  const { colors, spacing, radius, type, elevation } = theme;
   return StyleSheet.create({
     section: {
-      marginBottom: 16,
-      padding: 16,
-      borderRadius: 12,
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
+      marginBottom: spacing.lg,
+      padding: spacing.lg,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
       borderWidth: 1,
+      ...elevation.level1,
     },
     header: {
       flexDirection: 'row',
@@ -59,16 +61,15 @@ function createStyles(theme: AppTheme) {
       alignItems: 'center',
     },
     headerExpanded: {
-      marginBottom: 12,
+      marginBottom: spacing.md,
     },
     title: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.colors.textPrimary,
+      ...type.title,
+      color: colors.textPrimary,
     },
     chevron: {
-      fontSize: 14,
-      color: theme.colors.textSecondary,
+      ...type.body,
+      color: colors.textSecondary,
     },
   });
 }
