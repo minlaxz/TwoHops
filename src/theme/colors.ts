@@ -19,12 +19,14 @@ const typography = {
   caption: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
 } as const satisfies Record<string, TextStyle>;
 
-// Motion scale (issue #80): fast for pressed feedback and collapse, base for
-// state color and the Selected Profile highlight, slow for one Busy pulse
-// half-period. Scales: press shrink, Busy pulse grow.
+// Motion scale (issue #80): fast for pressed feedback, collapse fades and
+// log-row entry; base for the Running glow, layout transitions and the
+// Selected Profile highlight; slow for one Busy pulse half-period. Scales:
+// press shrink, Busy pulse grow; opacity: the pressed dip.
 const motion = {
   duration: { fast: 200, base: 400, slow: 600 },
   scale: { press: 0.97, pulse: 1.08 },
+  opacity: { press: 0.7 },
 } as const;
 
 export type AppTheme = {

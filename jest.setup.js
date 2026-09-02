@@ -13,6 +13,7 @@ jest.mock('react-native-reanimated', () => {
     default: { View, createAnimatedComponent },
     createAnimatedComponent,
     FadeIn: layoutAnimation,
+    FadeInDown: layoutAnimation,
     FadeOut: layoutAnimation,
     LinearTransition: layoutAnimation,
     useSharedValue: initial => ({ value: initial }),

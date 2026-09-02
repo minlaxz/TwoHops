@@ -328,6 +328,9 @@ function createStyles(theme: AppTheme) {
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.md,
       borderRadius: radius.sm,
+      // Reserves the highlight's border so rows keep one size either way.
+      borderWidth: 1,
+      borderColor: 'transparent',
     },
     profileRowHighlight: {
       ...StyleSheet.absoluteFillObject,

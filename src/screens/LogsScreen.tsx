@@ -1,11 +1,9 @@
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
-import { Animated, Text, View, ScrollView, StyleSheet } from 'react-native';
+import React, { useMemo, useState, useSyncExternalStore } from 'react';
+import { Text, View, ScrollView, StyleSheet } from 'react-native';
+import Animated, {
+  FadeInDown,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import PressableScale from '../components/PressableScale';
 import { useLogs } from '../context/LogsContext';
 import { useLogSettings } from '../context/LogSettingsContext';
@@ -159,7 +157,8 @@ function rowKey(row: object): number {
   return key;
 }
 
-/** Fades and slides a freshly mounted log row into place (issue #70). */
+/** Fades and slides a freshly mounted log row into place (issue #70). It is
+ * decoration, so reduce-motion mounts the row in place (issue #80). */
 function AnimatedLogRow({
   style,
   children,
@@ -167,30 +166,16 @@ function AnimatedLogRow({
   style: LogsScreenStyles['logRow'];
   children: React.ReactNode;
 }) {
-  const progress = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  }, [progress]);
+  const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
   return (
     <Animated.View
-      style={[
-        style,
-        {
-          opacity: progress,
-          transform: [
-            {
-              translateY: progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [8, 0],
-              }),
-            },
-          ],
-        },
-      ]}
+      style={style}
+      entering={
+        reduceMotion
+          ? undefined
+          : FadeInDown.duration(theme.motion.duration.fast)
+      }
     >
       {children}
     </Animated.View>

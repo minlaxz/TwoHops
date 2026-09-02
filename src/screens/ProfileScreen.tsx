@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Text, StyleSheet, View, TextInput } from 'react-native';
+import Animated, {
+  LinearTransition,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import { CollapsibleBody } from '../components/CollapsibleSection';
 import PressableScale from '../components/PressableScale';
 import {
@@ -79,6 +83,11 @@ export default function ServerScreen() {
   }, [dnsList]);
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const reduceMotion = useReducedMotion();
+  // The card and the action row below it ease when Advanced opens (#80).
+  const layout = reduceMotion
+    ? undefined
+    : LinearTransition.duration(theme.motion.duration.base);
   const placeholderTextColor = theme.colors.placeholder;
 
   // Header back and Android hardware back both funnel through here: a
@@ -186,7 +195,7 @@ export default function ServerScreen() {
   return (
     <MainScreen>
       <Text style={styles.title}>Configurations</Text>
-      <View style={styles.section}>
+      <Animated.View style={styles.section} layout={layout}>
         {isCreateMode ? (
           <>
             <TextInput
@@ -240,216 +249,213 @@ export default function ServerScreen() {
           <Text style={styles.advancedChevron}>{advancedOpen ? '▾' : '▸'}</Text>
         </PressableScale>
         <CollapsibleBody expanded={advancedOpen}>
-          <>
-            <Text style={styles.inputLabel}>Profile name:</Text>
-            <TextInput
-              testID="profile-name-input"
-              style={styles.input}
-              placeholder="Profile name"
-              placeholderTextColor={placeholderTextColor}
-              value={profileName}
-              onChangeText={setProfileName}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Name"
-              placeholderTextColor={placeholderTextColor}
-              value={server.name}
-              onChangeText={value => updateServer({ name: value })}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Server IP Address"
-              placeholderTextColor={placeholderTextColor}
-              value={server.ipAddress}
-              onChangeText={value => updateServer({ ipAddress: value })}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="TLS Domain Name"
-              placeholderTextColor={placeholderTextColor}
-              value={server.domain}
-              onChangeText={value => updateServer({ domain: value })}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor={placeholderTextColor}
-              value={server.login}
-              onChangeText={value => updateServer({ login: value })}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={[styles.input, styles.passwordInput]}
-              placeholder="Password"
-              placeholderTextColor={placeholderTextColor}
-              value={server.password}
-              onChangeText={value => updateServer({ password: value })}
-              secureTextEntry
-            />
-            <Text style={styles.inputLabel}>DNS Servers:</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="DNS Servers (comma-separated)"
-              placeholderTextColor={placeholderTextColor}
-              value={dnsText}
-              onChangeText={value => {
-                setDnsText(value);
-                updateProfile({ dnsServers: parseRules(value) });
-              }}
-              autoCapitalize="none"
-            />
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>
-                Mode: {server.vpnProtocol.toLowerCase()}
-              </Text>
-              <View style={styles.rowButtons}>
-                <TouchableOpacityButton
-                  touchableOpacityStyles={[
-                    styles.protocolButton,
-                    server.vpnProtocol === 'Http/2'
-                      ? styles.modeButtonActive
-                      : styles.modeButtonInactive,
-                  ]}
-                  textStyles={[
-                    styles.modeButtonText,
-                    server.vpnProtocol !== 'Http/2' &&
-                      styles.modeButtonTextInactive,
-                  ]}
-                  title="Http/2"
-                  onPress={() => updateServer({ vpnProtocol: 'Http/2' })}
-                />
-                <View style={styles.rowSpacer} />
-                <TouchableOpacityButton
-                  touchableOpacityStyles={[
-                    styles.protocolButton,
-                    server.vpnProtocol === 'QUIC'
-                      ? styles.modeButtonActive
-                      : styles.modeButtonInactive,
-                  ]}
-                  textStyles={[
-                    styles.modeButtonText,
-                    server.vpnProtocol !== 'QUIC' &&
-                      styles.modeButtonTextInactive,
-                  ]}
-                  title="QUIC"
-                  onPress={() => updateServer({ vpnProtocol: 'QUIC' })}
-                />
-              </View>
+          <Text style={styles.inputLabel}>Profile name:</Text>
+          <TextInput
+            testID="profile-name-input"
+            style={styles.input}
+            placeholder="Profile name"
+            placeholderTextColor={placeholderTextColor}
+            value={profileName}
+            onChangeText={setProfileName}
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Name"
+            placeholderTextColor={placeholderTextColor}
+            value={server.name}
+            onChangeText={value => updateServer({ name: value })}
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Server IP Address"
+            placeholderTextColor={placeholderTextColor}
+            value={server.ipAddress}
+            onChangeText={value => updateServer({ ipAddress: value })}
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="TLS Domain Name"
+            placeholderTextColor={placeholderTextColor}
+            value={server.domain}
+            onChangeText={value => updateServer({ domain: value })}
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Username"
+            placeholderTextColor={placeholderTextColor}
+            value={server.login}
+            onChangeText={value => updateServer({ login: value })}
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={[styles.input, styles.passwordInput]}
+            placeholder="Password"
+            placeholderTextColor={placeholderTextColor}
+            value={server.password}
+            onChangeText={value => updateServer({ password: value })}
+            secureTextEntry
+          />
+          <Text style={styles.inputLabel}>DNS Servers:</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="DNS Servers (comma-separated)"
+            placeholderTextColor={placeholderTextColor}
+            value={dnsText}
+            onChangeText={value => {
+              setDnsText(value);
+              updateProfile({ dnsServers: parseRules(value) });
+            }}
+            autoCapitalize="none"
+          />
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>
+              Mode: {server.vpnProtocol.toLowerCase()}
+            </Text>
+            <View style={styles.rowButtons}>
+              <TouchableOpacityButton
+                touchableOpacityStyles={[
+                  styles.protocolButton,
+                  server.vpnProtocol === 'Http/2'
+                    ? styles.modeButtonActive
+                    : styles.modeButtonInactive,
+                ]}
+                textStyles={[
+                  styles.modeButtonText,
+                  server.vpnProtocol !== 'Http/2' &&
+                    styles.modeButtonTextInactive,
+                ]}
+                title="Http/2"
+                onPress={() => updateServer({ vpnProtocol: 'Http/2' })}
+              />
+              <View style={styles.rowSpacer} />
+              <TouchableOpacityButton
+                touchableOpacityStyles={[
+                  styles.protocolButton,
+                  server.vpnProtocol === 'QUIC'
+                    ? styles.modeButtonActive
+                    : styles.modeButtonInactive,
+                ]}
+                textStyles={[
+                  styles.modeButtonText,
+                  server.vpnProtocol !== 'QUIC' &&
+                    styles.modeButtonTextInactive,
+                ]}
+                title="QUIC"
+                onPress={() => updateServer({ vpnProtocol: 'QUIC' })}
+              />
             </View>
-            <Text style={styles.sectionTitle}>Routing</Text>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Mode: {routingMode}</Text>
-              <View style={styles.rowButtons}>
-                <TouchableOpacityButton
-                  touchableOpacityStyles={[
-                    styles.modeButton,
-                    routingMode === 'general'
-                      ? styles.modeButtonActive
-                      : styles.modeButtonInactive,
-                  ]}
-                  textStyles={[
-                    styles.modeButtonText,
-                    routingMode !== 'general' && styles.modeButtonTextInactive,
-                  ]}
-                  title="General"
-                  onPress={() => updateProfile({ routingMode: 'general' })}
-                />
-                <View style={styles.rowSpacer} />
-                <TouchableOpacityButton
-                  touchableOpacityStyles={[
-                    styles.modeButton,
-                    styles.modeButtonWide,
-                    routingMode === 'selective'
-                      ? styles.modeButtonActive
-                      : styles.modeButtonInactive,
-                  ]}
-                  textStyles={[
-                    styles.modeButtonText,
-                    routingMode !== 'selective' &&
-                      styles.modeButtonTextInactive,
-                  ]}
-                  title="Selective"
-                  onPress={() => updateProfile({ routingMode: 'selective' })}
-                />
-              </View>
-            </View>
-            <Text style={styles.inputDescription}>
-              In most cases, "Selective" mode is recommended for better
-              performance and battery life.
-            </Text>
-            <View style={styles.line} />
-            <Text style={styles.inputLabel}>Remote Rules URL:</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="https://..."
-              placeholderTextColor={placeholderTextColor}
-              value={remoteRulesURL}
-              onChangeText={value => updateProfile({ remoteRulesURL: value })}
-              autoCapitalize="none"
-            />
-            <Text style={styles.inputDescription}>
-              * URL should point to a plain text file containing domain rules,
-              separated by new lines.
-            </Text>
-            <View style={styles.line} />
-            <Text style={styles.inputLabel}>Local Rules (one per line):</Text>
-            <TextInput
-              style={styles.multilineInput}
-              placeholder="example.com, facebook.com"
-              placeholderTextColor={placeholderTextColor}
-              value={localRulesText}
-              onChangeText={value => updateProfile({ localRulesText: value })}
-              autoCapitalize="none"
-              multiline
-              textAlignVertical="top"
-            />
-            <Text style={styles.inputDescription}>
-              * Domains listed here are merged with the Imported Rules (if any)
-              when you connect. Press Import to refresh the Imported Rules.
-            </Text>
-            <View style={styles.line} />
-
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>
-                * Effective rules: {effectiveRules(profile).length}
-                {'\n'}* Imported:{' '}
-                {importedAt ? new Date(importedAt).toLocaleString() : 'never'}
-              </Text>
+          </View>
+          <Text style={styles.sectionTitle}>Routing</Text>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Mode: {routingMode}</Text>
+            <View style={styles.rowButtons}>
+              <TouchableOpacityButton
+                touchableOpacityStyles={[
+                  styles.modeButton,
+                  routingMode === 'general'
+                    ? styles.modeButtonActive
+                    : styles.modeButtonInactive,
+                ]}
+                textStyles={[
+                  styles.modeButtonText,
+                  routingMode !== 'general' && styles.modeButtonTextInactive,
+                ]}
+                title="General"
+                onPress={() => updateProfile({ routingMode: 'general' })}
+              />
               <View style={styles.rowSpacer} />
               <TouchableOpacityButton
                 touchableOpacityStyles={[
                   styles.modeButton,
                   styles.modeButtonWide,
+                  routingMode === 'selective'
+                    ? styles.modeButtonActive
+                    : styles.modeButtonInactive,
                 ]}
-                textStyles={styles.modeButtonText}
-                title="Import"
-                onPress={async () => {
-                  const result = await importRemoteRules(profile);
-                  if (!result.ok) {
-                    alert(
-                      'Import failed',
-                      result.error.kind === 'noURL'
-                        ? 'Enter a Remote Rules URL to import.'
-                        : result.error.message,
-                    );
-                    return;
-                  }
-                  // Patch only the imported fields so edits made during the fetch
-                  // are not reverted by the pre-await profile snapshot.
-                  const { importedRules, importedAt: at } = result.value;
-                  updateProfile({ importedRules, importedAt: at });
-                }}
+                textStyles={[
+                  styles.modeButtonText,
+                  routingMode !== 'selective' && styles.modeButtonTextInactive,
+                ]}
+                title="Selective"
+                onPress={() => updateProfile({ routingMode: 'selective' })}
               />
             </View>
-          </>
+          </View>
+          <Text style={styles.inputDescription}>
+            In most cases, "Selective" mode is recommended for better
+            performance and battery life.
+          </Text>
+          <View style={styles.line} />
+          <Text style={styles.inputLabel}>Remote Rules URL:</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="https://..."
+            placeholderTextColor={placeholderTextColor}
+            value={remoteRulesURL}
+            onChangeText={value => updateProfile({ remoteRulesURL: value })}
+            autoCapitalize="none"
+          />
+          <Text style={styles.inputDescription}>
+            * URL should point to a plain text file containing domain rules,
+            separated by new lines.
+          </Text>
+          <View style={styles.line} />
+          <Text style={styles.inputLabel}>Local Rules (one per line):</Text>
+          <TextInput
+            style={styles.multilineInput}
+            placeholder="example.com, facebook.com"
+            placeholderTextColor={placeholderTextColor}
+            value={localRulesText}
+            onChangeText={value => updateProfile({ localRulesText: value })}
+            autoCapitalize="none"
+            multiline
+            textAlignVertical="top"
+          />
+          <Text style={styles.inputDescription}>
+            * Domains listed here are merged with the Imported Rules (if any)
+            when you connect. Press Import to refresh the Imported Rules.
+          </Text>
+          <View style={styles.line} />
+
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>
+              * Effective rules: {effectiveRules(profile).length}
+              {'\n'}* Imported:{' '}
+              {importedAt ? new Date(importedAt).toLocaleString() : 'never'}
+            </Text>
+            <View style={styles.rowSpacer} />
+            <TouchableOpacityButton
+              touchableOpacityStyles={[
+                styles.modeButton,
+                styles.modeButtonWide,
+              ]}
+              textStyles={styles.modeButtonText}
+              title="Import"
+              onPress={async () => {
+                const result = await importRemoteRules(profile);
+                if (!result.ok) {
+                  alert(
+                    'Import failed',
+                    result.error.kind === 'noURL'
+                      ? 'Enter a Remote Rules URL to import.'
+                      : result.error.message,
+                  );
+                  return;
+                }
+                // Patch only the imported fields so edits made during the fetch
+                // are not reverted by the pre-await profile snapshot.
+                const { importedRules, importedAt: at } = result.value;
+                updateProfile({ importedRules, importedAt: at });
+              }}
+            />
+          </View>
         </CollapsibleBody>
-      </View>
-      <View style={styles.actionRow}>
+      </Animated.View>
+      <Animated.View style={styles.actionRow} layout={layout}>
         {!isCreateMode ? (
           <TouchableOpacityButton
             touchableOpacityStyles={[
@@ -471,7 +477,7 @@ export default function ServerScreen() {
           disabled={!canCommit}
           onPress={handleCommit}
         />
-      </View>
+      </Animated.View>
     </MainScreen>
   );
 }
