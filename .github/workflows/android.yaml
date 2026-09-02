@@ -96,6 +96,8 @@ jobs:
           VERSION_CODE=$(date +%Y%m%d%H)
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          # Hyphen, not '+': '+' URL-encodes to %2B in release download links.
+          echo "release_tag=v$VERSION_NAME-$VERSION_CODE" >> $GITHUB_OUTPUT
 
       - name: ♻️ Cache Gradle
         uses: actions/cache@v4
@@ -127,17 +129,15 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          for apk in android/app/build/outputs/apk/release/*.apk; do
-            if [[ "$apk" == *"universal"* ]]; then
-              mv "$apk" artifacts/app-universal.apk
-            elif [[ "$apk" == *"arm64-v8a"* ]]; then
-              mv "$apk" artifacts/app-arm64-v8a.apk
-            elif [[ "$apk" == *"armeabi-v7a"* ]]; then
-              mv "$apk" artifacts/app-armeabi-v7a.apk
-            elif [[ "$apk" == *"x86_64"* ]]; then
-              mv "$apk" artifacts/app-x86_64.apk
-            fi
+          # app-<abi>-release.apk -> twohops-<tag>-<abi>.apk
+          TAG=${{ steps.version.outputs.release_tag }}
+          for apk in android/app/build/outputs/apk/release/app-*-release.apk; do
+            abi=$(basename "$apk" .apk)
+            abi=${abi#app-}
+            abi=${abi%-release}
+            mv "$apk" "artifacts/twohops-$TAG-$abi.apk"
           done
+          ls -1 artifacts
 
       - name: ⬆ Upload artifacts
         uses: actions/upload-artifact@v4
@@ -148,10 +148,6 @@ jobs:
       - name: 🏷 GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.version.outputs.version_name }}+${{ steps.version.outputs.version_code }}
+          tag_name: ${{ steps.version.outputs.release_tag }}
           name: Release v${{ steps.version.outputs.version_name }}
-          files: |
-            artifacts/app-universal.apk
-            artifacts/app-arm64-v8a.apk
-            artifacts/app-armeabi-v7a.apk
-            artifacts/app-x86_64.apk
+          files: artifacts/*.apk
