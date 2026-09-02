@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
 import Animated, {
   cancelAnimation,
@@ -13,6 +13,7 @@ import Animated, {
 import type { DisplayState } from '../services/tunnelSession';
 import type { AppTheme } from '../theme/colors';
 import { useAppTheme } from '../context/ThemeContext';
+import PressableScale from './PressableScale';
 
 type Props = {
   display: DisplayState;
@@ -43,6 +44,7 @@ export default function ConnectControl({ display, onPress }: Props) {
 
   const pulse = useSharedValue(1);
   const glow = useSharedValue(0);
+  const { duration, scale } = theme.motion;
 
   useEffect(() => {
     cancelAnimation(pulse);
@@ -56,14 +58,16 @@ export default function ConnectControl({ display, onPress }: Props) {
       display === 'busy'
         ? withRepeat(
             withSequence(
-              withTiming(1.08, { duration: 600 }),
-              withTiming(1, { duration: 600 }),
+              withTiming(scale.pulse, { duration: duration.slow }),
+              withTiming(1, { duration: duration.slow }),
             ),
             -1,
           )
-        : withTiming(1, { duration: 200 });
-    glow.value = withTiming(display === 'running' ? 1 : 0, { duration: 400 });
-  }, [display, reduceMotion, pulse, glow]);
+        : withTiming(1, { duration: duration.fast });
+    glow.value = withTiming(display === 'running' ? 1 : 0, {
+      duration: duration.base,
+    });
+  }, [display, reduceMotion, pulse, glow, duration, scale]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
@@ -83,7 +87,7 @@ export default function ConnectControl({ display, onPress }: Props) {
           pulseStyle,
         ]}
       >
-        <Pressable
+        <PressableScale
           testID="fab"
           accessibilityRole="button"
           accessibilityLabel={label}
@@ -97,7 +101,7 @@ export default function ConnectControl({ display, onPress }: Props) {
           ) : (
             <Ionicons name={icon} size={24} color={theme.colors.onAccent} />
           )}
-        </Pressable>
+        </PressableScale>
       </Animated.View>
     </View>
   );

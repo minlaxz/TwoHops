@@ -1,7 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme } from '../theme/colors';
+import PressableScale from './PressableScale';
 
 type CollapsibleSectionProps = {
   title: string;
@@ -9,6 +16,31 @@ type CollapsibleSectionProps = {
   testID?: string;
   children: React.ReactNode;
 };
+
+type CollapsibleBodyProps = {
+  expanded: boolean;
+  children: React.ReactNode;
+};
+
+// The animated body of any collapsible (issue #80): fades in and out instead
+// of snapping. Decorative, so reduce-motion turns it back into a snap.
+// ponytail: fade only; a measured height slide needs onLayout bookkeeping.
+export function CollapsibleBody({ expanded, children }: CollapsibleBodyProps) {
+  const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
+  if (!expanded) {
+    return null;
+  }
+  const duration = theme.motion.duration.fast;
+  return (
+    <Animated.View
+      entering={reduceMotion ? undefined : FadeIn.duration(duration)}
+      exiting={reduceMotion ? undefined : FadeOut.duration(duration)}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 // Shared collapsible section card (extracted from the profile screen's inline
 // Advanced pattern, issue #68). State is deliberately local and unpersisted;
@@ -24,11 +56,19 @@ export default function CollapsibleSection({
 }: CollapsibleSectionProps) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const reduceMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(initialExpanded);
 
   return (
-    <View style={styles.section}>
-      <Pressable
+    <Animated.View
+      style={styles.section}
+      layout={
+        reduceMotion
+          ? undefined
+          : LinearTransition.duration(theme.motion.duration.base)
+      }
+    >
+      <PressableScale
         testID={testID}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
@@ -37,9 +77,9 @@ export default function CollapsibleSection({
       >
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
-      </Pressable>
-      {expanded ? children : null}
-    </View>
+      </PressableScale>
+      <CollapsibleBody expanded={expanded}>{children}</CollapsibleBody>
+    </Animated.View>
   );
 }
 

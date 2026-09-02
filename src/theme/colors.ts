@@ -19,6 +19,16 @@ const typography = {
   caption: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
 } as const satisfies Record<string, TextStyle>;
 
+// Motion scale (issue #80): fast for pressed feedback, collapse fades and
+// log-row entry; base for the Running glow, layout transitions and the
+// Selected Profile highlight; slow for one Busy pulse half-period. Scales:
+// press shrink, Busy pulse grow; opacity: the pressed dip.
+const motion = {
+  duration: { fast: 200, base: 400, slow: 600 },
+  scale: { press: 0.97, pulse: 1.08 },
+  opacity: { press: 0.7 },
+} as const;
+
 export type AppTheme = {
   isDark: boolean;
   colors: {
@@ -55,6 +65,7 @@ export type AppTheme = {
   spacing: typeof spacing;
   radius: typeof radius;
   typography: typeof typography;
+  motion: typeof motion;
   // Elevation levels: 0 flat, 1 resting card, 2 floating (FAB, toast).
   elevation: { level0: ViewStyle; level1: ViewStyle; level2: ViewStyle };
 };
@@ -97,6 +108,7 @@ const lightTheme: AppTheme = {
   spacing,
   radius,
   typography,
+  motion,
   elevation: {
     level0: {},
     level1: {
@@ -151,6 +163,7 @@ const darkTheme: AppTheme = {
   spacing,
   radius,
   typography,
+  motion,
   elevation: {
     level0: {},
     level1: {
