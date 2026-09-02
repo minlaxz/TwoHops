@@ -19,3 +19,7 @@ run-ios:
 
 eas-android-build-dev:
 	eas build --platform android --profile development
+
+# Free disk after a local Android build (add --all to also drop ~/.gradle caches).
+clean-cache:
+	scripts/clean-build-cache.sh
