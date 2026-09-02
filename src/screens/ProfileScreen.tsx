@@ -36,7 +36,12 @@ import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme } from '../theme/colors';
 
 // Shared with DashboardScreen's RootStackParamList so the two cannot drift.
-export type ProfileScreenParams = { profileId?: string; mode?: 'create' };
+export type ProfileScreenParams = {
+  profileId?: string;
+  mode?: 'create';
+  // 'link' (from the add sheet's "Paste profile link") focuses the link input.
+  focus?: 'link';
+};
 
 export default function ServerScreen() {
   const { profiles, selectedId, createProfile, saveProfile, deleteProfile } =
@@ -200,6 +205,7 @@ export default function ServerScreen() {
           <>
             <TextInput
               testID="profile-link-input"
+              autoFocus={params?.focus === 'link'}
               style={styles.input}
               placeholder="twohops://..."
               placeholderTextColor={placeholderTextColor}
@@ -483,7 +489,7 @@ export default function ServerScreen() {
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, typography, elevation } = theme;
+  const { colors, spacing, radius, typography, card } = theme;
   const input = {
     ...typography.body,
     borderWidth: 1,
@@ -500,10 +506,7 @@ function createStyles(theme: AppTheme) {
       marginBottom: spacing.lg,
       padding: spacing.lg,
       borderRadius: radius.md,
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      borderWidth: 1,
-      ...elevation.level1,
+      ...card,
     },
     sectionTitle: {
       ...typography.title,

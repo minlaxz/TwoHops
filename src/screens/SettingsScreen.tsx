@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import Config from 'react-native-config';
 import MainScreen from '../components/views';
 import CollapsibleSection from '../components/CollapsibleSection';
-import { TouchableOpacityButton } from '../components/buttons';
+import SegmentedControl from '../components/SegmentedControl';
 import { useAppTheme } from '../context/ThemeContext';
 import { useLogSettings } from '../context/LogSettingsContext';
 import type { AppTheme, ThemePreference } from '../theme/colors';
@@ -29,7 +29,11 @@ const aboutRows: [string, string][] = [
   ['Core License', 'Apache-2.0'],
 ];
 
-const themeOptions: ThemePreference[] = ['system', 'light', 'dark'];
+const themeOptions: { value: ThemePreference; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
 
 export default function SettingsScreen() {
   const { theme, themePreference, setThemePreference } = useAppTheme();
@@ -40,6 +44,17 @@ export default function SettingsScreen() {
     setTrafficLoggingEnabled,
   } = useLogSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  // The theme already defines switch colors (issue #81 applies them).
+  const switchColors = (value: boolean) => ({
+    trackColor: {
+      false: theme.colors.switchTrackFalse,
+      true: theme.colors.switchTrackTrue,
+    },
+    thumbColor: value
+      ? theme.colors.switchThumbOn
+      : theme.colors.switchThumbOff,
+    ios_backgroundColor: theme.colors.switchTrackFalse,
+  });
   // Bottom tabs keep this screen mounted across tab switches, but issue #68
   // wants collapse defaults reset on every visit: bump the key on blur so
   // the sections remount (while hidden) with their defaults.
@@ -59,29 +74,14 @@ export default function SettingsScreen() {
         testID="settings-section-appearance"
       >
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Theme: {themePreference}</Text>
+          <Text style={styles.rowLabel}>Theme</Text>
         </View>
-        <View style={styles.rowButtons}>
-          {themeOptions.map(option => (
-            <React.Fragment key={option}>
-              <TouchableOpacityButton
-                touchableOpacityStyles={[
-                  styles.themeButton,
-                  themePreference === option
-                    ? styles.themeButtonActive
-                    : styles.themeButtonInactive,
-                ]}
-                textStyles={[
-                  styles.themeButtonText,
-                  themePreference !== option && styles.themeButtonTextInactive,
-                ]}
-                title={option[0].toUpperCase() + option.slice(1)}
-                onPress={() => setThemePreference(option)}
-              />
-              {option !== 'dark' ? <View style={styles.rowSpacer} /> : null}
-            </React.Fragment>
-          ))}
-        </View>
+        <SegmentedControl
+          testID="settings-theme"
+          options={themeOptions}
+          value={themePreference}
+          onChange={setThemePreference}
+        />
         <Text style={styles.description}>
           Use "System" to follow your phone appearance settings.
         </Text>
@@ -115,6 +115,7 @@ export default function SettingsScreen() {
             testID="settings-debug-logging"
             value={debugLoggingEnabled}
             onValueChange={setDebugLoggingEnabled}
+            {...switchColors(debugLoggingEnabled)}
           />
         </View>
         <View style={styles.row}>
@@ -123,6 +124,7 @@ export default function SettingsScreen() {
             testID="settings-traffic-logging"
             value={trafficLoggingEnabled}
             onValueChange={setTrafficLoggingEnabled}
+            {...switchColors(trafficLoggingEnabled)}
           />
         </View>
         <Text style={styles.description}>
@@ -136,7 +138,7 @@ export default function SettingsScreen() {
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, typography } = theme;
+  const { colors, spacing, typography } = theme;
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
@@ -148,36 +150,10 @@ function createStyles(theme: AppTheme) {
       flex: 1,
       color: colors.textPrimary,
     },
-    rowButtons: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderRadius: radius.sm,
-      overflow: 'hidden',
-    },
-    rowSpacer: { width: spacing.sm },
     description: {
       ...typography.caption,
       color: colors.textSecondary,
       marginTop: spacing.md,
-    },
-    themeButton: {
-      width: 90,
-      height: 40,
-      padding: spacing.xs,
-    },
-    themeButtonActive: {
-      backgroundColor: colors.buttonPrimary,
-    },
-    themeButtonInactive: {
-      backgroundColor: colors.buttonInactive,
-    },
-    themeButtonText: {
-      ...typography.caption,
-      fontWeight: '600',
-      color: colors.buttonPrimaryText,
-    },
-    themeButtonTextInactive: {
-      color: colors.buttonInactiveText,
     },
     rowValue: {
       ...typography.body,

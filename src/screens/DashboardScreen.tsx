@@ -8,7 +8,9 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import PressableScale from '../components/PressableScale';
+import AddProfileSheet from '../components/AddProfileSheet';
 import { useAppAlert } from '../components/AppAlert';
 import ConnectControl from '../components/ConnectControl';
 import { useAppToast } from '../components/AppToast';
@@ -42,6 +44,7 @@ export default function DashboardScreen() {
 
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const didLogSetupChangeRef = useRef(false);
+  const addSheetRef = useRef<BottomSheetModal>(null);
 
   const setupSummary = useMemo(() => {
     const { server, routingMode, dnsServers } = profile;
@@ -150,9 +153,7 @@ export default function DashboardScreen() {
             accessibilityRole="button"
             accessibilityLabel="Add profile"
             style={styles.addButton}
-            // Opens a blank Profile Draft (ADR 0005) — nothing is persisted
-            // until the create screen commits it.
-            onPress={() => navigation.navigate('Profile', { mode: 'create' })}
+            onPress={() => addSheetRef.current?.present()}
           >
             <Ionicons
               name="add"
@@ -181,6 +182,16 @@ export default function DashboardScreen() {
       {fabVisible ? (
         <ConnectControl display={display} onPress={onFabPress} />
       ) : null}
+      {/* Both routes open a blank Profile Draft (ADR 0005) — nothing is
+          persisted until the create screen commits it. Paste lands on the
+          link input with the keyboard up. */}
+      <AddProfileSheet
+        sheetRef={addSheetRef}
+        onNewProfile={() => navigation.navigate('Profile', { mode: 'create' })}
+        onPasteLink={() =>
+          navigation.navigate('Profile', { mode: 'create', focus: 'link' })
+        }
+      />
     </View>
   );
 }
@@ -257,7 +268,7 @@ function ProfileRow({
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, typography, elevation } = theme;
+  const { colors, spacing, radius, typography, card } = theme;
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -316,10 +327,7 @@ function createStyles(theme: AppTheme) {
       marginTop: spacing.lg,
       padding: spacing.lg,
       borderRadius: radius.md,
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      borderWidth: 1,
-      ...elevation.level1,
+      ...card,
     },
     profileRow: {
       flexDirection: 'row',

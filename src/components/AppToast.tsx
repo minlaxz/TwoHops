@@ -81,8 +81,9 @@ function createStyles(theme: AppTheme) {
       paddingHorizontal: spacing.lg,
       borderRadius: radius.pill,
       backgroundColor: colors.surfaceElevated,
+      // Floating surfaces follow the card rule: bordered in light, not dark.
       borderColor: colors.border,
-      borderWidth: 1,
+      borderWidth: theme.card.borderWidth,
       ...elevation.level2,
     },
     text: {
