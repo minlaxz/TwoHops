@@ -15,7 +15,7 @@ import {
 } from './setupProfile';
 
 // Each entry keeps the ADR 0001 document shape (own `version` included) and
-// gains an `id` plus a user-editable `name`.
+// gains an `id` plus a `name` mirrored from the server name (#89).
 export type ProfileEntry = SetupProfile & { id: string; name: string };
 
 export interface ProfileList {
@@ -56,12 +56,11 @@ function appendProfile(
   list: ProfileList,
   profile: SetupProfile,
   select: boolean,
-  name?: string,
 ): { list: ProfileList; id: string } {
   const entry: ProfileEntry = {
     ...profile,
     id: newProfileId(),
-    name: name ?? profileName(profile),
+    name: profileName(profile),
   };
   return {
     list: {
@@ -74,15 +73,14 @@ function appendProfile(
   };
 }
 
-// Commits a Profile Draft (ADR 0005): appends it under the user's chosen
-// name, falling back to the server name — the Completeness gate guarantees
+// Commits a Profile Draft (ADR 0005): appends it under its server name —
+// the Profile's one and only name (#89); the Completeness gate guarantees
 // one exists on this path.
 export function createProfile(
   list: ProfileList,
-  name: string,
   profile: SetupProfile,
 ): { list: ProfileList; id: string } {
-  return appendProfile(list, profile, false, name.trim() || undefined);
+  return appendProfile(list, profile, false);
 }
 
 // Profile Link rule (ADR 0003): always creates, never overwrites; selected

@@ -40,14 +40,14 @@ type SetupProfileContextValue = {
   isHydrated: boolean;
   selectProfile: (id: string) => void;
   /** Commits a Profile Draft to the Profile List; returns the new id. */
-  createProfile: (name: string, profile: SetupProfile) => string;
+  createProfile: (profile: SetupProfile) => string;
   /** Creates a profile from a Profile Link; selects it when `select`. */
   addFromProfileLink: (
     link: string,
     select: boolean,
   ) => Result<{ id: string }, ProfileLinkError>;
-  /** Commits an edit Draft back onto its entry: name + profile in one write. */
-  saveProfile: (id: string, name: string, profile: SetupProfile) => void;
+  /** Commits an edit Draft back onto its entry; the entry name is the server name (#89). */
+  saveProfile: (id: string, profile: SetupProfile) => void;
   deleteProfile: (id: string) => void;
 };
 
@@ -113,8 +113,8 @@ export function SetupProfileProvider({
   // which React defers.
   const listRef = useRef(list);
   listRef.current = list;
-  const createProfile = useCallback((name: string, profile: SetupProfile) => {
-    const result = createProfileIntent(listRef.current, name, profile);
+  const createProfile = useCallback((profile: SetupProfile) => {
+    const result = createProfileIntent(listRef.current, profile);
     listRef.current = result.list;
     setList(result.list);
     return result.id;
@@ -140,13 +140,13 @@ export function SetupProfileProvider({
     [],
   );
   const saveProfile = useCallback(
-    (id: string, name: string, profile: SetupProfile) =>
+    (id: string, profile: SetupProfile) =>
       setList(prev =>
         renameProfileIntent(
           updateEntry(prev, id, () => profile),
           id,
-          // Blank falls back to the server name, mirroring createProfile.
-          name.trim() || profile.server.name,
+          // Trimmed like createProfile; the gate only checks trimmed length.
+          profile.server.name.trim(),
         ),
       ),
     [],

@@ -489,7 +489,7 @@ test('"+" opens the editor above the tabs in create mode', async () => {
   expect(text).toContain('Configurations');
   // Create mode leads with the link input; Advanced starts collapsed.
   expect(textInputByTestID(renderer, 'profile-link-input')).toBeDefined();
-  expect(textInputByTestID(renderer, 'profile-name-input')).toBeUndefined();
+  expect(textInputByTestID(renderer, 'server-name-input')).toBeUndefined();
   // The tab bar stays mounted beneath the pushed Profile screen.
   expect(tabButtons(renderer).length).toBe(3);
 
@@ -949,9 +949,9 @@ test('"+" opens a blank Profile Draft without touching the Profile List', async 
   // Editor pushed in create mode; expand Advanced to reach the fields.
   expect(renderedText(renderer)).toContain('Configurations');
   await press(renderer, 'profile-advanced-toggle');
-  // The name field starts blank — no generated "Profile n".
-  expect(textInputByTestID(renderer, 'profile-name-input').props.value).toBe(
-    '',
+  // Name is the server name (#89): seeded from env, no generated "Profile n".
+  expect(textInputByTestID(renderer, 'server-name-input').props.value).toBe(
+    'env-server',
   );
   // Nothing was added to the list or persisted.
   expect(profileRows(renderer)).toHaveLength(2);
@@ -1014,7 +1014,7 @@ test('Create is gated on Profile Completeness and commits exactly one profile', 
   );
 
   await ReactTestRenderer.act(async () => {
-    textInputByTestID(renderer, 'profile-name-input').props.onChangeText(
+    textInputByTestID(renderer, 'server-name-input').props.onChangeText(
       'My VPN',
     );
   });
@@ -1071,7 +1071,7 @@ test('back on a dirty draft asks; Keep Editing stays, Discard drops it', async (
   await openCreateEditor(renderer);
   await press(renderer, 'profile-advanced-toggle');
   await ReactTestRenderer.act(async () => {
-    textInputByTestID(renderer, 'profile-name-input').props.onChangeText(
+    textInputByTestID(renderer, 'server-name-input').props.onChangeText(
       'Half-typed',
     );
   });
@@ -1082,7 +1082,7 @@ test('back on a dirty draft asks; Keep Editing stays, Discard drops it', async (
   await press(renderer, 'alert-button-Keep Editing');
   // Still editing: the screen and the typed name survive.
   expect(renderedText(renderer)).toContain('Configurations');
-  expect(textInputByTestID(renderer, 'profile-name-input').props.value).toBe(
+  expect(textInputByTestID(renderer, 'server-name-input').props.value).toBe(
     'Half-typed',
   );
 
@@ -1117,7 +1117,7 @@ test('a bad link in create mode shows the alert modal and touches nothing', asyn
   await press(renderer, 'alert-button-OK');
   expect(renderedText(renderer)).not.toContain('Profile Link failed');
   // Advanced stays collapsed and the Profile List is untouched.
-  expect(textInputByTestID(renderer, 'profile-name-input')).toBeUndefined();
+  expect(textInputByTestID(renderer, 'server-name-input')).toBeUndefined();
   expect(profileRows(renderer)).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
@@ -1132,7 +1132,7 @@ test('edit mode has no link input and opens Advanced expanded', async () => {
   await press(renderer, 'profile-edit-b');
 
   expect(textInputByTestID(renderer, 'profile-link-input')).toBeUndefined();
-  expect(textInputByTestID(renderer, 'profile-name-input').props.value).toBe(
+  expect(textInputByTestID(renderer, 'server-name-input').props.value).toBe(
     'Beta',
   );
 
@@ -1147,7 +1147,7 @@ test('edit mode holds a draft: rename reaches the card and storage only on Save'
 
   await press(renderer, 'profile-edit-b');
 
-  const nameInput = textInputByTestID(renderer, 'profile-name-input');
+  const nameInput = textInputByTestID(renderer, 'server-name-input');
   expect(nameInput.props.value).toBe('Beta');
   await ReactTestRenderer.act(async () => {
     nameInput.props.onChangeText('Backup');
@@ -1267,7 +1267,7 @@ test('Save on an edit draft is disabled until touched (issue #71)', async () => 
 
   // Any edit flips the touched flag — even one restoring the same value
   // (touched semantics, not value-diff).
-  const nameInput = textInputByTestID(renderer, 'profile-name-input');
+  const nameInput = textInputByTestID(renderer, 'server-name-input');
   await ReactTestRenderer.act(async () => {
     nameInput.props.onChangeText('Beta');
   });
