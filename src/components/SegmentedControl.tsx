@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -39,10 +39,15 @@ export default function SegmentedControl<T extends string>({
     options.findIndex(option => option.value === value),
   );
   const offset = useSharedValue(index * segmentWidth);
+  // The first real layout snaps the thumb into place; only later selection
+  // changes slide it.
+  const laidOutRef = useRef(false);
 
   useEffect(() => {
     const target = index * segmentWidth;
-    offset.value = reduceMotion
+    const snap = reduceMotion || !laidOutRef.current;
+    laidOutRef.current = segmentWidth > 0;
+    offset.value = snap
       ? target
       : withTiming(target, { duration: theme.motion.duration.fast });
   }, [index, segmentWidth, reduceMotion, offset, theme]);

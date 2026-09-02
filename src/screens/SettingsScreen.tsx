@@ -45,16 +45,16 @@ export default function SettingsScreen() {
   } = useLogSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
   // The theme already defines switch colors (issue #81 applies them).
-  // thumbColor is one value per switch, so the on/off thumb follows the
-  // track via the platform default; iOS ignores it anyway.
-  const switchColors = {
+  const switchColors = (value: boolean) => ({
     trackColor: {
       false: theme.colors.switchTrackFalse,
       true: theme.colors.switchTrackTrue,
     },
-    thumbColor: theme.colors.switchThumbOn,
+    thumbColor: value
+      ? theme.colors.switchThumbOn
+      : theme.colors.switchThumbOff,
     ios_backgroundColor: theme.colors.switchTrackFalse,
-  };
+  });
   // Bottom tabs keep this screen mounted across tab switches, but issue #68
   // wants collapse defaults reset on every visit: bump the key on blur so
   // the sections remount (while hidden) with their defaults.
@@ -115,7 +115,7 @@ export default function SettingsScreen() {
             testID="settings-debug-logging"
             value={debugLoggingEnabled}
             onValueChange={setDebugLoggingEnabled}
-            {...switchColors}
+            {...switchColors(debugLoggingEnabled)}
           />
         </View>
         <View style={styles.row}>
@@ -124,7 +124,7 @@ export default function SettingsScreen() {
             testID="settings-traffic-logging"
             value={trafficLoggingEnabled}
             onValueChange={setTrafficLoggingEnabled}
-            {...switchColors}
+            {...switchColors(trafficLoggingEnabled)}
           />
         </View>
         <Text style={styles.description}>
