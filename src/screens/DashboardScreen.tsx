@@ -1,16 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
-import { View, Text, StyleSheet } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { View, Text, StyleSheet, Share } from 'react-native';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import PressableScale from '../components/PressableScale';
 import AddProfileSheet from '../components/AddProfileSheet';
+import ProfilePickerSheet from '../components/ProfilePickerSheet';
 import { useAppAlert } from '../components/AppAlert';
 import ConnectControl from '../components/ConnectControl';
 import { useAppToast } from '../components/AppToast';
@@ -18,7 +13,12 @@ import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
 import { useLogs } from '../context/LogsContext';
 import { trigger as hapticTick } from 'react-native-haptic-feedback';
-import { effectiveRules, tunnelStartInput } from '../services/setupProfile';
+import {
+  effectiveRules,
+  profileLink,
+  profileSubtitle,
+  tunnelStartInput,
+} from '../services/setupProfile';
 import { displayState, type SessionState } from '../services/tunnelSession';
 import type { AppTheme } from '../theme/colors';
 import type { ProfileScreenParams } from './ProfileScreen';
@@ -45,6 +45,7 @@ export default function DashboardScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const didLogSetupChangeRef = useRef(false);
   const addSheetRef = useRef<BottomSheetModal>(null);
+  const pickerRef = useRef<BottomSheetModal>(null);
 
   const setupSummary = useMemo(() => {
     const { server, routingMode, dnsServers } = profile;
@@ -89,18 +90,36 @@ export default function DashboardScreen() {
     waitingForNetwork: 'Waiting for network…',
   };
 
-  const handleSelectProfile = (id: string) => {
+  const handleOpenPicker = () => {
     // Recovery states collapse to Running; Busy is locked too — honest either way.
     if (display !== 'stopped') {
       appendDebugLog('Profile switch refused: tunnel is not stopped.');
       toast('Stop the tunnel to switch profiles.');
       return;
     }
+    pickerRef.current?.present();
+  };
+
+  const handleSelectProfile = (id: string) => {
     if (id !== selectedId) {
       selectProfile(id);
       appendDebugLog('Selected Profile changed.');
     }
   };
+
+  // Share Profile (#90): link only, no title; the OS sheet is the feedback.
+  // The link carries the password, so the Debug Log never echoes it.
+  const handleShare = () => {
+    Share.share({ message: profileLink(profile) }).then(
+      () => appendDebugLog('Profile Link shared.'),
+      (error: unknown) =>
+        appendDebugLog(
+          `Share failed: ${error instanceof Error ? error.message : error}`,
+        ),
+    );
+  };
+
+  const selected = profiles.find(entry => entry.id === selectedId) ?? null;
 
   // Hidden only with no Profile List. An incomplete legacy Selected Profile
   // keeps the control; its only guard is the connect-refusal alert (#61) —
@@ -162,21 +181,73 @@ export default function DashboardScreen() {
             />
           </PressableScale>
         </View>
-        {profiles.map(entry => (
-          <ProfileRow
-            key={entry.id}
-            id={entry.id}
-            name={entry.name}
-            selected={entry.id === selectedId}
-            onSelect={() => handleSelectProfile(entry.id)}
-            onEdit={() =>
-              navigation.navigate('Profile', { profileId: entry.id })
-            }
-            styles={styles}
-          />
-        ))}
         {profiles.length === 0 && isHydrated ? (
           <Text style={styles.hint}>No profiles yet. Tap + to add one.</Text>
+        ) : null}
+        {profiles.length > 0 ? (
+          <PressableScale
+            testID="profile-selected"
+            accessibilityRole="button"
+            style={[styles.profileRow, selected && styles.profileRowSelected]}
+            onPress={handleOpenPicker}
+          >
+            <View style={styles.profileText}>
+              <Text
+                style={[
+                  styles.profileName,
+                  selected && styles.profileNameSelected,
+                ]}
+                numberOfLines={1}
+              >
+                {selected ? selected.name : 'Choose a profile'}
+              </Text>
+              {selected ? (
+                <Text style={styles.profileSubtitle} numberOfLines={1}>
+                  {profileSubtitle(selected)}
+                </Text>
+              ) : null}
+            </View>
+            <Ionicons
+              name="chevron-down"
+              size={18}
+              color={theme.colors.textSecondary}
+            />
+          </PressableScale>
+        ) : null}
+        {selected ? (
+          <View style={styles.actions}>
+            <PressableScale
+              testID="profile-edit"
+              accessibilityRole="button"
+              accessibilityLabel={`Edit profile ${selected.name}`}
+              style={styles.action}
+              onPress={() =>
+                navigation.navigate('Profile', { profileId: selected.id })
+              }
+            >
+              <Ionicons
+                name="pencil"
+                size={16}
+                color={theme.colors.textSecondary}
+              />
+              <Text style={styles.actionLabel}>Edit</Text>
+            </PressableScale>
+            <View style={styles.actionDivider} />
+            <PressableScale
+              testID="profile-share"
+              accessibilityRole="button"
+              accessibilityLabel={`Share profile ${selected.name}`}
+              style={styles.action}
+              onPress={handleShare}
+            >
+              <Ionicons
+                name="share-outline"
+                size={16}
+                color={theme.colors.textSecondary}
+              />
+              <Text style={styles.actionLabel}>Share</Text>
+            </PressableScale>
+          </View>
         ) : null}
       </View>
       {fabVisible ? (
@@ -185,6 +256,12 @@ export default function DashboardScreen() {
       {/* Both routes open a blank Profile Draft (ADR 0005) — nothing is
           persisted until the create screen commits it. Paste lands on the
           link input with the keyboard up. */}
+      <ProfilePickerSheet
+        sheetRef={pickerRef}
+        profiles={profiles}
+        selectedId={selectedId}
+        onSelect={handleSelectProfile}
+      />
       <AddProfileSheet
         sheetRef={addSheetRef}
         onNewProfile={() => navigation.navigate('Profile', { mode: 'create' })}
@@ -193,77 +270,6 @@ export default function DashboardScreen() {
         }
       />
     </View>
-  );
-}
-
-type ProfileRowProps = {
-  id: string;
-  name: string;
-  selected: boolean;
-  onSelect: () => void;
-  onEdit: () => void;
-  styles: ReturnType<typeof createStyles>;
-};
-
-// The Selected Profile highlight is an overlay whose opacity eases in and out
-// (issue #80) so rotating profiles slides the ring rather than snapping it.
-// Reduce-motion snaps; the bold name and accessibility state never animate.
-function ProfileRow({
-  id,
-  name,
-  selected,
-  onSelect,
-  onEdit,
-  styles,
-}: ProfileRowProps) {
-  const { theme } = useAppTheme();
-  const reduceMotion = useReducedMotion();
-  const highlight = useSharedValue(selected ? 1 : 0);
-
-  useEffect(() => {
-    const target = selected ? 1 : 0;
-    highlight.value = reduceMotion
-      ? target
-      : withTiming(target, { duration: theme.motion.duration.base });
-  }, [selected, reduceMotion, highlight, theme]);
-
-  const highlightStyle = useAnimatedStyle(() => ({
-    opacity: highlight.value,
-  }));
-
-  return (
-    <PressableScale
-      testID={`profile-row-${id}`}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      style={styles.profileRow}
-      onPress={onSelect}
-    >
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.profileRowHighlight, highlightStyle]}
-      />
-      <Text
-        style={[styles.profileName, selected && styles.profileNameSelected]}
-      >
-        {name}
-      </Text>
-      <View style={styles.rowRight}>
-        <PressableScale
-          testID={`profile-edit-${id}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Edit profile ${name}`}
-          hitSlop={8}
-          onPress={onEdit}
-        >
-          <Ionicons
-            name="pencil"
-            size={16}
-            color={theme.colors.textSecondary}
-          />
-        </PressableScale>
-      </View>
-    </PressableScale>
   );
 }
 
@@ -318,11 +324,6 @@ function createStyles(theme: AppTheme) {
       justifyContent: 'center',
       backgroundColor: colors.buttonPrimary,
     },
-    rowRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.md,
-    },
     profilesCard: {
       marginTop: spacing.lg,
       padding: spacing.lg,
@@ -333,19 +334,20 @@ function createStyles(theme: AppTheme) {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
+      gap: spacing.md,
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.md,
       borderRadius: radius.sm,
-      // Reserves the highlight's border so rows keep one size either way.
+      // Reserves the highlight's border so the row keeps one size either way.
       borderWidth: 1,
       borderColor: 'transparent',
     },
-    profileRowHighlight: {
-      ...StyleSheet.absoluteFillObject,
-      borderRadius: radius.sm,
-      borderWidth: 1,
+    profileRowSelected: {
       borderColor: colors.accent,
       backgroundColor: colors.background,
+    },
+    profileText: {
+      flex: 1,
     },
     profileName: {
       ...typography.body,
@@ -353,6 +355,35 @@ function createStyles(theme: AppTheme) {
     },
     profileNameSelected: {
       fontWeight: '600',
+      color: colors.accent,
+    },
+    profileSubtitle: {
+      ...typography.caption,
+      color: colors.textSecondary,
+    },
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      marginTop: spacing.md,
+      paddingTop: spacing.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    action: {
+      flex: 1,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.xs,
+    },
+    actionDivider: {
+      width: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+    },
+    actionLabel: {
+      ...typography.body,
+      color: colors.textSecondary,
     },
     sectionTitle: {
       ...typography.title,

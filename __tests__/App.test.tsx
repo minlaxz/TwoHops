@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { ActivityIndicator, Linking } from 'react-native';
+import { ActivityIndicator, Linking, Share } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
@@ -154,13 +154,13 @@ async function seedLogSettings({ debug = true, traffic = true } = {}) {
   );
 }
 
-async function seedTwoProfiles() {
+async function seedTwoProfiles(selectedId: string | null = 'a') {
   await AsyncStorage.setItem(
     PROFILES_STORAGE_KEY,
     JSON.stringify({
       version: 1,
       profiles: [profileEntry('a', 'Alpha'), profileEntry('b', 'Beta')],
-      selectedId: 'a',
+      selectedId,
     }),
   );
 }
@@ -181,18 +181,26 @@ function fabIsHidden(renderer: ReactTestRenderer.ReactTestRenderer) {
   );
 }
 
-// Pressable forwards testID to nested nodes; keep one node per row id.
-function profileRows(renderer: ReactTestRenderer.ReactTestRenderer) {
+// The Profile List lives behind the Profile Picker (#90): tapping the
+// Selected Profile row presents it (only while Stopped — otherwise the rows
+// come back empty). Pressable forwards testID to nested nodes; keep one node
+// per row id. The sheet mock stays presented until a row is chosen.
+async function openPicker(renderer: ReactTestRenderer.ReactTestRenderer) {
+  await press(renderer, 'profile-selected');
   const byId = new Map<string, ReactTestRenderer.ReactTestInstance>();
   for (const node of renderer.root.findAll(
     candidate =>
       typeof candidate.props.onPress === 'function' &&
       typeof candidate.props.testID === 'string' &&
-      candidate.props.testID.startsWith('profile-row-'),
+      candidate.props.testID.startsWith('profile-picker-row-'),
   )) {
     byId.set(node.props.testID, node);
   }
   return [...byId.values()];
+}
+
+function selectedStates(rows: ReactTestRenderer.ReactTestInstance[]) {
+  return rows.map(row => row.props.accessibilityState.selected);
 }
 
 // The async act flushes the tunnel session's state-seed promise so it does
@@ -472,7 +480,7 @@ test('"Paste profile link" routes to the create editor with the link input focus
     textInputByTestID(renderer, 'profile-link-input').props.autoFocus,
   ).toBe(true);
   // Still a Draft: the Profile List is untouched.
-  expect(profileRows(renderer)).toHaveLength(2);
+  expect(await openPicker(renderer)).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -498,36 +506,50 @@ test('"+" opens the editor above the tabs in create mode', async () => {
   });
 });
 
-test('Profiles card lists profiles and highlights the Selected Profile', async () => {
+test('Profiles card shows only the Selected Profile; the Picker lists the rest', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   const text = renderedText(renderer);
   expect(text).toContain('Profiles');
   expect(text).toContain('Alpha');
-  expect(text).toContain('Beta');
+  expect(text).toContain('vpn.example.com · QUIC');
+  expect(text).toContain('Edit');
+  expect(text).toContain('Share');
+  // The rest of the Profile List is behind the Picker (#90).
+  expect(text).not.toContain('Beta');
+  expect(text).not.toContain('Choose profile');
   // The empty-state hint only renders with an empty Profile List.
   expect(text).not.toContain('No profiles yet.');
-  expect(
-    profileRows(renderer).map(row => row.props.accessibilityState.selected),
-  ).toEqual([true, false]);
+
+  const rows = await openPicker(renderer);
+  expect(renderedText(renderer)).toContain('Choose profile');
+  expect(renderedText(renderer)).toContain('Beta');
+  expect(rows.map(row => row.props.testID)).toEqual([
+    'profile-picker-row-a',
+    'profile-picker-row-b',
+  ]);
+  expect(selectedStates(rows)).toEqual([true, false]);
+  expect(iconNames(rows[0])).toContain('checkmark');
+  expect(iconNames(rows[1])).not.toContain('checkmark');
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });
 });
 
-test('tapping a profile while Stopped selects it', async () => {
+test('choosing a Picker row while Stopped selects it and dismisses the sheet', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
+  const rows = await openPicker(renderer);
   await ReactTestRenderer.act(async () => {
-    profileRows(renderer)[1].props.onPress();
+    rows[1].props.onPress();
   });
 
-  expect(
-    profileRows(renderer).map(row => row.props.accessibilityState.selected),
-  ).toEqual([false, true]);
+  expect(renderedText(renderer)).not.toContain('Choose profile');
+  expect(renderedText(renderer)).toContain('Beta');
+  expect(selectedStates(await openPicker(renderer))).toEqual([false, true]);
   expect(renderedText(renderer)).not.toContain('Stop the tunnel');
 
   await ReactTestRenderer.act(async () => {
@@ -535,7 +557,7 @@ test('tapping a profile while Stopped selects it', async () => {
   });
 });
 
-test('tapping a profile while Running raises a Toast that auto-dismisses', async () => {
+test('tapping the Selected Profile while Running raises a Toast, no Picker', async () => {
   jest.useFakeTimers();
   try {
     await seedTwoProfiles();
@@ -544,18 +566,14 @@ test('tapping a profile while Running raises a Toast that auto-dismisses', async
     await ReactTestRenderer.act(async () => {
       emitNativeState('connected');
     });
-    await ReactTestRenderer.act(async () => {
-      profileRows(renderer)[1].props.onPress();
-    });
+    expect(await openPicker(renderer)).toHaveLength(0);
 
     const toast = renderer.root.findByProps({ testID: 'app-toast' });
     expect(renderedText(renderer)).toContain(
       'Stop the tunnel to switch profiles.',
     );
+    expect(renderedText(renderer)).not.toContain('Choose profile');
     expect(toast).toBeTruthy();
-    expect(
-      profileRows(renderer).map(row => row.props.accessibilityState.selected),
-    ).toEqual([true, false]);
 
     await ReactTestRenderer.act(async () => {
       jest.advanceTimersByTime(TOAST_DURATION_MS);
@@ -575,23 +593,19 @@ test('tapping a profile while Running raises a Toast that auto-dismisses', async
   }
 });
 
-test('tapping a profile in a recovery state is locked too', async () => {
+test('tapping the Selected Profile in a recovery state is locked too', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await ReactTestRenderer.act(async () => {
     emitNativeState('waitingForRecovery');
   });
-  await ReactTestRenderer.act(async () => {
-    profileRows(renderer)[1].props.onPress();
-  });
+  expect(await openPicker(renderer)).toHaveLength(0);
 
   expect(renderedText(renderer)).toContain(
     'Stop the tunnel to switch profiles.',
   );
-  expect(
-    profileRows(renderer).map(row => row.props.accessibilityState.selected),
-  ).toEqual([true, false]);
+  expect(renderedText(renderer)).toContain('Alpha');
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -612,8 +626,9 @@ test('tunnel start reads the Selected Profile', async () => {
   );
   const renderer = await renderApp();
 
+  const rows = await openPicker(renderer);
   await ReactTestRenderer.act(async () => {
-    profileRows(renderer)[1].props.onPress();
+    rows[1].props.onPress();
   });
   await ReactTestRenderer.act(async () => {
     fab(renderer)!.props.onPress();
@@ -658,24 +673,22 @@ test('FAB shows Play when Stopped and starts the tunnel', async () => {
   });
 });
 
-test('add and edit-pencil controls render Ionicons glyphs', async () => {
+test('add, row, Edit and Share controls render Ionicons glyphs', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   expect(iconNames(pressableByTestID(renderer, 'profile-add')!)).toContain(
     'add',
   );
-
-  const editButtons = renderer.root.findAll(
-    node =>
-      typeof node.props.testID === 'string' &&
-      node.props.testID.startsWith('profile-edit-') &&
-      typeof node.props.onPress === 'function',
+  expect(iconNames(pressableByTestID(renderer, 'profile-selected')!)).toContain(
+    'chevron-down',
   );
-  expect(editButtons.length).toBeGreaterThan(0);
-  for (const button of editButtons) {
-    expect(iconNames(button)).toContain('pencil');
-  }
+  expect(iconNames(pressableByTestID(renderer, 'profile-edit')!)).toContain(
+    'pencil',
+  );
+  expect(iconNames(pressableByTestID(renderer, 'profile-share')!)).toContain(
+    'share-outline',
+  );
 
   expect(renderedText(renderer)).not.toContain('＋');
   expect(renderedText(renderer)).not.toContain('✎');
@@ -843,6 +856,83 @@ test('recovery states keep a persistent detail label that clears on recovery', a
   });
 });
 
+test('Share hands the Selected Profile to the OS sheet as a Profile Link (#90)', async () => {
+  await seedLogSettings();
+  await seedTwoProfiles();
+  const share = jest.spyOn(Share, 'share').mockResolvedValue({
+    action: 'sharedAction',
+  } as never);
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-share');
+
+  expect(share).toHaveBeenCalledWith({
+    message:
+      'twohops://?login=user&password=pw&ip=10.0.0.1' +
+      '&domain=vpn.example.com&protocol=QUIC&dns=1.1.1.1',
+  });
+  // No Toast; the Debug Log records the share without echoing the link.
+  expect(renderer.root.findAllByProps({ testID: 'app-toast' })).toHaveLength(0);
+  await openLogsTab(renderer);
+  await press(renderer, 'logs-segment-debug');
+  const text = renderedText(renderer);
+  expect(text).toContain('Profile Link shared.');
+  expect(text).not.toContain('password=pw');
+
+  share.mockRestore();
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Selected Profile subtitle falls back to the IP, then to Incomplete', async () => {
+  const noDomain = profileEntry('a', 'Alpha', '10.0.0.7');
+  noDomain.server.domain = '';
+  const bare = profileEntry('b', 'Beta', '');
+  bare.server.domain = '';
+  await AsyncStorage.setItem(
+    PROFILES_STORAGE_KEY,
+    JSON.stringify({ version: 1, profiles: [noDomain, bare], selectedId: 'a' }),
+  );
+  const renderer = await renderApp();
+
+  expect(renderedText(renderer)).toContain('10.0.0.7 · QUIC');
+
+  const rows = await openPicker(renderer);
+  await ReactTestRenderer.act(async () => {
+    rows[1].props.onPress();
+  });
+  expect(renderedText(renderer)).toContain('Incomplete');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('no Selected Profile: row reads Choose a profile, Edit | Share hidden', async () => {
+  await seedTwoProfiles(null);
+  const renderer = await renderApp();
+
+  const text = renderedText(renderer);
+  expect(text).toContain('Choose a profile');
+  expect(text).not.toContain('Edit');
+  expect(text).not.toContain('Share');
+  expect(pressableByTestID(renderer, 'profile-edit')).toBeNull();
+  expect(pressableByTestID(renderer, 'profile-share')).toBeNull();
+
+  const rows = await openPicker(renderer);
+  expect(selectedStates(rows)).toEqual([false, false]);
+  await ReactTestRenderer.act(async () => {
+    rows[1].props.onPress();
+  });
+  expect(renderedText(renderer)).toContain('Beta');
+  expect(pressableByTestID(renderer, 'profile-edit')).toBeTruthy();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
 test('empty Profile List hides the FAB and hints to create a profile', async () => {
   await AsyncStorage.setItem(
     PROFILES_STORAGE_KEY,
@@ -954,7 +1044,7 @@ test('"+" opens a blank Profile Draft without touching the Profile List', async 
     'env-server',
   );
   // Nothing was added to the list or persisted.
-  expect(profileRows(renderer)).toHaveLength(2);
+  expect(await openPicker(renderer)).toHaveLength(2);
   expect(
     JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles,
   ).toHaveLength(2);
@@ -984,7 +1074,7 @@ test('Apply Link patches the Profile Draft; the Profile List is untouched', asyn
   )[0];
   expect(username.props.value).toBe('bob');
   // The draft is not a Profile List entry: still just the two seeded rows.
-  expect(profileRows(renderer)).toHaveLength(2);
+  expect(await openPicker(renderer)).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -1022,14 +1112,12 @@ test('Create is gated on Profile Completeness and commits exactly one profile', 
 
   // Editor closed; the committed profile is on the card, unselected, persisted.
   expect(renderedText(renderer)).not.toContain('Configurations');
+  // Unselected, so the card still shows Alpha; the Picker lists it.
+  expect(renderedText(renderer)).not.toContain('My VPN');
+  const rows = await openPicker(renderer);
   expect(renderedText(renderer)).toContain('My VPN');
-  const rows = profileRows(renderer);
   expect(rows).toHaveLength(3);
-  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
-    true,
-    false,
-    false,
-  ]);
+  expect(selectedStates(rows)).toEqual([true, false, false]);
   const stored = JSON.parse(
     (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
   );
@@ -1057,7 +1145,7 @@ test('back on an untouched create draft exits silently; footer is Create only', 
 
   expect(renderedText(renderer)).not.toContain('Discard changes?');
   expect(renderedText(renderer)).not.toContain('Configurations');
-  expect(profileRows(renderer)).toHaveLength(2);
+  expect(await openPicker(renderer)).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -1090,7 +1178,7 @@ test('back on a dirty draft asks; Keep Editing stays, Discard drops it', async (
   await press(renderer, 'alert-button-Discard');
   // Editor closed; nothing was created or persisted.
   expect(renderedText(renderer)).not.toContain('Configurations');
-  expect(profileRows(renderer)).toHaveLength(2);
+  expect(await openPicker(renderer)).toHaveLength(2);
   expect(
     JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles,
   ).toHaveLength(2);
@@ -1118,7 +1206,7 @@ test('a bad link in create mode shows the alert modal and touches nothing', asyn
   expect(renderedText(renderer)).not.toContain('Profile Link failed');
   // Advanced stays collapsed and the Profile List is untouched.
   expect(textInputByTestID(renderer, 'server-name-input')).toBeUndefined();
-  expect(profileRows(renderer)).toHaveLength(2);
+  expect(await openPicker(renderer)).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -1126,10 +1214,10 @@ test('a bad link in create mode shows the alert modal and touches nothing', asyn
 });
 
 test('edit mode has no link input and opens Advanced expanded', async () => {
-  await seedTwoProfiles();
+  await seedTwoProfiles('b');
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-edit-b');
+  await press(renderer, 'profile-edit');
 
   expect(textInputByTestID(renderer, 'profile-link-input')).toBeUndefined();
   expect(textInputByTestID(renderer, 'server-name-input').props.value).toBe(
@@ -1142,10 +1230,10 @@ test('edit mode has no link input and opens Advanced expanded', async () => {
 });
 
 test('edit mode holds a draft: rename reaches the card and storage only on Save', async () => {
-  await seedTwoProfiles();
+  await seedTwoProfiles('b');
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-edit-b');
+  await press(renderer, 'profile-edit');
 
   const nameInput = textInputByTestID(renderer, 'server-name-input');
   expect(nameInput.props.value).toBe('Beta');
@@ -1174,10 +1262,8 @@ test('edit mode holds a draft: rename reaches the card and storage only on Save'
   expect(renderedText(renderer)).not.toContain('Configurations');
   expect(renderedText(renderer)).toContain('Backup');
   expect(renderedText(renderer)).not.toContain('Beta');
-  // Editing is not selecting: Alpha keeps the selection.
-  expect(
-    profileRows(renderer).map(row => row.props.accessibilityState.selected),
-  ).toEqual([true, false]);
+  // Editing does not move the selection: Beta stays the Selected Profile.
+  expect(selectedStates(await openPicker(renderer))).toEqual([false, true]);
   expect(
     JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[1]
       .name,
@@ -1189,10 +1275,10 @@ test('edit mode holds a draft: rename reaches the card and storage only on Save'
 });
 
 test('saved edits land on that profile only; tunnel still starts from the Selected Profile', async () => {
-  await seedTwoProfiles();
+  await seedTwoProfiles('b');
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-edit-b');
+  await press(renderer, 'profile-edit');
   const username = renderer.root.findAll(
     node =>
       node.props.placeholder === 'Username' &&
@@ -1209,6 +1295,11 @@ test('saved edits land on that profile only; tunnel still starts from the Select
   expect(stored.profiles[1].server.login).toBe('edited-user');
   expect(stored.profiles[0].server.login).toBe('user');
 
+  // Switch back to Alpha through the Picker; the tunnel starts from it.
+  const rows = await openPicker(renderer);
+  await ReactTestRenderer.act(async () => {
+    rows[0].props.onPress();
+  });
   await ReactTestRenderer.act(async () => {
     fab(renderer)!.props.onPress();
   });
@@ -1227,10 +1318,10 @@ test('saved edits land on that profile only; tunnel still starts from the Select
 });
 
 test('Save is disabled while the edit draft violates Profile Completeness', async () => {
-  await seedTwoProfiles();
+  await seedTwoProfiles('b');
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-edit-b');
+  await press(renderer, 'profile-edit');
   const ipInput = renderer.root.findAll(
     node =>
       node.props.placeholder === 'Server IP Address' &&
@@ -1256,10 +1347,10 @@ test('Save is disabled while the edit draft violates Profile Completeness', asyn
 });
 
 test('Save on an edit draft is disabled until touched (issue #71)', async () => {
-  await seedTwoProfiles();
+  await seedTwoProfiles('b');
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-edit-b');
+  await press(renderer, 'profile-edit');
   // The seeded profile is complete, but the draft is untouched: Save waits.
   expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
     true,
@@ -1285,14 +1376,14 @@ test('edit back: clean exit is silent; dirty asks and Discard restores nothing',
   const renderer = await renderApp();
 
   // Untouched draft: back closes without a confirmation.
-  await press(renderer, 'profile-edit-b');
+  await press(renderer, 'profile-edit');
   await pressBack();
   expect(renderedText(renderer)).not.toContain('Discard changes?');
   expect(renderedText(renderer)).not.toContain('Configurations');
 
   // Dirty draft: back asks; Discard drops the draft, storage keeps the
   // old values (nothing was written to restore).
-  await press(renderer, 'profile-edit-b');
+  await press(renderer, 'profile-edit');
   const username = renderer.root.findAll(
     node =>
       node.props.placeholder === 'Username' &&
@@ -1326,7 +1417,7 @@ test("saving the Running tunnel's profile raises the applies-on-next-connect Toa
       emitNativeState('connected');
     });
     // Edit the Selected (Running) profile — allowed.
-    await press(renderer, 'profile-edit-a');
+    await press(renderer, 'profile-edit');
     const username = renderer.root.findAll(
       node =>
         node.props.placeholder === 'Username' &&
@@ -1372,13 +1463,15 @@ test('deleting the Selected Profile is blocked while Running', async () => {
   await ReactTestRenderer.act(async () => {
     emitNativeState('connected');
   });
-  await press(renderer, 'profile-edit-a');
+  await press(renderer, 'profile-edit');
   await press(renderer, 'profile-delete');
 
   const text = renderedText(renderer);
   expect(text).toContain('Cannot delete');
   expect(text).toContain('Stop the tunnel to delete the Selected Profile.');
-  expect(profileRows(renderer)).toHaveLength(2);
+  expect(
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles,
+  ).toHaveLength(2);
 
   await press(renderer, 'alert-button-OK');
   await ReactTestRenderer.act(async () => {
@@ -1393,16 +1486,16 @@ test('deleting the Selected Profile while Stopped reselects the other', async ()
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-edit-a');
+  await press(renderer, 'profile-edit');
   await press(renderer, 'profile-delete');
 
   // The confirmation modal offers a destructive Delete.
   expect(renderedText(renderer)).toContain('Delete "Alpha"?');
   await press(renderer, 'alert-button-Delete');
 
-  const rows = profileRows(renderer);
+  const rows = await openPicker(renderer);
   expect(rows).toHaveLength(1);
-  expect(rows[0].props.testID).toBe('profile-row-b');
+  expect(rows[0].props.testID).toBe('profile-picker-row-b');
   expect(rows[0].props.accessibilityState.selected).toBe(true);
   // The editor for the deleted profile has been popped.
   expect(renderedText(renderer)).not.toContain('Configurations');
@@ -1419,13 +1512,9 @@ test('a twohops: deep link creates and selects while Stopped', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  const rows = profileRows(renderer);
+  const rows = await openPicker(renderer);
   expect(rows).toHaveLength(3);
-  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
-    false,
-    false,
-    true,
-  ]);
+  expect(selectedStates(rows)).toEqual([false, false, true]);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -1448,17 +1537,18 @@ test('a twohops: deep link while Running creates without selecting', async () =>
     releaseInitialURL('twohops://x?login=bob');
   });
 
-  const rows = profileRows(renderer);
-  expect(rows).toHaveLength(3);
-  expect(rows.map(row => row.props.accessibilityState.selected)).toEqual([
-    true,
-    false,
-    false,
-  ]);
+  // Created but not selected: the card still shows Alpha.
+  expect(renderedText(renderer)).toContain('Alpha');
+  expect(
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!),
+  ).toMatchObject({ selectedId: 'a' });
 
   await ReactTestRenderer.act(async () => {
     emitNativeState('disconnected');
   });
+  const rows = await openPicker(renderer);
+  expect(rows).toHaveLength(3);
+  expect(selectedStates(rows)).toEqual([true, false, false]);
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });

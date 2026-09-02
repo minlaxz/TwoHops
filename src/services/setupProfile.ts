@@ -183,6 +183,27 @@ export function applyProfileLink(
   };
 }
 
+// Share Profile: the inverse of applyProfileLink. Carries exactly the link
+// contract (no name, Routing Mode or Local Rules); empty fields are omitted.
+// Password travels in clear — CONTEXT.md "Share Profile" accepts this.
+export function profileLink(profile: SetupProfile): string {
+  const { server } = profile;
+  const fields: [string, string][] = [
+    ['login', server.login],
+    ['password', server.password],
+    ['ip', server.ipAddress],
+    ['domain', server.domain],
+    ['protocol', server.vpnProtocol],
+    ['dns', profile.dnsServers.join(',')],
+    ['remoteRules', profile.remoteRulesURL],
+  ];
+  const query = fields
+    .filter(([, value]) => value !== '')
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+  return `twohops://?${query}`;
+}
+
 // Remote Rules import: fetch the Remote Rules URL into the Imported Rules
 // cache. Network is injected. Failure leaves the profile (and the previous
 // Imported Rules) untouched; the error is transient UI state, never persisted.
@@ -213,6 +234,14 @@ export async function importRemoteRules(
 
 export function effectiveRules(profile: SetupProfile): string[] {
   return mergeRules(parseRules(profile.localRulesText), profile.importedRules);
+}
+
+// What the Dashboard card and Profile Picker show under the name (#90):
+// `domain · protocol`; an empty domain falls back to the IP address, and a
+// Profile with neither reads Incomplete.
+export function profileSubtitle({ server }: SetupProfile): string {
+  const host = server.domain || server.ipAddress;
+  return host ? `${host} · ${server.vpnProtocol}` : 'Incomplete';
 }
 
 export function missingFields(profile: SetupProfile): MissingField[] {

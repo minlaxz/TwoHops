@@ -4,6 +4,7 @@ import {
   updateServer,
   clearProfile,
   applyProfileLink,
+  profileLink,
   effectiveRules,
   importRemoteRules,
   missingFields,
@@ -261,6 +262,55 @@ describe('saveProfile / loadProfile', () => {
     expect([...map.entries()]).toEqual([[PROFILE_STORAGE_KEY, doc]]);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe('profileLink', () => {
+  test('encodes every carried field, URL-escaped, dns comma-joined', () => {
+    const profile = updateProfile(
+      updateServer(completeProfile(), {
+        login: 'u 2',
+        password: 'p==&x',
+        ipAddress: '1.2.3.4',
+        domain: 'tls.example.com',
+        vpnProtocol: 'Http/2',
+      }),
+      {
+        dnsServers: ['https://dns.nextdns.io', '1.1.1.1'],
+        remoteRulesURL: 'https://r.example.com/rules.txt',
+      },
+    );
+    expect(profileLink(profile)).toBe(
+      'twohops://?login=u%202&password=p%3D%3D%26x&ip=1.2.3.4' +
+        '&domain=tls.example.com&protocol=Http%2F2' +
+        '&dns=https%3A%2F%2Fdns.nextdns.io%2C1.1.1.1' +
+        '&remoteRules=https%3A%2F%2Fr.example.com%2Frules.txt',
+    );
+  });
+
+  test('omits empty fields; name, routing mode and local rules never travel', () => {
+    const profile = updateProfile(
+      updateServer(defaultProfile(env), { name: 'Only', login: 'me' }),
+      { dnsServers: [], routingMode: 'general', localRulesText: 'a.com' },
+    );
+    expect(profileLink(profile)).toBe('twohops://?login=me&protocol=Http%2F2');
+  });
+
+  test('round-trips through applyProfileLink', () => {
+    const shared = updateProfile(
+      updateServer(completeProfile(), { password: 'p==&x?#', login: 'u 2' }),
+      { dnsServers: ['1.1.1.1', '8.8.8.8'], remoteRulesURL: 'https://r/x' },
+    );
+    const result = applyProfileLink(defaultProfile(env), profileLink(shared));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The link never carries the name; the target keeps its own (env) name.
+    expect(result.value.server).toEqual({
+      ...shared.server,
+      name: 'env-server',
+    });
+    expect(result.value.dnsServers).toEqual(shared.dnsServers);
+    expect(result.value.remoteRulesURL).toBe(shared.remoteRulesURL);
   });
 });
 
