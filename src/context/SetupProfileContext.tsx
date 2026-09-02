@@ -46,7 +46,7 @@ type SetupProfileContextValue = {
     link: string,
     select: boolean,
   ) => Result<{ id: string }, ProfileLinkError>;
-  /** Commits an edit Draft back onto its entry; the display name follows the server name (#89). */
+  /** Commits an edit Draft back onto its entry; the entry name is the server name (#89). */
   saveProfile: (id: string, profile: SetupProfile) => void;
   deleteProfile: (id: string) => void;
 };
@@ -145,7 +145,8 @@ export function SetupProfileProvider({
         renameProfileIntent(
           updateEntry(prev, id, () => profile),
           id,
-          profile.server.name,
+          // Trimmed like createProfile; the gate only checks trimmed length.
+          profile.server.name.trim(),
         ),
       ),
     [],

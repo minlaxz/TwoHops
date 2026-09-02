@@ -15,7 +15,7 @@ import {
 } from './setupProfile';
 
 // Each entry keeps the ADR 0001 document shape (own `version` included) and
-// gains an `id` plus a user-editable `name`.
+// gains an `id` plus a `name` mirrored from the server name (#89).
 export type ProfileEntry = SetupProfile & { id: string; name: string };
 
 export interface ProfileList {
@@ -56,12 +56,11 @@ function appendProfile(
   list: ProfileList,
   profile: SetupProfile,
   select: boolean,
-  name?: string,
 ): { list: ProfileList; id: string } {
   const entry: ProfileEntry = {
     ...profile,
     id: newProfileId(),
-    name: name ?? profileName(profile),
+    name: profileName(profile),
   };
   return {
     list: {

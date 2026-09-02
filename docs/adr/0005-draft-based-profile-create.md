@@ -53,3 +53,6 @@ editable) so the link alone reaches Profile Completeness.
   Save, and Save adds a touched-Draft gate on top of Completeness
   (touched-flag semantics, not value-diff). Create mode keeps a single
   Create button.
+- Amended by #89: the separate "Profile name" is gone. The Draft's only name
+  is the Server Credentials Name; Create and Save write the entry name from
+  it (trimmed), so a blank Draft starts with the env server name, not blank.

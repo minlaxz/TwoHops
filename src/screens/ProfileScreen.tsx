@@ -244,7 +244,7 @@ export default function ServerScreen() {
         </PressableScale>
         <CollapsibleBody expanded={advancedOpen}>
           <TextInput
-            testID="profile-name-input"
+            testID="server-name-input"
             style={styles.input}
             placeholder="Name"
             placeholderTextColor={placeholderTextColor}

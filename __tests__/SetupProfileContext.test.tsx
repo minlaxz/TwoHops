@@ -128,7 +128,7 @@ test('createProfile commits a draft: nothing persisted before, entry after', asy
 });
 
 // The edit Draft also lives in screen state; saveProfile is its single
-// commit point — one write; the display name follows the server name (#89).
+// commit point — one write; the entry name is the server name (#89).
 test('saveProfile commits an edit draft: server name becomes the name', async () => {
   const seed: ProfileList = {
     version: 1,
@@ -147,7 +147,7 @@ test('saveProfile commits an edit draft: server name becomes the name', async ()
     const beta = ctx().profiles[1];
     ctx().saveProfile('b', {
       ...beta,
-      server: { ...beta.server, name: 'Backup', login: 'bob' },
+      server: { ...beta.server, name: ' Backup ', login: 'bob' },
     });
   });
   await flush();
