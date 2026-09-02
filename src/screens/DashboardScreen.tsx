@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
-import { Pressable, View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import PressableScale from '../components/PressableScale';
 import { useAppAlert } from '../components/AppAlert';
 import ConnectControl from '../components/ConnectControl';
 import { useAppToast } from '../components/AppToast';
@@ -138,7 +145,7 @@ export default function DashboardScreen() {
       <View style={styles.profilesCard}>
         <View style={styles.cardHeader}>
           <Text style={styles.sectionTitle}>Profiles</Text>
-          <Pressable
+          <PressableScale
             testID="profile-add"
             accessibilityRole="button"
             accessibilityLabel="Add profile"
@@ -152,50 +159,21 @@ export default function DashboardScreen() {
               size={18}
               color={theme.colors.buttonPrimaryText}
             />
-          </Pressable>
+          </PressableScale>
         </View>
-        {profiles.map(entry => {
-          const isSelected = entry.id === selectedId;
-          return (
-            <Pressable
-              key={entry.id}
-              testID={`profile-row-${entry.id}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              style={[
-                styles.profileRow,
-                isSelected && styles.profileRowSelected,
-              ]}
-              onPress={() => handleSelectProfile(entry.id)}
-            >
-              <Text
-                style={[
-                  styles.profileName,
-                  isSelected && styles.profileNameSelected,
-                ]}
-              >
-                {entry.name}
-              </Text>
-              <View style={styles.rowRight}>
-                <Pressable
-                  testID={`profile-edit-${entry.id}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit profile ${entry.name}`}
-                  hitSlop={8}
-                  onPress={() =>
-                    navigation.navigate('Profile', { profileId: entry.id })
-                  }
-                >
-                  <Ionicons
-                    name="pencil"
-                    size={16}
-                    color={theme.colors.textSecondary}
-                  />
-                </Pressable>
-              </View>
-            </Pressable>
-          );
-        })}
+        {profiles.map(entry => (
+          <ProfileRow
+            key={entry.id}
+            id={entry.id}
+            name={entry.name}
+            selected={entry.id === selectedId}
+            onSelect={() => handleSelectProfile(entry.id)}
+            onEdit={() =>
+              navigation.navigate('Profile', { profileId: entry.id })
+            }
+            styles={styles}
+          />
+        ))}
         {profiles.length === 0 && isHydrated ? (
           <Text style={styles.hint}>No profiles yet. Tap + to add one.</Text>
         ) : null}
@@ -204,6 +182,77 @@ export default function DashboardScreen() {
         <ConnectControl display={display} onPress={onFabPress} />
       ) : null}
     </View>
+  );
+}
+
+type ProfileRowProps = {
+  id: string;
+  name: string;
+  selected: boolean;
+  onSelect: () => void;
+  onEdit: () => void;
+  styles: ReturnType<typeof createStyles>;
+};
+
+// The Selected Profile highlight is an overlay whose opacity eases in and out
+// (issue #80) so rotating profiles slides the ring rather than snapping it.
+// Reduce-motion snaps; the bold name and accessibility state never animate.
+function ProfileRow({
+  id,
+  name,
+  selected,
+  onSelect,
+  onEdit,
+  styles,
+}: ProfileRowProps) {
+  const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
+  const highlight = useSharedValue(selected ? 1 : 0);
+
+  useEffect(() => {
+    const target = selected ? 1 : 0;
+    highlight.value = reduceMotion
+      ? target
+      : withTiming(target, { duration: theme.motion.duration.base });
+  }, [selected, reduceMotion, highlight, theme]);
+
+  const highlightStyle = useAnimatedStyle(() => ({
+    opacity: highlight.value,
+  }));
+
+  return (
+    <PressableScale
+      testID={`profile-row-${id}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      style={styles.profileRow}
+      onPress={onSelect}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.profileRowHighlight, highlightStyle]}
+      />
+      <Text
+        style={[styles.profileName, selected && styles.profileNameSelected]}
+      >
+        {name}
+      </Text>
+      <View style={styles.rowRight}>
+        <PressableScale
+          testID={`profile-edit-${id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit profile ${name}`}
+          hitSlop={8}
+          onPress={onEdit}
+        >
+          <Ionicons
+            name="pencil"
+            size={16}
+            color={theme.colors.textSecondary}
+          />
+        </PressableScale>
+      </View>
+    </PressableScale>
   );
 }
 
@@ -279,10 +328,11 @@ function createStyles(theme: AppTheme) {
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.md,
       borderRadius: radius.sm,
-      borderWidth: 1,
-      borderColor: 'transparent',
     },
-    profileRowSelected: {
+    profileRowHighlight: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: radius.sm,
+      borderWidth: 1,
       borderColor: colors.accent,
       backgroundColor: colors.background,
     },

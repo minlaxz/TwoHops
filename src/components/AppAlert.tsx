@@ -5,7 +5,8 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
+import PressableScale from './PressableScale';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme } from '../theme/colors';
 
@@ -82,7 +83,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
             ) : null}
             <View style={styles.buttonRow}>
               {pending?.buttons.map(button => (
-                <Pressable
+                <PressableScale
                   key={button.text}
                   testID={`alert-button-${button.text}`}
                   accessibilityRole="button"
@@ -98,7 +99,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
                   >
                     {button.text}
                   </Text>
-                </Pressable>
+                </PressableScale>
               ))}
             </View>
           </View>

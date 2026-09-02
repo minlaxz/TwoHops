@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+import PressableScale from './PressableScale';
 import { CustomButtonProps } from '../types';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme } from '../theme/colors';
@@ -16,14 +17,14 @@ export const TouchableOpacityButton: React.FC<CustomButtonProps> = ({
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
-    <TouchableOpacity
+    <PressableScale
       style={[styles.button, touchableOpacityStyles]}
       onPress={onPress}
       disabled={disabled}
       testID={testID}
     >
       <Text style={[styles.buttonText, textStyles]}>{title}</Text>
-    </TouchableOpacity>
+    </PressableScale>
   );
 };
 
@@ -37,9 +38,9 @@ export const TouchableOpacityLink: React.FC<CustomButtonProps> = ({
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
-    <TouchableOpacity onPress={onPress} disabled={disabled}>
+    <PressableScale onPress={onPress} disabled={disabled}>
       <Text style={[styles.link, textStyles]}>{title}</Text>
-    </TouchableOpacity>
+    </PressableScale>
   );
 };
 

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, StyleSheet, View, TextInput } from 'react-native';
+import { Text, StyleSheet, View, TextInput } from 'react-native';
+import { CollapsibleBody } from '../components/CollapsibleSection';
+import PressableScale from '../components/PressableScale';
 import {
   useNavigation,
   usePreventRemove,
@@ -227,7 +229,7 @@ export default function ServerScreen() {
             <View style={styles.line} />
           </>
         ) : null}
-        <Pressable
+        <PressableScale
           testID="profile-advanced-toggle"
           accessibilityRole="button"
           accessibilityState={{ expanded: advancedOpen }}
@@ -236,8 +238,8 @@ export default function ServerScreen() {
         >
           <Text style={styles.sectionTitle}>Advanced</Text>
           <Text style={styles.advancedChevron}>{advancedOpen ? '▾' : '▸'}</Text>
-        </Pressable>
-        {advancedOpen ? (
+        </PressableScale>
+        <CollapsibleBody expanded={advancedOpen}>
           <>
             <Text style={styles.inputLabel}>Profile name:</Text>
             <TextInput
@@ -445,7 +447,7 @@ export default function ServerScreen() {
               />
             </View>
           </>
-        ) : null}
+        </CollapsibleBody>
       </View>
       <View style={styles.actionRow}>
         {!isCreateMode ? (

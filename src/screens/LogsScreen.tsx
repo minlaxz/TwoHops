@@ -5,14 +5,8 @@ import React, {
   useState,
   useSyncExternalStore,
 } from 'react';
-import {
-  Animated,
-  Text,
-  View,
-  ScrollView,
-  StyleSheet,
-  Pressable,
-} from 'react-native';
+import { Animated, Text, View, ScrollView, StyleSheet } from 'react-native';
+import PressableScale from '../components/PressableScale';
 import { useLogs } from '../context/LogsContext';
 import { useLogSettings } from '../context/LogSettingsContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
@@ -89,7 +83,7 @@ export default function LogsScreen() {
             ) : null}
           </View>
           {(shownSegment === 'traffic' ? traffic : debug).length > 0 ? (
-            <Pressable
+            <PressableScale
               testID="logs-clear"
               accessibilityRole="button"
               style={styles.clearButton}
@@ -98,7 +92,7 @@ export default function LogsScreen() {
               }
             >
               <Text style={styles.clearLabel}>Clear</Text>
-            </Pressable>
+            </PressableScale>
           ) : null}
         </View>
         <View style={styles.logScrollContainer}>
@@ -137,7 +131,7 @@ function SegmentButton({
   styles,
 }: SegmentButtonProps) {
   return (
-    <Pressable
+    <PressableScale
       testID={testID}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
@@ -147,7 +141,7 @@ function SegmentButton({
       <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
         {label}
       </Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
