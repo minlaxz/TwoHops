@@ -1,0 +1,30 @@
+{
+  "images" : [
+    {
+      "filename" : "TwoHops-Splash-light-1080x1920.png",
+      "idiom" : "universal",
+      "scale" : "1x",
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "light"
+        }
+      ]
+    },
+    {
+      "filename" : "TwoHops-Splash-dark-1080x1920.png",
+      "idiom" : "universal",
+      "scale" : "1x",
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ]
+    }
+  ],
+  "info" : {
+    "author" : "TwoHops",
+    "version" : 1
+  }
+}
