@@ -12,6 +12,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-vector-icons/ionicons": "^13.1.3",
     "@react-navigation/bottom-tabs": "^7.18.18",
@@ -20,6 +21,7 @@
     "react": "19.2.0",
     "react-native": "0.83.1",
     "react-native-config": "^1.6.1",
+    "react-native-gesture-handler": "^3.2.1",
     "react-native-haptic-feedback": "^3.0.0",
     "react-native-reanimated": "^4.6.0",
     "react-native-safe-area-context": "^5.5.2",

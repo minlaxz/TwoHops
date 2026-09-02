@@ -30,3 +30,32 @@ jest.mock('react-native-haptic-feedback', () => ({
   default: { trigger: jest.fn() },
   trigger: jest.fn(),
 }));
+// Gesture handler ships its own jest mocks; the bottom sheet's shipped mock
+// renders its children unconditionally, so the modal is re-stubbed here to
+// render only between present() and dismiss() — that is the behavior the
+// app-render seam observes.
+require('react-native-gesture-handler/jestSetup');
+jest.mock('@gorhom/bottom-sheet', () => {
+  const React = require('react');
+  const mock = require('@gorhom/bottom-sheet/mock');
+  class BottomSheetModal extends React.Component {
+    state = { presented: false };
+    present() {
+      this.setState({ presented: true });
+    }
+    dismiss() {
+      this.setState({ presented: false });
+      this.props.onDismiss?.();
+    }
+    close() {
+      this.dismiss();
+    }
+    forceClose() {
+      this.dismiss();
+    }
+    render() {
+      return this.state.presented ? this.props.children : null;
+    }
+  }
+  return { ...mock, BottomSheetModal };
+});

@@ -84,16 +84,13 @@ export default function CollapsibleSection({
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, typography, elevation } = theme;
+  const { colors, spacing, radius, typography, card } = theme;
   return StyleSheet.create({
     section: {
       marginBottom: spacing.lg,
       padding: spacing.lg,
       borderRadius: radius.md,
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      borderWidth: 1,
-      ...elevation.level1,
+      ...card,
     },
     header: {
       flexDirection: 'row',

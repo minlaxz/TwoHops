@@ -68,6 +68,9 @@ export type AppTheme = {
   motion: typeof motion;
   // Elevation levels: 0 flat, 1 resting card, 2 floating (FAB, toast).
   elevation: { level0: ViewStyle; level1: ViewStyle; level2: ViewStyle };
+  // Resting card surface (issue #81): light keeps a subtle border; dark
+  // drops it for a lifted, tinted surface.
+  card: ViewStyle;
 };
 
 const SHADOW = '#000000';
@@ -126,6 +129,16 @@ const lightTheme: AppTheme = {
       elevation: 6,
     },
   },
+  card: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d5ddd8',
+    borderWidth: 1,
+    shadowColor: SHADOW,
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
 };
 
 // Derived from blackish green #1a2421: background one step darker, elevated
@@ -180,6 +193,16 @@ const darkTheme: AppTheme = {
       shadowOffset: { width: 0, height: 4 },
       elevation: 6,
     },
+  },
+  card: {
+    backgroundColor: '#222c28',
+    borderColor: '#222c28',
+    borderWidth: 0,
+    shadowColor: SHADOW,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
 };
 

@@ -246,7 +246,7 @@ function DebugRows({
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, typography, elevation } = theme;
+  const { colors, spacing, radius, typography, card } = theme;
   return StyleSheet.create({
     screen: {
       flex: 1,
@@ -257,10 +257,7 @@ function createStyles(theme: AppTheme) {
       flex: 1,
       padding: spacing.lg,
       borderRadius: radius.md,
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      borderWidth: 1,
-      ...elevation.level1,
+      ...card,
     },
     toolbar: {
       flexDirection: 'row',

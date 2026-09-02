@@ -6,11 +6,13 @@
  */
 
 import * as React from 'react';
-import { Linking, StatusBar } from 'react-native';
+import { Linking, StatusBar, StyleSheet } from 'react-native';
 import {
   initialWindowMetrics,
   SafeAreaProvider,
 } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import {
   createStaticNavigation,
   DarkTheme,
@@ -241,7 +243,11 @@ function AppNavigator() {
               <SessionToastListener />
               <LogSettingsProvider>
                 <LogsProvider>
-                  <Navigation theme={navigationTheme} />
+                  {/* Sheets portal here: above the navigator, inside every
+                      provider their content reads from. */}
+                  <BottomSheetModalProvider>
+                    <Navigation theme={navigationTheme} />
+                  </BottomSheetModalProvider>
                 </LogsProvider>
               </LogSettingsProvider>
             </TunnelSessionProvider>
@@ -254,12 +260,18 @@ function AppNavigator() {
 
 function App() {
   return (
-    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <ThemeProvider>
-        <AppNavigator />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <ThemeProvider>
+          <AppNavigator />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});
 
 export default App;

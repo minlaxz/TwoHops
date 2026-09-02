@@ -434,11 +434,56 @@ test('one toggle OFF hides only its tab; buffered rows return on re-enable', asy
   });
 });
 
-test('"+" opens the editor above the tabs in create mode', async () => {
+test('"+" opens a sheet; "New profile" routes to the create editor (issue #81)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  // Nothing offered until "+" is pressed.
+  expect(pressableByTestID(renderer, 'profile-add-new')).toBeNull();
+  await press(renderer, 'profile-add');
+  const text = renderedText(renderer);
+  expect(text).toContain('New profile');
+  expect(text).toContain('Paste profile link');
+
+  await press(renderer, 'profile-add-new');
+  // Sheet dismissed, editor pushed in create mode with the link input
+  // present but not focused — the blank Draft is the point.
+  expect(pressableByTestID(renderer, 'profile-add-new')).toBeNull();
+  expect(renderedText(renderer)).toContain('Configurations');
+  expect(
+    textInputByTestID(renderer, 'profile-link-input').props.autoFocus,
+  ).toBeFalsy();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('"Paste profile link" routes to the create editor with the link input focused (issue #81)', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await press(renderer, 'profile-add');
+  await press(renderer, 'profile-add-link');
+
+  expect(pressableByTestID(renderer, 'profile-add-link')).toBeNull();
+  expect(renderedText(renderer)).toContain('Configurations');
+  expect(
+    textInputByTestID(renderer, 'profile-link-input').props.autoFocus,
+  ).toBe(true);
+  // Still a Draft: the Profile List is untouched.
+  expect(profileRows(renderer)).toHaveLength(2);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('"+" opens the editor above the tabs in create mode', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await openCreateEditor(renderer);
 
   const text = renderedText(renderer);
   expect(text).toContain('Configurations');
@@ -879,6 +924,13 @@ async function press(
   });
 }
 
+// "+" opens the add-profile sheet (issue #81); "New profile" is the route
+// every create-mode test used to reach directly.
+async function openCreateEditor(renderer: ReactTestRenderer.ReactTestRenderer) {
+  await press(renderer, 'profile-add');
+  await press(renderer, 'profile-add-new');
+}
+
 // Android hardware back / header back: both run the same navigation pop,
 // which is what raises the Profile Draft discard confirmation.
 async function pressBack() {
@@ -892,7 +944,7 @@ test('"+" opens a blank Profile Draft without touching the Profile List', async 
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-add');
+  await openCreateEditor(renderer);
 
   // Editor pushed in create mode; expand Advanced to reach the fields.
   expect(renderedText(renderer)).toContain('Configurations');
@@ -916,7 +968,7 @@ test('Apply Link patches the Profile Draft; the Profile List is untouched', asyn
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-add');
+  await openCreateEditor(renderer);
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
       'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com',
@@ -943,7 +995,7 @@ test('Create is gated on Profile Completeness and commits exactly one profile', 
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-add');
+  await openCreateEditor(renderer);
   // Blank draft: Create renders (outside Advanced) but stays disabled.
   expect(pressableByTestID(renderer, 'profile-create')!.props.disabled).toBe(
     true,
@@ -996,7 +1048,7 @@ test('back on an untouched create draft exits silently; footer is Create only', 
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-add');
+  await openCreateEditor(renderer);
   // Create mode footer: Create only — no Cancel, no Delete (issue #71).
   expect(pressableByTestID(renderer, 'profile-create')).toBeTruthy();
   expect(pressableByTestID(renderer, 'profile-cancel')).toBeNull();
@@ -1016,7 +1068,7 @@ test('back on a dirty draft asks; Keep Editing stays, Discard drops it', async (
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-add');
+  await openCreateEditor(renderer);
   await press(renderer, 'profile-advanced-toggle');
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'profile-name-input').props.onChangeText(
@@ -1052,7 +1104,7 @@ test('a bad link in create mode shows the alert modal and touches nothing', asyn
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await press(renderer, 'profile-add');
+  await openCreateEditor(renderer);
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
       'https://not-a-profile-link',
@@ -1428,20 +1480,27 @@ test('theme change stays on Settings and keeps Debug Logs (issue #49)', async ()
     settingsTab.props.onPress();
   });
 
-  // Appearance starts collapsed (issue #68); open it to reach the buttons.
+  // Appearance starts collapsed (issue #68); open it to reach the picker.
   await press(renderer, 'settings-section-appearance');
-  const darkButton = renderer.root.findAll(
-    node =>
-      node.props.title === 'Dark' && typeof node.props.onPress === 'function',
-  )[0];
-  await ReactTestRenderer.act(async () => {
-    darkButton.props.onPress();
-  });
+  // One segmented control (issue #81): System starts checked.
+  expect(
+    pressableByTestID(renderer, 'settings-theme-system')!.props
+      .accessibilityState.checked,
+  ).toBe(true);
+  await press(renderer, 'settings-theme-dark');
 
   // Theme applied, navigation did not reset to Dashboard.
   let text = renderedText(renderer);
-  // renderedText joins JSX text children with newlines: "Theme: " / "dark".
-  expect(text).toMatch(/Theme: ?\ndark/);
+  expect(
+    pressableByTestID(renderer, 'settings-theme-dark')!.props.accessibilityState
+      .checked,
+  ).toBe(true);
+  expect(
+    pressableByTestID(renderer, 'settings-theme-system')!.props
+      .accessibilityState.checked,
+  ).toBe(false);
+  // Persistence unchanged: the preference lands under the same key.
+  expect(await AsyncStorage.getItem('@twohops/theme/preference')).toBe('dark');
   expect(text).toContain('Appearance');
   // Pressable spreads props across nested nodes; any Settings-tab node
   // carrying accessibilityState reports the selected tab.
@@ -1484,7 +1543,7 @@ test('Settings tab shows theme picker and app version', async () => {
   // Issue #68: Appearance starts collapsed, About starts expanded.
   let text = renderedText(renderer);
   expect(text).toContain('Appearance');
-  expect(text).not.toContain('Theme:');
+  expect(pressableByTestID(renderer, 'settings-theme-system')).toBeNull();
   const appearanceHeader = pressableByTestID(
     renderer,
     'settings-section-appearance',
@@ -1509,8 +1568,7 @@ test('Settings tab shows theme picker and app version', async () => {
 
   // Expanding Appearance reveals the theme picker.
   await press(renderer, 'settings-section-appearance');
-  text = renderedText(renderer);
-  expect(text).toContain('Theme:');
+  expect(pressableByTestID(renderer, 'settings-theme-system')).not.toBeNull();
 
   // Leave and return: bottom tabs keep the screen mounted, but issue #68
   // says collapse defaults reset on every visit.
