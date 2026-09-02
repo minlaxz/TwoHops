@@ -24,11 +24,11 @@ export function parseReleaseTag(tag: string): string | null {
 }
 
 function toSemver(version: string): Semver | null {
-  const parts = version.split('.').map(Number);
-  if (parts.length !== 3 || parts.some(part => !Number.isInteger(part))) {
+  const parts = version.split('.');
+  if (parts.length !== 3 || parts.some(part => !/^\d+$/.test(part))) {
     return null;
   }
-  return parts as Semver;
+  return parts.map(Number) as Semver;
 }
 
 /** Negative when a < b, zero when equal, positive when a > b. */

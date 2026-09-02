@@ -32,6 +32,8 @@ describe('compareVersions', () => {
 
   test('throws on non-semver input', () => {
     expect(() => compareVersions('abc', '0.0.1')).toThrow();
+    expect(() => compareVersions('1..2', '0.0.1')).toThrow();
+    expect(() => compareVersions('0.0.15-beta', '0.0.1')).toThrow();
   });
 });
 

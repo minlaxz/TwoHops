@@ -62,6 +62,7 @@ export function UpdateCheckProvider({
   // undefined = no successful check yet; null = up to date.
   const [answer, setAnswer] = useState<LatestRelease | null | undefined>();
   const inFlight = useRef(false);
+  const launched = useRef(false);
 
   const check = useCallback(
     async ({ manual } = { manual: false }) => {
@@ -93,11 +94,13 @@ export function UpdateCheckProvider({
     [enabled, installedVersion, fetchImpl, debugLogs, toast],
   );
 
-  // Once per cold start: the provider mounts once for the app's lifetime.
+  // Once per cold start: the ref keeps a dependency change from re-checking.
   useEffect(() => {
-    check();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!launched.current) {
+      launched.current = true;
+      check();
+    }
+  }, [check]);
 
   const value = useMemo<UpdateCheckValue>(() => {
     const status: UpdateCheckStatus = checking

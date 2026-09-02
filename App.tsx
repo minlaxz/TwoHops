@@ -78,7 +78,7 @@ function SettingsTabIcon({
   color: string;
   size: number;
 }) {
-  const { status } = useUpdateCheck();
+  const { enabled, status } = useUpdateCheck();
   const { theme } = useAppTheme();
   return (
     <>
@@ -87,7 +87,7 @@ function SettingsTabIcon({
         color={color}
         size={size}
       />
-      {status === 'available' && (
+      {enabled && status === 'available' && (
         <View
           testID="settings-tab-update-dot"
           style={[styles.updateDot, { backgroundColor: theme.colors.accent }]}

@@ -9,7 +9,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { useLogSettings } from '../context/LogSettingsContext';
 import { useUpdateCheck } from '../context/UpdateCheckContext';
 import PressableScale from '../components/PressableScale';
-import { INSTALLED_VERSION as APP_VERSION } from '../services/updateCheck';
+import { INSTALLED_VERSION } from '../services/updateCheck';
 import type { AppTheme, ThemePreference } from '../theme/colors';
 
 // Build number is CI-injected via .env (ENV_BUILD_NUMBER); absent in local dev.
@@ -22,7 +22,7 @@ const CORE_VERSION = '1.1.3';
 const aboutRows: [string, string][] = [
   [
     'App Version',
-    BUILD_NUMBER ? `${APP_VERSION} (${BUILD_NUMBER})` : APP_VERSION,
+    BUILD_NUMBER ? `${INSTALLED_VERSION} (${BUILD_NUMBER})` : INSTALLED_VERSION,
   ],
   ['Core Version', CORE_VERSION],
   ['App License', 'Apache-2.0'],
@@ -63,11 +63,7 @@ function UpdateRow({ styles }: { styles: ReturnType<typeof createStyles> }) {
       style={styles.row}
     >
       <Text style={styles.rowLabel}>Update</Text>
-      <Text
-        style={status === 'available' ? styles.rowValueAccent : styles.rowValue}
-      >
-        {value}
-      </Text>
+      <Text style={styles.rowValue}>{value}</Text>
     </PressableScale>
   );
 }
@@ -197,10 +193,6 @@ function createStyles(theme: AppTheme) {
     rowValue: {
       ...typography.body,
       color: colors.textSecondary,
-    },
-    rowValueAccent: {
-      ...typography.body,
-      color: colors.accent,
     },
   });
 }
