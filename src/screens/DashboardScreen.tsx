@@ -8,6 +8,7 @@ import { useAppToast } from '../components/AppToast';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
 import { useLogs } from '../context/LogsContext';
+import { trigger as hapticTick } from 'react-native-haptic-feedback';
 import { effectiveRules, tunnelStartInput } from '../services/setupProfile';
 import { displayState, type SessionState } from '../services/tunnelSession';
 import type { AppTheme } from '../theme/colors';
@@ -64,6 +65,8 @@ export default function DashboardScreen() {
     trafficLogs.clear();
     debugLogs.clear();
     appendDebugLog(`Setup config: ${setupSummary}`);
+    // Haptic tick only when a command is actually issued (#79).
+    hapticTick('impactLight');
     session.connect(input.value);
   };
 
@@ -100,6 +103,7 @@ export default function DashboardScreen() {
       return;
     }
     appendDebugLog('Stop button pressed.');
+    hapticTick('impactLight');
     session.disconnect();
   };
 
