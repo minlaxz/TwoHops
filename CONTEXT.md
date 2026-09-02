@@ -11,11 +11,15 @@ Every Setup Profile the app remembers. May be empty on a fresh install.
 _Avoid_: profiles array
 
 **Selected Profile**:
-The one Setup Profile that tunnel commands act on and the Dashboard shows. Can only change while the Display State is Stopped. Deleting it while Stopped selects another Profile, or none.
+The one Setup Profile that tunnel commands act on and the Dashboard shows. The Dashboard shows only this Profile (name, domain, protocol) with its Edit and Share actions; the rest of the Profile List lives behind the Profile Picker. Can only change while the Display State is Stopped. Deleting it while Stopped selects another Profile, or none.
 _Avoid_: active profile, current profile
 
+**Profile Picker**:
+The sheet opened by tapping the Selected Profile on the Dashboard, listing every Profile in the Profile List with the Selected Profile marked. Choosing a row changes the Selected Profile. Opens only while the Display State is Stopped; otherwise the tap is refused with a Toast. Adding a Profile is not done from the Picker.
+_Avoid_: profile dropdown, profile menu, switcher
+
 **Server Credentials**:
-The server identity and login used to start the tunnel: name, IP address, domain, login, password, protocol. Name is the native tunnel's profile identifier.
+The server identity and login used to start the tunnel: name, IP address, domain, login, password, protocol. Name is the Profile's one and only name: what the Profile List, Dashboard and Profile Picker show, and the label the native tunnel is started with. It plays no part in the connection itself. There is no separate display name.
 _Avoid_: server config
 
 **DNS Servers**:
@@ -46,6 +50,10 @@ _Avoid_: merged rules text, rules text
 **Profile Link**:
 A `twohops:` URL that carries Server Credentials (except the server name), DNS Servers and a Remote Rules URL. Applying one fills profile fields without any network access; it never overwrites a stored Profile — on the profile screen it patches the Profile Draft in place, defaulting the missing server name from the domain.
 _Avoid_: auto fill, import URL
+
+**Share Profile**:
+Handing the Selected Profile to another device as a Profile Link through the OS share sheet. The link carries exactly what a Profile Link carries — including the password in clear — and nothing more; the user's choice of recipient is the only safeguard. Available whenever there is a Selected Profile, whatever its Profile Completeness; empty fields are left out of the link.
+_Avoid_: export profile, copy config
 
 **Profile Draft**:
 The in-memory Setup Profile being created or edited on the profile screen. Not part of the Profile List and never persisted until Create (new) or Save (existing) is pressed; navigating away (header or Android back — there is no Cancel control, #71) discards it, after a discard confirmation when it has been touched. A new Draft starts blank — no generated name.
