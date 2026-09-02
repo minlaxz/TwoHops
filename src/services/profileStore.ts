@@ -74,15 +74,14 @@ function appendProfile(
   };
 }
 
-// Commits a Profile Draft (ADR 0005): appends it under the user's chosen
-// name, falling back to the server name — the Completeness gate guarantees
+// Commits a Profile Draft (ADR 0005): appends it under its server name —
+// the Profile's one and only name (#89); the Completeness gate guarantees
 // one exists on this path.
 export function createProfile(
   list: ProfileList,
-  name: string,
   profile: SetupProfile,
 ): { list: ProfileList; id: string } {
-  return appendProfile(list, profile, false, name.trim() || undefined);
+  return appendProfile(list, profile, false);
 }
 
 // Profile Link rule (ADR 0003): always creates, never overwrites; selected

@@ -63,19 +63,15 @@ export default function ServerScreen() {
   // mode opens it (the fields are what the pencil came for).
   const [advancedOpen, setAdvancedOpen] = useState(!isCreateMode);
   // The Profile Draft: in-memory until Create (blank) or Save (loaded from
-  // the entry) commits it. A create draft's name starts blank — no generated
-  // "Profile n". Edit mode never writes through; the entry is only a seed.
-  const [draft, setDraft] = useState<{ name: string; profile: SetupProfile }>(
-    () =>
-      entry && !isCreateMode
-        ? { name: entry.name, profile: entry }
-        : { name: '', profile: defaultProfile(Config as ProfileEnv) },
+  // the entry) commits it. Its only name is the server name (#89). Edit mode
+  // never writes through; the entry is only a seed.
+  const [draft, setDraft] = useState<SetupProfile>(() =>
+    entry && !isCreateMode ? entry : defaultProfile(Config as ProfileEnv),
   );
   const [isTouched, setIsTouched] = useState(false);
   const committedRef = useRef(false);
 
-  const profile = isCreateMode || entry ? draft.profile : undefined;
-  const profileName = draft.name;
+  const profile = isCreateMode || entry ? draft : undefined;
 
   // DNS text is only a display of the DNS Servers list; local state keeps
   // the user's in-progress punctuation while the list is the source of truth.
@@ -129,22 +125,14 @@ export default function ServerScreen() {
   const display = displayState(state);
   // Every Draft edit marks it touched — the discard confirmation and the
   // Save gate both key off this flag (touched semantics, not value-diff).
-  const patchDraft = (transform: (prev: typeof draft) => typeof draft) => {
+  const patchDraft = (transform: (prev: SetupProfile) => SetupProfile) => {
     setDraft(transform);
     setIsTouched(true);
   };
   const updateProfile = (patch: Parameters<typeof updateProfileIntent>[1]) =>
-    patchDraft(prev => ({
-      ...prev,
-      profile: updateProfileIntent(prev.profile, patch),
-    }));
+    patchDraft(prev => updateProfileIntent(prev, patch));
   const updateServer = (patch: Parameters<typeof updateServerIntent>[1]) =>
-    patchDraft(prev => ({
-      ...prev,
-      profile: updateServerIntent(prev.profile, patch),
-    }));
-  const setProfileName = (value: string) =>
-    patchDraft(prev => ({ ...prev, name: value }));
+    patchDraft(prev => updateServerIntent(prev, patch));
 
   // The Completeness gate: Create/Save can never mint an incomplete profile.
   // Save is additionally gated on the touched flag (issue #71): an untouched
@@ -157,9 +145,9 @@ export default function ServerScreen() {
     }
     committedRef.current = true;
     if (isCreateMode) {
-      createProfile(draft.name, draft.profile);
+      createProfile(draft);
     } else if (entry) {
-      saveProfile(entry.id, draft.name, draft.profile);
+      saveProfile(entry.id, draft);
       // The live tunnel keeps its config; only the next connect reads this.
       if (entry.id === selectedId && display !== 'stopped') {
         toast('Changes apply on next connect');
@@ -236,7 +224,7 @@ export default function ServerScreen() {
                   );
                   return;
                 }
-                patchDraft(prev => ({ ...prev, profile: result.value }));
+                patchDraft(() => result.value);
                 setURL('');
                 setAdvancedOpen(true);
               }}
@@ -255,17 +243,8 @@ export default function ServerScreen() {
           <Text style={styles.advancedChevron}>{advancedOpen ? '▾' : '▸'}</Text>
         </PressableScale>
         <CollapsibleBody expanded={advancedOpen}>
-          <Text style={styles.inputLabel}>Profile name:</Text>
           <TextInput
             testID="profile-name-input"
-            style={styles.input}
-            placeholder="Profile name"
-            placeholderTextColor={placeholderTextColor}
-            value={profileName}
-            onChangeText={setProfileName}
-            autoCapitalize="none"
-          />
-          <TextInput
             style={styles.input}
             placeholder="Name"
             placeholderTextColor={placeholderTextColor}

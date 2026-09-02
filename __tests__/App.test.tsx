@@ -949,9 +949,9 @@ test('"+" opens a blank Profile Draft without touching the Profile List', async 
   // Editor pushed in create mode; expand Advanced to reach the fields.
   expect(renderedText(renderer)).toContain('Configurations');
   await press(renderer, 'profile-advanced-toggle');
-  // The name field starts blank — no generated "Profile n".
+  // Name is the server name (#89): seeded from env, no generated "Profile n".
   expect(textInputByTestID(renderer, 'profile-name-input').props.value).toBe(
-    '',
+    'env-server',
   );
   // Nothing was added to the list or persisted.
   expect(profileRows(renderer)).toHaveLength(2);

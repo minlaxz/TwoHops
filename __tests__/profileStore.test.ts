@@ -136,25 +136,19 @@ describe('updateSelected', () => {
 });
 
 describe('createProfile', () => {
-  test('appends the committed draft under the given name; selection unchanged', () => {
+  test('appends the committed draft named after its server; selection unchanged', () => {
     const draft = completeProfile();
-    const { list, id } = createProfile(twoProfileList(), '  My VPN  ', draft);
+    const { list, id } = createProfile(twoProfileList(), draft);
     expect(list.profiles).toHaveLength(3);
     const entry = list.profiles[2];
     expect(entry.id).toBe(id);
-    expect(entry).toEqual({ ...draft, id, name: 'My VPN' });
+    expect(entry).toEqual({ ...draft, id, name: 'env-server' });
     expect(list.selectedId).toBe('a');
-  });
-
-  test('a blank name falls back to the server name', () => {
-    const { list } = createProfile(twoProfileList(), '  ', completeProfile());
-    expect(list.profiles[2].name).toBe('env-server');
   });
 
   test('an empty list selects the new profile', () => {
     const { list, id } = createProfile(
       { version: 1, profiles: [], selectedId: null },
-      'Solo',
       completeProfile(),
     );
     expect(list.selectedId).toBe(id);
