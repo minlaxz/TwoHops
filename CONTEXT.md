@@ -101,3 +101,19 @@ _Avoid_: native version, sdk version
 **Debug Logs**:
 App-side narration of lifecycle events (commands sent, state changes, profile edits). In-memory only; gone on app restart. Cleared on each connect command and by hand from the Logs screen; the recovery states never clear them.
 _Avoid_: ui debug logs, app logs
+
+**Installed Version**:
+The release version the running build was made from. A build-time fact; the build number beside it is a date stamp, not part of the version. Every release bumps the version — a version is never rebuilt.
+_Avoid_: app version (in code), current version
+
+**Latest Release**:
+The newest published, non-prerelease GitHub release of the app: its version and its release page. Android is the only platform it ships for.
+_Avoid_: latest tag, remote version
+
+**Update Check**:
+One attempt to learn the Latest Release. Runs once per app launch on its own and again whenever the user asks from the Settings screen. Its outcome is persistent state shown on the Settings screen, never a Toast; only a user-requested attempt announces its failure with a Toast. A second attempt while one is in flight is ignored.
+_Avoid_: version check, update poll
+
+**Available Update**:
+A Latest Release whose version is greater than the Installed Version. Derived from the last successful Update Check, never stored; a failed Update Check keeps the previous answer. Signalled by a dot on the Settings tab and a row in Settings that opens the release page. Stays until the Installed Version catches up.
+_Avoid_: new version flag, update pending

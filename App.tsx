@@ -6,7 +6,7 @@
  */
 
 import * as React from 'react';
-import { Linking, StatusBar, StyleSheet } from 'react-native';
+import { Linking, StatusBar, StyleSheet, View } from 'react-native';
 import {
   initialWindowMetrics,
   SafeAreaProvider,
@@ -39,6 +39,10 @@ import {
 } from './src/context/TunnelSessionContext';
 import { LogsProvider } from './src/context/LogsContext';
 import { LogSettingsProvider } from './src/context/LogSettingsContext';
+import {
+  UpdateCheckProvider,
+  useUpdateCheck,
+} from './src/context/UpdateCheckContext';
 import { displayState } from './src/services/tunnelSession';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import { AlertProvider } from './src/components/AppAlert';
@@ -59,6 +63,37 @@ function tabIcon(
       color={color}
       size={size}
     />
+  );
+}
+
+// Settings tab icon carries a dot in the accent colour while an Available
+// Update exists (issue #87). A custom dot, not tabBarBadge: an empty badge
+// bubble reads as a bug.
+function SettingsTabIcon({
+  focused,
+  color,
+  size,
+}: {
+  focused: boolean;
+  color: string;
+  size: number;
+}) {
+  const { enabled, status } = useUpdateCheck();
+  const { theme } = useAppTheme();
+  return (
+    <>
+      <Ionicons
+        name={focused ? 'settings' : 'settings-outline'}
+        color={color}
+        size={size}
+      />
+      {enabled && status === 'available' && (
+        <View
+          testID="settings-tab-update-dot"
+          style={[styles.updateDot, { backgroundColor: theme.colors.accent }]}
+        />
+      )}
+    </>
   );
 }
 
@@ -194,7 +229,7 @@ const MainTabs = createBottomTabNavigator({
       screen: SettingsScreen,
       options: {
         title: 'Settings',
-        tabBarIcon: tabIcon('settings', 'settings-outline'),
+        tabBarIcon: props => <SettingsTabIcon {...props} />,
       },
     },
   },
@@ -243,11 +278,13 @@ function AppNavigator() {
               <SessionToastListener />
               <LogSettingsProvider>
                 <LogsProvider>
-                  {/* Sheets portal here: above the navigator, inside every
-                      provider their content reads from. */}
-                  <BottomSheetModalProvider>
-                    <Navigation theme={navigationTheme} />
-                  </BottomSheetModalProvider>
+                  <UpdateCheckProvider>
+                    {/* Sheets portal here: above the navigator, inside every
+                        provider their content reads from. */}
+                    <BottomSheetModalProvider>
+                      <Navigation theme={navigationTheme} />
+                    </BottomSheetModalProvider>
+                  </UpdateCheckProvider>
                 </LogsProvider>
               </LogSettingsProvider>
             </TunnelSessionProvider>
@@ -272,6 +309,14 @@ function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  updateDot: {
+    position: 'absolute',
+    top: -1,
+    right: -3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
 });
 
 export default App;
