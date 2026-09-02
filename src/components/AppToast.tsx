@@ -65,7 +65,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, type, elevation } = theme;
+  const { colors, spacing, radius, typography, elevation } = theme;
   return StyleSheet.create({
     wrap: {
       position: 'absolute',
@@ -86,7 +86,7 @@ function createStyles(theme: AppTheme) {
       ...elevation.level2,
     },
     text: {
-      ...type.caption,
+      ...typography.caption,
       color: colors.textPrimary,
       textAlign: 'center',
     },

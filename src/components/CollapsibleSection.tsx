@@ -44,7 +44,7 @@ export default function CollapsibleSection({
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, type, elevation } = theme;
+  const { colors, spacing, radius, typography, elevation } = theme;
   return StyleSheet.create({
     section: {
       marginBottom: spacing.lg,
@@ -64,11 +64,11 @@ function createStyles(theme: AppTheme) {
       marginBottom: spacing.md,
     },
     title: {
-      ...type.title,
+      ...typography.title,
       color: colors.textPrimary,
     },
     chevron: {
-      ...type.body,
+      ...typography.body,
       color: colors.textSecondary,
     },
   });

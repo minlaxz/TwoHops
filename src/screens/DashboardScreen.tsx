@@ -233,7 +233,7 @@ export default function DashboardScreen() {
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, type, elevation } = theme;
+  const { colors, spacing, radius, typography, elevation } = theme;
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -250,13 +250,13 @@ function createStyles(theme: AppTheme) {
       alignItems: 'center',
     },
     detailLabel: {
-      ...type.body,
+      ...typography.body,
       color: colors.textSecondary,
       textAlign: 'center',
       marginBottom: spacing.md,
     },
     hint: {
-      ...type.caption,
+      ...typography.caption,
       marginTop: spacing.sm,
       color: colors.textSecondary,
       textAlign: 'center',
@@ -275,7 +275,7 @@ function createStyles(theme: AppTheme) {
       ...elevation.level2,
     },
     errorHint: {
-      ...type.caption,
+      ...typography.caption,
       marginTop: spacing.xs,
       color: colors.danger,
       textAlign: 'center',
@@ -324,14 +324,14 @@ function createStyles(theme: AppTheme) {
       backgroundColor: colors.background,
     },
     profileName: {
-      ...type.body,
+      ...typography.body,
       color: colors.textPrimary,
     },
     profileNameSelected: {
       fontWeight: '600',
     },
     sectionTitle: {
-      ...type.title,
+      ...typography.title,
       color: colors.textPrimary,
     },
   });

@@ -267,7 +267,7 @@ function DebugRows({
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, type, elevation } = theme;
+  const { colors, spacing, radius, typography, elevation } = theme;
   return StyleSheet.create({
     screen: {
       flex: 1,
@@ -306,7 +306,7 @@ function createStyles(theme: AppTheme) {
       backgroundColor: colors.background,
     },
     clearLabel: {
-      ...type.caption,
+      ...typography.caption,
       fontWeight: '600',
       color: colors.textPrimary,
     },
@@ -320,7 +320,7 @@ function createStyles(theme: AppTheme) {
       backgroundColor: colors.buttonPrimary,
     },
     segmentLabel: {
-      ...type.caption,
+      ...typography.caption,
       fontWeight: '600',
       color: colors.textPrimary,
     },
@@ -337,7 +337,7 @@ function createStyles(theme: AppTheme) {
       paddingBottom: spacing.sm,
     },
     logEmpty: {
-      ...type.caption,
+      ...typography.caption,
       color: colors.textSecondary,
     },
     logRow: {
@@ -346,17 +346,17 @@ function createStyles(theme: AppTheme) {
       borderBottomColor: colors.logBorder,
     },
     logTitle: {
-      ...type.caption,
+      ...typography.caption,
       fontWeight: '600',
       marginBottom: spacing.xs,
       color: colors.textPrimary,
     },
     logLine: {
-      ...type.caption,
+      ...typography.caption,
       color: colors.textPrimary,
     },
     logTime: {
-      ...type.caption,
+      ...typography.caption,
       color: colors.textSecondary,
       marginTop: spacing.xs,
     },

@@ -71,7 +71,10 @@ export default function SettingsScreen() {
                     ? styles.themeButtonActive
                     : styles.themeButtonInactive,
                 ]}
-                textStyles={styles.themeButtonText}
+                textStyles={[
+                  styles.themeButtonText,
+                  themePreference !== option && styles.themeButtonTextInactive,
+                ]}
                 title={option[0].toUpperCase() + option.slice(1)}
                 onPress={() => setThemePreference(option)}
               />
@@ -133,7 +136,7 @@ export default function SettingsScreen() {
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, type } = theme;
+  const { colors, spacing, radius, typography } = theme;
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
@@ -141,9 +144,8 @@ function createStyles(theme: AppTheme) {
       marginBottom: spacing.md,
     },
     rowLabel: {
-      ...type.body,
+      ...typography.body,
       flex: 1,
-      fontWeight: '500',
       color: colors.textPrimary,
     },
     rowButtons: {
@@ -154,7 +156,7 @@ function createStyles(theme: AppTheme) {
     },
     rowSpacer: { width: spacing.sm },
     description: {
-      ...type.caption,
+      ...typography.caption,
       color: colors.textSecondary,
       marginTop: spacing.md,
     },
@@ -170,12 +172,15 @@ function createStyles(theme: AppTheme) {
       backgroundColor: colors.buttonInactive,
     },
     themeButtonText: {
-      ...type.caption,
+      ...typography.caption,
       fontWeight: '600',
       color: colors.buttonPrimaryText,
     },
+    themeButtonTextInactive: {
+      color: colors.buttonInactiveText,
+    },
     rowValue: {
-      ...type.body,
+      ...typography.body,
       color: colors.textSecondary,
     },
   });

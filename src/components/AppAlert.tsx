@@ -109,7 +109,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, type, elevation } = theme;
+  const { colors, spacing, radius, typography, elevation } = theme;
   return StyleSheet.create({
     overlay: {
       flex: 1,
@@ -129,12 +129,12 @@ function createStyles(theme: AppTheme) {
       ...elevation.level2,
     },
     title: {
-      ...type.title,
+      ...typography.title,
       marginBottom: spacing.sm,
       color: colors.textPrimary,
     },
     message: {
-      ...type.body,
+      ...typography.body,
       color: colors.textSecondary,
       marginBottom: spacing.sm,
     },
@@ -149,7 +149,7 @@ function createStyles(theme: AppTheme) {
       marginLeft: spacing.sm,
     },
     buttonText: {
-      ...type.body,
+      ...typography.body,
       fontWeight: '600',
       color: colors.accent,
     },

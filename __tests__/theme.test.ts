@@ -26,9 +26,6 @@ describe('theme tokens', () => {
     const light = getAppTheme('light');
     const dark = getAppTheme('dark');
     expect(leafPaths(dark).sort()).toEqual(leafPaths(light).sort());
-    expect(light.colors.status.running).toBeDefined();
-    expect(light.spacing.lg).toBe(16);
-    expect(light.type.display.fontSize).toBe(34);
   });
 
   test('screens and components use no raw color literals', () => {

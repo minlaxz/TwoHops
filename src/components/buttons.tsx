@@ -44,7 +44,7 @@ export const TouchableOpacityLink: React.FC<CustomButtonProps> = ({
 };
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, type } = theme;
+  const { colors, spacing, radius, typography } = theme;
   return StyleSheet.create({
     button: {
       height: 50,
@@ -56,12 +56,12 @@ function createStyles(theme: AppTheme) {
       backgroundColor: colors.buttonPrimary,
     },
     buttonText: {
-      ...type.body,
+      ...typography.body,
       fontWeight: '600',
       color: colors.buttonPrimaryText,
     },
     link: {
-      ...type.body,
+      ...typography.body,
       textDecorationLine: 'underline',
       color: colors.link,
       textDecorationColor: colors.link,

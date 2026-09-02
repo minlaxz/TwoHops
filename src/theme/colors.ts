@@ -12,7 +12,7 @@ const radius = { sm: 8, md: 12, lg: 20, pill: 999 } as const;
 // display 34 / title 20 / body 15 / caption 13; weights: display bold,
 // title semibold, body and caption regular (callers bump to '600' for
 // emphasis, e.g. selected rows and button labels).
-const type = {
+const typography = {
   display: { fontSize: 34, lineHeight: 40, fontWeight: '700' },
   title: { fontSize: 20, lineHeight: 26, fontWeight: '600' },
   body: { fontSize: 15, lineHeight: 20, fontWeight: '400' },
@@ -35,6 +35,7 @@ export type AppTheme = {
     buttonPrimary: string;
     buttonPrimaryText: string;
     buttonInactive: string;
+    buttonInactiveText: string;
     switchTrackFalse: string;
     switchTrackTrue: string;
     switchThumbOn: string;
@@ -53,16 +54,16 @@ export type AppTheme = {
   };
   spacing: typeof spacing;
   radius: typeof radius;
-  type: typeof type;
+  typography: typeof typography;
   // Elevation levels: 0 flat, 1 resting card, 2 floating (FAB, toast).
   elevation: { level0: ViewStyle; level1: ViewStyle; level2: ViewStyle };
 };
 
-const LIGHT_SHADOW = '#000000';
-const DARK_SHADOW = '#000000';
+const SHADOW = '#000000';
 
-// Warm green-tinted neutrals; xanadu (#738678) for borders/inactive only —
-// it fails AA as text on white. Secondary text is #57655c (≥5.4:1).
+// Warm green-tinted neutrals; xanadu (#738678) only as the Stopped fill —
+// it fails AA as text on white. Secondary text is #57655c (≥5.4:1). Every
+// text/fill pair here was contrast-checked (≥4.5:1 text, ≥3:1 icons).
 const lightTheme: AppTheme = {
   isDark: false,
   colors: {
@@ -75,10 +76,11 @@ const lightTheme: AppTheme = {
     divider: '#e3e9e5',
     inputBackground: '#eef2ef',
     inputBackgroundStrong: '#e6ece8',
-    placeholder: '#6f7d74',
+    placeholder: '#617068',
     buttonPrimary: '#2a3c33',
     buttonPrimaryText: '#ffffff',
-    buttonInactive: '#738678',
+    buttonInactive: '#dfe6e2',
+    buttonInactiveText: '#141c18',
     switchTrackFalse: '#c3ccc6',
     switchTrackTrue: '#1b7d45',
     switchThumbOn: '#ffffff',
@@ -88,24 +90,24 @@ const lightTheme: AppTheme = {
     logBorder: '#e3e9e5',
     accent: '#1b7d45',
     onAccent: '#ffffff',
-    status: { stopped: '#738678', busy: '#c47a00', running: '#1b7d45' },
+    status: { stopped: '#738678', busy: '#b56f00', running: '#1b7d45' },
     overlay: 'rgba(20, 28, 24, 0.5)',
-    shadow: LIGHT_SHADOW,
+    shadow: SHADOW,
   },
   spacing,
   radius,
-  type,
+  typography,
   elevation: {
     level0: {},
     level1: {
-      shadowColor: LIGHT_SHADOW,
+      shadowColor: SHADOW,
       shadowOpacity: 0.06,
       shadowRadius: 4,
       shadowOffset: { width: 0, height: 2 },
       elevation: 1,
     },
     level2: {
-      shadowColor: LIGHT_SHADOW,
+      shadowColor: SHADOW,
       shadowOpacity: 0.2,
       shadowRadius: 6,
       shadowOffset: { width: 0, height: 3 },
@@ -132,6 +134,7 @@ const darkTheme: AppTheme = {
     buttonPrimary: '#4cd37a',
     buttonPrimaryText: '#131a17',
     buttonInactive: '#3a4a41',
+    buttonInactiveText: '#eef3ef',
     switchTrackFalse: '#3a4a41',
     switchTrackTrue: '#4cd37a',
     switchThumbOn: '#eef3ef',
@@ -141,24 +144,24 @@ const darkTheme: AppTheme = {
     logBorder: '#26312c',
     accent: '#4cd37a',
     onAccent: '#131a17',
-    status: { stopped: '#4a5a51', busy: '#f2b544', running: '#4cd37a' },
+    status: { stopped: '#738678', busy: '#f2b544', running: '#4cd37a' },
     overlay: 'rgba(0, 0, 0, 0.6)',
-    shadow: DARK_SHADOW,
+    shadow: SHADOW,
   },
   spacing,
   radius,
-  type,
+  typography,
   elevation: {
     level0: {},
     level1: {
-      shadowColor: DARK_SHADOW,
+      shadowColor: SHADOW,
       shadowOpacity: 0,
       shadowRadius: 0,
       shadowOffset: { width: 0, height: 0 },
       elevation: 0,
     },
     level2: {
-      shadowColor: DARK_SHADOW,
+      shadowColor: SHADOW,
       shadowOpacity: 0.4,
       shadowRadius: 8,
       shadowOffset: { width: 0, height: 4 },

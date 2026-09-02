@@ -313,7 +313,11 @@ export default function ServerScreen() {
                       ? styles.modeButtonActive
                       : styles.modeButtonInactive,
                   ]}
-                  textStyles={styles.modeButtonText}
+                  textStyles={[
+                    styles.modeButtonText,
+                    server.vpnProtocol !== 'Http/2' &&
+                      styles.modeButtonTextInactive,
+                  ]}
                   title="Http/2"
                   onPress={() => updateServer({ vpnProtocol: 'Http/2' })}
                 />
@@ -325,7 +329,11 @@ export default function ServerScreen() {
                       ? styles.modeButtonActive
                       : styles.modeButtonInactive,
                   ]}
-                  textStyles={styles.modeButtonText}
+                  textStyles={[
+                    styles.modeButtonText,
+                    server.vpnProtocol !== 'QUIC' &&
+                      styles.modeButtonTextInactive,
+                  ]}
                   title="QUIC"
                   onPress={() => updateServer({ vpnProtocol: 'QUIC' })}
                 />
@@ -342,7 +350,10 @@ export default function ServerScreen() {
                       ? styles.modeButtonActive
                       : styles.modeButtonInactive,
                   ]}
-                  textStyles={styles.modeButtonText}
+                  textStyles={[
+                    styles.modeButtonText,
+                    routingMode !== 'general' && styles.modeButtonTextInactive,
+                  ]}
                   title="General"
                   onPress={() => updateProfile({ routingMode: 'general' })}
                 />
@@ -355,7 +366,11 @@ export default function ServerScreen() {
                       ? styles.modeButtonActive
                       : styles.modeButtonInactive,
                   ]}
-                  textStyles={styles.modeButtonText}
+                  textStyles={[
+                    styles.modeButtonText,
+                    routingMode !== 'selective' &&
+                      styles.modeButtonTextInactive,
+                  ]}
                   title="Selective"
                   onPress={() => updateProfile({ routingMode: 'selective' })}
                 />
@@ -460,9 +475,9 @@ export default function ServerScreen() {
 }
 
 function createStyles(theme: AppTheme) {
-  const { colors, spacing, radius, type, elevation } = theme;
+  const { colors, spacing, radius, typography, elevation } = theme;
   const input = {
-    ...type.body,
+    ...typography.body,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.sm,
@@ -483,7 +498,7 @@ function createStyles(theme: AppTheme) {
       ...elevation.level1,
     },
     sectionTitle: {
-      ...type.title,
+      ...typography.title,
       marginBottom: spacing.md,
       color: colors.textPrimary,
     },
@@ -493,24 +508,24 @@ function createStyles(theme: AppTheme) {
       alignItems: 'center',
     },
     advancedChevron: {
-      ...type.body,
+      ...typography.body,
       color: colors.textSecondary,
       marginBottom: spacing.md,
     },
     title: {
-      ...type.title,
+      ...typography.title,
       marginBottom: spacing.sm,
       textAlign: 'center',
       color: colors.textPrimary,
     },
     inputLabel: {
-      ...type.caption,
+      ...typography.caption,
       marginBottom: spacing.xs,
       color: colors.textSecondary,
     },
     input,
     inputDescription: {
-      ...type.caption,
+      ...typography.caption,
       color: colors.textSecondary,
       marginBottom: spacing.md,
       textAlign: 'justify',
@@ -529,9 +544,8 @@ function createStyles(theme: AppTheme) {
       marginBottom: spacing.md,
     },
     rowLabel: {
-      ...type.body,
+      ...typography.body,
       flex: 1,
-      fontWeight: '500',
       color: colors.textPrimary,
     },
     rowButtons: {
@@ -582,9 +596,12 @@ function createStyles(theme: AppTheme) {
       backgroundColor: colors.buttonInactive,
     },
     modeButtonText: {
-      ...type.caption,
+      ...typography.caption,
       fontWeight: '600',
       color: colors.buttonPrimaryText,
+    },
+    modeButtonTextInactive: {
+      color: colors.buttonInactiveText,
     },
   });
 }
