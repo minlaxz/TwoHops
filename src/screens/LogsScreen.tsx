@@ -1,4 +1,10 @@
-import React, { useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { Text, View, FlatList, StyleSheet } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -13,6 +19,8 @@ import { useAppToast } from '../components/AppToast';
 import { displayState } from '../services/tunnelSession';
 import { addLocalRule, offerableLocalRule } from '../services/setupProfile';
 import { registrableDomain } from '../services/routingRules';
+import { probeDirect } from '../services/directProbe';
+import type { ProbeResult } from '../services/directProbe';
 import type { DebugEntry } from '../services/tunnelSession';
 import type { QueryLogRow } from '../types';
 import type { AppTheme } from '../theme/colors';
@@ -255,7 +263,28 @@ type RowsProps<T extends object> = Pick<
 function TrafficRows(props: RowsProps<QueryLogRow>) {
   const { styles } = props;
   const { profile, selectedId, saveProfile } = useSetupProfile();
+  const { trafficLogs } = useLogs();
   const toast = useAppToast();
+  // Direct Probe verdicts per row (#99), keyed like the list. On-demand only;
+  // never probe every bypassed domain automatically.
+  const [probes, setProbes] = useState<
+    Record<string, ProbeResult | 'testing'>
+  >({});
+  // Clear drops the rows, so drop their verdicts too.
+  useEffect(
+    () => trafficLogs.subscribe(() => {
+      if (trafficLogs.getRows().length === 0) {
+        setProbes({});
+      }
+    }),
+    [trafficLogs],
+  );
+  const testDirect = async (row: QueryLogRow, domain: string) => {
+    const key = rowKey(row);
+    setProbes(prev => ({ ...prev, [key]: 'testing' }));
+    const result = await probeDirect(domain);
+    setProbes(prev => ({ ...prev, [key]: result }));
+  };
   // One-tap add of a bypassed domain to the Selected Profile's Local Rules
   // (issue #98). Eligibility lives in `offerableLocalRule`.
   const addRule = (rule: string) => {
@@ -276,6 +305,8 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
       renderBody={log => {
         const rule =
           selectedId === null ? null : offerableLocalRule(profile, log);
+        const probe = probes[rowKey(log)];
+        const domain = log.domain ?? '';
         return (
           <>
             <Text style={styles.logTitle}>
@@ -287,17 +318,41 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
             </Text>
             <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
             {rule !== null ? (
-              <PressableScale
-                testID={`logs-add-rule-${rule}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Add ${rule} to Local Rules`}
-                style={styles.addRuleButton}
-                onPress={() => addRule(rule)}
-              >
-                <Text style={styles.addRuleLabel}>
-                  Add {rule} to Local Rules
-                </Text>
-              </PressableScale>
+              <>
+                {probe === 'failed' ? (
+                  <Text style={styles.probeVerdict}>
+                    Direct failed. Add to rules?
+                  </Text>
+                ) : probe === 'works' ? (
+                  <Text style={styles.probeVerdict}>Direct works.</Text>
+                ) : null}
+                <View style={styles.rowActions}>
+                  <PressableScale
+                    testID={`logs-add-rule-${rule}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add ${rule} to Local Rules`}
+                    style={styles.addRuleButton}
+                    onPress={() => addRule(rule)}
+                  >
+                    <Text style={styles.addRuleLabel}>
+                      Add {rule} to Local Rules
+                    </Text>
+                  </PressableScale>
+                  <PressableScale
+                    testID={`logs-test-direct-${domain}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Test direct connection to ${domain}`}
+                    accessibilityState={{ busy: probe === 'testing' }}
+                    disabled={probe === 'testing'}
+                    style={styles.addRuleButton}
+                    onPress={() => testDirect(log, domain)}
+                  >
+                    <Text style={styles.addRuleLabel}>
+                      {probe === 'testing' ? 'Testing…' : 'Test direct'}
+                    </Text>
+                  </PressableScale>
+                </View>
+              </>
             ) : null}
           </>
         );
@@ -428,6 +483,16 @@ function createStyles(theme: AppTheme) {
     addRuleLabel: {
       ...typography.caption,
       fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    rowActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    probeVerdict: {
+      ...typography.caption,
+      marginTop: spacing.sm,
       color: colors.textPrimary,
     },
   });

@@ -17,6 +17,12 @@ import type { QueryLogRow } from '../src/types';
 
 // Not exercising the real adapter; keep the native registry out of this test.
 jest.mock('../src/services/vpn', () => ({ VpnClient: {} }));
+// Direct Probe (#99) hits the network; the screen only needs its verdict.
+jest.mock('../src/services/directProbe', () => ({
+  probeDirect: jest.fn(),
+}));
+import { probeDirect } from '../src/services/directProbe';
+const probeMock = probeDirect as jest.MockedFunction<typeof probeDirect>;
 jest.mock('react-native-config', () => ({
   ENV_SERVER_NAME: 'env-server',
   ENV_PROTOCOL: 'QUIC',
@@ -121,7 +127,12 @@ async function mount(trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 })) {
     renderer.root
       .findAll(node => node.props.testID === 'app-toast')
       .map(node => node.findAllByType(Text)[0]?.props.children)[0];
-  return { rowsAnimating, rowsShown, press, addButtons, toastText };
+  const texts = () =>
+    renderer.root
+      .findAllByType(Text)
+      .map(node => String(node.props.children))
+      .flat();
+  return { rowsAnimating, rowsShown, press, addButtons, toastText, texts };
 }
 
 async function seedProfiles(...args: Parameters<typeof profileList>) {
@@ -205,5 +216,41 @@ describe('add bypassed domain to Local Rules (#98)', () => {
     generalLogs.append(trafficRow(now(), { domain: 'y.com' }));
     const general = await mount(generalLogs);
     expect(general.addButtons()).toHaveLength(0);
+  });
+});
+
+describe('Test direct probe for a bypassed domain (#99)', () => {
+  test('press probes the row domain; failure says so and keeps Add; success says works', async () => {
+    await seedProfiles('selective');
+    const trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 });
+    trafficLogs.append(trafficRow(new Date(), { domain: 'www.facebook.com' }));
+    const { press, addButtons, texts } = await mount(trafficLogs);
+    expect(texts()).toContain('Test direct');
+
+    probeMock.mockResolvedValueOnce('failed');
+    await press('logs-test-direct-www.facebook.com');
+    expect(probeMock).toHaveBeenCalledWith('www.facebook.com');
+    expect(texts()).toContain('Direct failed. Add to rules?');
+    expect(addButtons()).toHaveLength(1);
+
+    probeMock.mockResolvedValueOnce('works');
+    await press('logs-test-direct-www.facebook.com');
+    expect(texts()).toContain('Direct works.');
+
+    // Clear drops the rows and their verdicts.
+    await press('logs-clear');
+    await ReactTestRenderer.act(async () => {
+      trafficLogs.append(trafficRow(new Date(), { domain: 'www.facebook.com' }));
+    });
+    expect(texts()).not.toContain('Direct works.');
+    expect(texts()).toContain('Test direct');
+  });
+
+  test('not offered where Add is not offered (tunnel rows, general mode)', async () => {
+    await seedProfiles('general');
+    const trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 });
+    trafficLogs.append(trafficRow(new Date(), { domain: 'y.com' }));
+    const { texts } = await mount(trafficLogs);
+    expect(texts()).not.toContain('Test direct');
   });
 });
