@@ -90,6 +90,10 @@ _Avoid_: ui state, simple state, status label
 A transient, self-dismissing notice announcing a state transition or a refused action ("Connected", "Stop the tunnel to switch profiles"). Global — any screen can raise one. Not for persistent state: anything the user must still know a minute later belongs elsewhere.
 _Avoid_: snackbar, inline notice, hint
 
+**Direct Probe**:
+An on-demand `HEAD https://<domain>` from the app, started from a bypassed Traffic Log row, to learn whether the domain answers when reached direct. Any HTTP status is "works"; reset, DNS failure or a 5 s timeout is "failed" and offers the Local Rule. Never runs automatically: the core gives no failure signal for bypass connections, so this is the only detection that does not guess. DPI that serves a fake page passes as "works".
+_Avoid_: connectivity check, ping, health check
+
 **Traffic Logs**:
 The per-connection query rows the native tunnel emits (action, protocol, domain, addresses, time). Collected globally from tunnel start into a capped buffer, independent of which screen is open. Deliberately outside the Tunnel Session. Cleared on each connect command and by hand from the Logs screen; the recovery states never clear them.
 _Avoid_: query log (in UI copy), connection log
