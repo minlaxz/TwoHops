@@ -3,7 +3,7 @@
 ## Language
 
 **Setup Profile**:
-One named, identified tunnel configuration: the user's Server Credentials, DNS Servers, Routing Mode, Local Rules, Remote Rules URL, plus the Imported Rules cache. The app keeps many; each is one document.
+One named, identified tunnel configuration: the user's Server Credentials, Tunnel DNS Servers, Bypass DNS Servers, Bypass DNS Route, Routing Mode, Local Rules, Remote Rules URL, plus the Imported Rules cache. The app keeps many; each is one document.
 _Avoid_: setup config, settings, saved profile
 
 **Profile List**:
@@ -22,9 +22,25 @@ _Avoid_: profile dropdown, profile menu, switcher
 The server identity and login used to start the tunnel: name, IP address, domain, login, password, protocol. Name is the Profile's one and only name: what the Profile List, Dashboard and Profile Picker show, and the label the native tunnel is started with. It plays no part in the connection itself. There is no separate display name.
 _Avoid_: server config
 
-**DNS Servers**:
-The list of DNS server addresses the tunnel uses. Part of the Setup Profile; the text field is only a display of the list.
-_Avoid_: dns servers text
+**Tunnel DNS Servers**:
+The list of resolvers the tunnel uses for Tunnel-side Queries. Reached through the tunnel. Part of the Setup Profile; the text field is only a display of the list. Empty means the core's own default resolvers.
+_Avoid_: DNS Servers (unqualified), dns servers text, dns upstreams (in UI copy)
+
+**Bypass DNS Servers**:
+The list of resolvers the tunnel uses for Bypass-side Queries. Part of the Setup Profile; the text field is only a display of the list. Empty means the device's system resolvers, as before this list existed, and hides the Bypass DNS Route control.
+_Avoid_: direct DNS, system DNS override
+
+**Bypass DNS Route**:
+Which network a Bypass-side Query travels on to reach the Bypass DNS Servers: `direct` (the device's own network, the default) or `tunnel` (through the tunnel, for networks that block public resolvers). Only the query changes path; the connection to the answer still goes direct. Meaningless while Bypass DNS Servers is empty.
+_Avoid_: dns via tunnel, dns detour
+
+**Tunnel-side Query**:
+A DNS query whose name the Effective Rules and Routing Mode place inside the tunnel. Answered by the Tunnel DNS Servers. The connection that follows goes through the tunnel.
+_Avoid_: included query, routed query
+
+**Bypass-side Query**:
+A DNS query whose name the Effective Rules and Routing Mode place outside the tunnel. Answered by the Bypass DNS Servers. The connection that follows goes direct.
+_Avoid_: excluded query, direct query
 
 **Routing Rule**:
 One domain, IP address, or CIDR that the tunnel excludes or includes, depending on the Routing Mode.
@@ -48,7 +64,7 @@ Local Rules merged with Imported Rules, deduplicated, local first. Derived on de
 _Avoid_: merged rules text, rules text
 
 **Profile Link**:
-A `twohops:` URL that carries Server Credentials (except the server name), DNS Servers and a Remote Rules URL. Applying one fills profile fields without any network access; it never overwrites a stored Profile — on the profile screen it patches the Profile Draft in place, defaulting the missing server name from the domain.
+A `twohops:` URL that carries Server Credentials (except the server name), Tunnel DNS Servers, Bypass DNS Servers, Bypass DNS Route and a Remote Rules URL. Applying one fills profile fields without any network access; it never overwrites a stored Profile — on the profile screen it patches the Profile Draft in place, defaulting the missing server name from the domain.
 _Avoid_: auto fill, import URL
 
 **Share Profile**:
@@ -64,7 +80,7 @@ Whether the Setup Profile has every field needed to start the tunnel: name, IP a
 _Avoid_: is profile complete (boolean only)
 
 **Tunnel Start Input**:
-The value handed to the native tunnel, derived from the Setup Profile: Server Credentials, DNS Servers, Routing Mode and Effective Rules. Distinct from Profile Completeness — a profile can be complete yet unable to start.
+The value handed to the native tunnel, derived from the Setup Profile: Server Credentials, Tunnel DNS Servers, Bypass DNS Servers, Bypass DNS Route, Routing Mode and Effective Rules. Distinct from Profile Completeness — a profile can be complete yet unable to start.
 
 **Tunnel Session**:
 The one long-lived object that owns the tunnel's lifecycle: its current Session State, the last Session Error, and the connect / disconnect commands. Exists always; "disconnected" is one of its states, not its absence. Takes a Tunnel Start Input; knows nothing about the Setup Profile.
