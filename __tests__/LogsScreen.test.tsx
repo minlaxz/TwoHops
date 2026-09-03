@@ -84,12 +84,14 @@ function profileList(
   };
 }
 
-async function mount(trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 })) {
+async function mount(
+  trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 }),
+  debugLogs = createLogBuffer<DebugEntry>({ cap: 10 }),
+) {
   await AsyncStorage.setItem(
     '@twohops/logs/settings',
     JSON.stringify({ trafficLoggingEnabled: true, debugLoggingEnabled: true }),
   );
-  const debugLogs = createLogBuffer<DebugEntry>({ cap: 10 });
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   await ReactTestRenderer.act(async () => {
     renderer = ReactTestRenderer.create(
@@ -325,10 +327,18 @@ describe('scroll to top (#103)', () => {
     scrollToOffset.mockRestore();
   });
 
-  test('debug tab has it too', async () => {
-    const { press, scrollTo, scrollTopButton } = await mount();
+  test('debug tab has it too; hidden once the list is cleared', async () => {
+    const debugLogs = createLogBuffer<DebugEntry>({ cap: 10 });
+    debugLogs.append({ at: new Date(), message: 'hello' });
+    const { press, scrollTo, scrollTopButton } = await mount(
+      undefined,
+      debugLogs,
+    );
     await press('logs-segment-debug');
     await scrollTo(1200);
     expect(scrollTopButton()).toHaveLength(1);
+    // Clear empties the list without a scroll event.
+    await press('logs-clear');
+    expect(scrollTopButton()).toHaveLength(0);
   });
 });

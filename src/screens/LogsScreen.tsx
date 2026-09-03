@@ -265,7 +265,7 @@ function LogRows<T extends object>({
       />
       <ScrollToTopButton
         testID="logs-scroll-top"
-        visible={farDown}
+        visible={farDown && logs.length > 0}
         onPress={() =>
           list.current?.scrollToOffset({ offset: 0, animated: true })
         }
@@ -340,11 +340,11 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
             {rule !== null ? (
               <RowControl
                 domain={domain}
+                rule={rule}
                 probe={probe}
                 styles={styles}
                 onTest={() => testDirect(log, domain)}
                 onAdd={() => addRule(rule)}
-                addTestID={`logs-add-rule-${rule}`}
               />
             ) : null}
           </>
@@ -358,18 +358,19 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
 // Add offer only after a failed probe, nothing but the verdict on success.
 function RowControl({
   domain,
+  rule,
   probe,
   styles,
   onTest,
   onAdd,
-  addTestID,
 }: {
   domain: string;
+  /** The Local Rule Add would append (collapsed domain). */
+  rule: string;
   probe: ProbeResult | 'testing' | undefined;
   styles: LogsScreenStyles;
   onTest: () => void;
   onAdd: () => void;
-  addTestID: string;
 }) {
   if (probe === 'works') {
     return <Text style={styles.probeVerdict}>Direct works.</Text>;
@@ -379,9 +380,9 @@ function RowControl({
       <>
         <Text style={styles.probeVerdict}>Direct failed.</Text>
         <PressableScale
-          testID={addTestID}
+          testID={`logs-add-rule-${rule}`}
           accessibilityRole="button"
-          accessibilityLabel={`Add ${domain} to Local Rules`}
+          accessibilityLabel={`Add ${rule} to Local Rules`}
           style={styles.addRuleButton}
           onPress={onAdd}
         >
