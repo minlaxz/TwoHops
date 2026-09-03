@@ -155,6 +155,18 @@ function rowKey(row: object): string {
   return key;
 }
 
+// A row animates in at most once. FlatList virtualisation remounts rows that
+// scroll back into view and a segment switch remounts the whole list; without
+// this every post-mount row would replay its entry each time (issue #97).
+const animatedRows = new WeakSet<object>();
+function shouldAnimate(row: object, stamp: Date, mountedAt: number): boolean {
+  if (stamp.getTime() <= mountedAt || animatedRows.has(row)) {
+    return false;
+  }
+  animatedRows.add(row);
+  return true;
+}
+
 /** Fades and slides a freshly mounted log row into place (issue #70). It is
  * decoration, so reduce-motion mounts the row in place (issue #80). */
 function AnimatedLogRow({
@@ -194,35 +206,65 @@ function toWildcardDomain(domain: string): string {
   return `*.${parts.slice(-2).join('.')}`;
 }
 
-type RowsProps<T> = {
+type LogRowsProps<T extends object> = {
+  testID: string;
   logs: readonly T[];
   styles: LogsScreenStyles;
   /** Screen mount time (ms); rows stamped after it animate in. */
   mountedAt: number;
+  emptyText: string;
+  stampOf: (row: T) => Date;
+  renderBody: (row: T) => React.ReactNode;
 };
 
 // FlatList renders only the visible window; a ScrollView + map mounted every
 // buffered row (up to 250) at once, which is what made opening the tab slow
 // on low-end devices (issue #97).
-function TrafficRows({ logs, styles, mountedAt }: RowsProps<QueryLogRow>) {
+function LogRows<T extends object>({
+  testID,
+  logs,
+  styles,
+  mountedAt,
+  emptyText,
+  stampOf,
+  renderBody,
+}: LogRowsProps<T>) {
   return (
     <FlatList
-      testID="logs-traffic-list"
+      testID={testID}
       style={styles.logScroll}
       contentContainerStyle={styles.logScrollContent}
       showsVerticalScrollIndicator
       data={logs}
       keyExtractor={rowKey}
-      ListEmptyComponent={
-        <Text style={styles.logEmpty}>
-          No Traffic Logs yet. Rows collect while the tunnel is running.
-        </Text>
-      }
+      ListEmptyComponent={<Text style={styles.logEmpty}>{emptyText}</Text>}
       renderItem={({ item: log }) => (
         <AnimatedLogRow
           style={styles.logRow}
-          animate={log.stamp.getTime() > mountedAt}
+          animate={shouldAnimate(log, stampOf(log), mountedAt)}
         >
+          {renderBody(log)}
+        </AnimatedLogRow>
+      )}
+    />
+  );
+}
+
+type RowsProps<T extends object> = Pick<
+  LogRowsProps<T>,
+  'logs' | 'styles' | 'mountedAt'
+>;
+
+function TrafficRows(props: RowsProps<QueryLogRow>) {
+  const { styles } = props;
+  return (
+    <LogRows
+      {...props}
+      testID="logs-traffic-list"
+      emptyText="No Traffic Logs yet. Rows collect while the tunnel is running."
+      stampOf={log => log.stamp}
+      renderBody={log => (
+        <>
           <Text style={styles.logTitle}>
             {log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain:{' '}
             {toWildcardDomain(log.domain ?? '-')}
@@ -231,30 +273,25 @@ function TrafficRows({ logs, styles, mountedAt }: RowsProps<QueryLogRow>) {
             {log.source} {'->'} {log.destination ?? 'unknown'}
           </Text>
           <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
-        </AnimatedLogRow>
+        </>
       )}
     />
   );
 }
 
-function DebugRows({ logs, styles, mountedAt }: RowsProps<DebugEntry>) {
+function DebugRows(props: RowsProps<DebugEntry>) {
+  const { styles } = props;
   return (
-    <FlatList
+    <LogRows
+      {...props}
       testID="logs-debug-list"
-      style={styles.logScroll}
-      contentContainerStyle={styles.logScrollContent}
-      showsVerticalScrollIndicator
-      data={logs}
-      keyExtractor={rowKey}
-      ListEmptyComponent={<Text style={styles.logEmpty}>No Debug Logs yet.</Text>}
-      renderItem={({ item: log }) => (
-        <AnimatedLogRow
-          style={styles.logRow}
-          animate={log.at.getTime() > mountedAt}
-        >
+      emptyText="No Debug Logs yet."
+      stampOf={log => log.at}
+      renderBody={log => (
+        <>
           <Text style={styles.logLine}>{log.message}</Text>
           <Text style={styles.logTime}>{log.at.toISOString()}</Text>
-        </AnimatedLogRow>
+        </>
       )}
     />
   );

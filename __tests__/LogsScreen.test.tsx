@@ -37,7 +37,7 @@ function trafficRow(stamp: Date): QueryLogRow {
 async function mount(trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 })) {
   await AsyncStorage.setItem(
     '@twohops/logs/settings',
-    JSON.stringify({ trafficLoggingEnabled: true }),
+    JSON.stringify({ trafficLoggingEnabled: true, debugLoggingEnabled: true }),
   );
   const debugLogs = createLogBuffer<DebugEntry>({ cap: 10 });
   let renderer!: ReactTestRenderer.ReactTestRenderer;
@@ -62,7 +62,11 @@ async function mount(trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 })) {
       .length;
   const rowsShown = () =>
     renderer.root.findByType(FlatList).props.data.length;
-  return { rowsAnimating, rowsShown };
+  const press = (testID: string) =>
+    ReactTestRenderer.act(async () => {
+      renderer.root.findByProps({ testID }).props.onPress();
+    });
+  return { rowsAnimating, rowsShown, press };
 }
 
 beforeEach(() => AsyncStorage.clear());
@@ -81,6 +85,22 @@ test('rows already buffered mount in place; rows appended after open animate (#9
   });
   expect(rowsShown()).toBe(3);
   expect(rowsAnimating()).toBe(1);
+});
+
+test('a row animates once: remounting the list does not replay it (#97)', async () => {
+  const trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 });
+  const { rowsAnimating, rowsShown, press } = await mount(trafficLogs);
+  await ReactTestRenderer.act(async () => {
+    trafficLogs.append(trafficRow(new Date(Date.now() + 1000)));
+  });
+  expect(rowsAnimating()).toBe(1);
+
+  // Segment switch remounts the FlatList (FlatList virtualisation does the
+  // same to rows scrolled back into view); neither may replay the entry.
+  await press('logs-segment-debug');
+  await press('logs-segment-traffic');
+  expect(rowsShown()).toBe(1);
+  expect(rowsAnimating()).toBe(0);
 });
 
 test('empty buffer shows the empty copy', async () => {
