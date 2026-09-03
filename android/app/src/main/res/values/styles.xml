@@ -1,9 +1,17 @@
 <resources>
 
-    <!-- Base application theme. -->
+    <!-- Base application theme. Plain window background: any window-level gap
+         during screen transitions shows this colour, not the splash artwork. -->
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <!-- Customize your theme here. -->
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+        <item name="android:windowBackground">@color/twohops_splash_background</item>
+    </style>
+
+    <!-- Cold-start theme on MainActivity. MainActivity.onCreate swaps to
+         AppTheme before super.onCreate, so the splash only shows until the
+         React root view draws. -->
+    <style name="SplashTheme" parent="AppTheme">
         <item name="android:windowBackground">@drawable/splash_background</item>
     </style>
 

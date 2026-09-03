@@ -208,6 +208,7 @@ const MainTabs = createBottomTabNavigator({
       tabBarActiveTintColor: theme.colors.accent,
       tabBarInactiveTintColor: theme.colors.textSecondary,
       sceneStyle: { backgroundColor: theme.colors.background },
+      animation: 'shift',
     };
   },
   screens: {
@@ -241,6 +242,7 @@ const RootStack = createNativeStackNavigator({
     return {
       ...headerOptions(theme),
       contentStyle: { backgroundColor: theme.colors.background },
+      animation: 'slide_from_right',
     };
   },
   screens: {

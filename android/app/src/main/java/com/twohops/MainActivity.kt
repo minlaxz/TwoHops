@@ -1,6 +1,8 @@
 package com.twohops
 
 import android.os.Bundle
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import com.swmansion.rnscreens.fragment.restoration.RNScreensFragmentFactory
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -18,6 +20,20 @@ class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     supportFragmentManager.fragmentFactory = RNScreensFragmentFactory()
     super.onCreate(savedInstanceState)
+    // SplashTheme (manifest) keeps the splash artwork as the window background
+    // until the React root view has laid out real content, so cold start stays
+    // seamless. Then swap to a plain colour so screen transitions never bleed
+    // the splash through a window-level gap.
+    val content = findViewById<ViewGroup>(android.R.id.content)
+    content.viewTreeObserver.addOnGlobalLayoutListener(
+        object : ViewTreeObserver.OnGlobalLayoutListener {
+          override fun onGlobalLayout() {
+            val root = content.getChildAt(0) as? ViewGroup ?: return
+            if (root.childCount == 0) return
+            window.setBackgroundDrawableResource(R.color.twohops_splash_background)
+            content.viewTreeObserver.removeOnGlobalLayoutListener(this)
+          }
+        })
   }
 
   /**
