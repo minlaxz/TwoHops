@@ -6,11 +6,13 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import { Text, View, FlatList, StyleSheet } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import Animated, {
   FadeInDown,
   useReducedMotion,
 } from 'react-native-reanimated';
 import PressableScale from '../components/PressableScale';
+import ScrollToTopButton from '../components/ScrollToTopButton';
 import { useLogs } from '../context/LogsContext';
 import { useLogSettings } from '../context/LogSettingsContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
@@ -109,13 +111,11 @@ export default function LogsScreen() {
             </PressableScale>
           ) : null}
         </View>
-        <View style={styles.logScrollContainer}>
-          {shownSegment === 'traffic' ? (
-            <TrafficRows logs={traffic} styles={styles} mountedAt={mountedAt} />
-          ) : (
-            <DebugRows logs={debug} styles={styles} mountedAt={mountedAt} />
-          )}
-        </View>
+        {shownSegment === 'traffic' ? (
+          <TrafficRows logs={traffic} styles={styles} mountedAt={mountedAt} />
+        ) : (
+          <DebugRows logs={debug} styles={styles} mountedAt={mountedAt} />
+        )}
       </View>
     </View>
   );
@@ -234,24 +234,43 @@ function LogRows<T extends object>({
   stampOf,
   renderBody,
 }: LogRowsProps<T>) {
+  const list = useRef<FlatList<T>>(null);
+  // Scroll-to-top shows once the list is more than a screen down (#103).
+  const [farDown, setFarDown] = useState(false);
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement } = e.nativeEvent;
+    setFarDown(contentOffset.y > layoutMeasurement.height);
+  };
   return (
-    <FlatList
-      testID={testID}
-      style={styles.logScroll}
-      contentContainerStyle={styles.logScrollContent}
-      showsVerticalScrollIndicator
-      data={logs}
-      keyExtractor={rowKey}
-      ListEmptyComponent={<Text style={styles.logEmpty}>{emptyText}</Text>}
-      renderItem={({ item: log }) => (
-        <AnimatedLogRow
-          style={styles.logRow}
-          animate={shouldAnimate(log, stampOf(log), mountedAt)}
-        >
-          {renderBody(log)}
-        </AnimatedLogRow>
-      )}
-    />
+    <View style={styles.logScrollContainer}>
+      <FlatList
+        ref={list}
+        testID={testID}
+        style={styles.logScroll}
+        contentContainerStyle={styles.logScrollContent}
+        showsVerticalScrollIndicator
+        onScroll={onScroll}
+        scrollEventThrottle={100}
+        data={logs}
+        keyExtractor={rowKey}
+        ListEmptyComponent={<Text style={styles.logEmpty}>{emptyText}</Text>}
+        renderItem={({ item: log }) => (
+          <AnimatedLogRow
+            style={styles.logRow}
+            animate={shouldAnimate(log, stampOf(log), mountedAt)}
+          >
+            {renderBody(log)}
+          </AnimatedLogRow>
+        )}
+      />
+      <ScrollToTopButton
+        testID="logs-scroll-top"
+        visible={farDown}
+        onPress={() =>
+          list.current?.scrollToOffset({ offset: 0, animated: true })
+        }
+      />
+    </View>
   );
 }
 
@@ -319,46 +338,73 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
             </Text>
             <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
             {rule !== null ? (
-              <>
-                {probe === 'failed' ? (
-                  <Text style={styles.probeVerdict}>
-                    Direct failed. Add to rules?
-                  </Text>
-                ) : probe === 'works' ? (
-                  <Text style={styles.probeVerdict}>Direct works.</Text>
-                ) : null}
-                <View style={styles.rowActions}>
-                  <PressableScale
-                    testID={`logs-add-rule-${rule}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Add ${rule} to Local Rules`}
-                    style={styles.addRuleButton}
-                    onPress={() => addRule(rule)}
-                  >
-                    <Text style={styles.addRuleLabel}>
-                      Add {rule} to Local Rules
-                    </Text>
-                  </PressableScale>
-                  <PressableScale
-                    testID={`logs-test-direct-${domain}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Test direct connection to ${domain}`}
-                    accessibilityState={{ busy: probe === 'testing' }}
-                    disabled={probe === 'testing'}
-                    style={styles.addRuleButton}
-                    onPress={() => testDirect(log, domain)}
-                  >
-                    <Text style={styles.addRuleLabel}>
-                      {probe === 'testing' ? 'Testing…' : 'Test direct'}
-                    </Text>
-                  </PressableScale>
-                </View>
-              </>
+              <RowControl
+                domain={domain}
+                probe={probe}
+                styles={styles}
+                onTest={() => testDirect(log, domain)}
+                onAdd={() => addRule(rule)}
+                addTestID={`logs-add-rule-${rule}`}
+              />
             ) : null}
           </>
         );
       }}
     />
+  );
+}
+
+// One control per bypassed row (#103): the probe while idle/testing, the
+// Add offer only after a failed probe, nothing but the verdict on success.
+function RowControl({
+  domain,
+  probe,
+  styles,
+  onTest,
+  onAdd,
+  addTestID,
+}: {
+  domain: string;
+  probe: ProbeResult | 'testing' | undefined;
+  styles: LogsScreenStyles;
+  onTest: () => void;
+  onAdd: () => void;
+  addTestID: string;
+}) {
+  if (probe === 'works') {
+    return <Text style={styles.probeVerdict}>Direct works.</Text>;
+  }
+  if (probe === 'failed') {
+    return (
+      <>
+        <Text style={styles.probeVerdict}>Direct failed.</Text>
+        <PressableScale
+          testID={addTestID}
+          accessibilityRole="button"
+          accessibilityLabel={`Add ${domain} to Local Rules`}
+          style={styles.addRuleButton}
+          onPress={onAdd}
+        >
+          <Text style={styles.addRuleLabel}>Add to Local Rules</Text>
+        </PressableScale>
+      </>
+    );
+  }
+  const testing = probe === 'testing';
+  return (
+    <PressableScale
+      testID={`logs-test-direct-${domain}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Test direct connection to ${domain}`}
+      accessibilityState={{ busy: testing }}
+      disabled={testing}
+      style={styles.addRuleButton}
+      onPress={onTest}
+    >
+      <Text style={styles.addRuleLabel}>
+        {testing ? 'Testing…' : 'Test direct'}
+      </Text>
+    </PressableScale>
   );
 }
 
@@ -485,11 +531,6 @@ function createStyles(theme: AppTheme) {
       ...typography.caption,
       fontWeight: '600',
       color: colors.textPrimary,
-    },
-    rowActions: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: spacing.sm,
     },
     probeVerdict: {
       ...typography.caption,

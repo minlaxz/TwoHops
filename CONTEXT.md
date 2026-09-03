@@ -91,7 +91,7 @@ A transient, self-dismissing notice announcing a state transition or a refused a
 _Avoid_: snackbar, inline notice, hint
 
 **Direct Probe**:
-An on-demand `HEAD https://<domain>` from the app, started from a bypassed Traffic Log row, to learn whether the domain answers when reached direct. Any HTTP status is "works"; reset, DNS failure or a 5 s timeout is "failed" and offers the Local Rule. Never runs automatically: the core gives no failure signal for bypass connections, so this is the only detection that does not guess. DPI that serves a fake page passes as "works".
+An on-demand `HEAD https://<domain>` from the app, started from a bypassed Traffic Log row, to learn whether the domain answers when reached direct. Any HTTP status is "works"; reset, DNS failure or a 5 s timeout is "failed" and offers the Local Rule. A row shows one control at a time: the probe, then only on failure the offer; "works" leaves a verdict and no control. Never runs automatically: the core gives no failure signal for bypass connections, so this is the only detection that does not guess. DPI that serves a fake page passes as "works".
 _Avoid_: connectivity check, ping, health check
 
 **Traffic Logs**:
