@@ -646,6 +646,28 @@ test('tapping Edit while Running raises a Toast and stays on the Dashboard (#105
   });
 });
 
+test('tapping Edit while Busy is locked too (#105)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connecting');
+  });
+  await press(renderer, 'profile-edit');
+
+  expect(renderedText(renderer)).toContain(
+    'Stop the tunnel to edit the profile.',
+  );
+  expect(pressableByTestID(renderer, 'profile-save')).toBeNull();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
 test('tunnel start reads the Selected Profile', async () => {
   await AsyncStorage.setItem(
     PROFILES_STORAGE_KEY,

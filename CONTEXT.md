@@ -83,7 +83,7 @@ The window after a connect or disconnect command during which the Tunnel Session
 _Avoid_: state probe, sync
 
 **Display State**:
-The UI-facing collapse of Session State into three values: Stopped (`disconnected`), Busy (`connecting`, `disconnecting`), Running (`connected` and the recovery states, which add a detail label such as "Reconnecting…"). The play/stop control and profile-switch lock follow the Display State, never a raw Session State. Never rendered as a status caption: the connect control's appearance carries the persistent state, Toasts announce transitions, and only the recovery detail label stays on screen while recovery lasts.
+The UI-facing collapse of Session State into three values: Stopped (`disconnected`), Busy (`connecting`, `disconnecting`), Running (`connected` and the recovery states, which add a detail label such as "Reconnecting…"). The play/stop control and the profile-switch and Edit locks follow the Display State, never a raw Session State. Never rendered as a status caption: the connect control's appearance carries the persistent state, Toasts announce transitions, and only the recovery detail label stays on screen while recovery lasts.
 _Avoid_: ui state, simple state, status label
 
 **Toast**:

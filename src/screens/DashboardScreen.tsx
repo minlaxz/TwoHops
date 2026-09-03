@@ -234,7 +234,6 @@ export default function DashboardScreen() {
               testID="profile-edit"
               accessibilityRole="button"
               accessibilityLabel={`Edit profile ${selected.name}`}
-              accessibilityState={{ disabled: editLocked }}
               style={[styles.action, editLocked && styles.actionDimmed]}
               onPress={handleEdit}
             >
