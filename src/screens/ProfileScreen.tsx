@@ -6,6 +6,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { CollapsibleBody } from '../components/CollapsibleSection';
 import PressableScale from '../components/PressableScale';
+import SegmentedControl from '../components/SegmentedControl';
 import {
   useNavigation,
   usePreventRemove,
@@ -34,6 +35,16 @@ import {
 import { displayState } from '../services/tunnelSession';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme } from '../theme/colors';
+import type { RoutingMode, VpnProtocol } from '../types';
+
+const protocolOptions: { value: VpnProtocol; label: string }[] = [
+  { value: 'Http/2', label: 'Http/2' },
+  { value: 'QUIC', label: 'QUIC' },
+];
+const routingOptions: { value: RoutingMode; label: string }[] = [
+  { value: 'general', label: 'General' },
+  { value: 'selective', label: 'Selective' },
+];
 
 // Shared with DashboardScreen's RootStackParamList so the two cannot drift.
 export type ProfileScreenParams = {
@@ -297,79 +308,24 @@ export default function ServerScreen() {
             autoCapitalize="none"
           />
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>
-              Mode: {server.vpnProtocol.toLowerCase()}
-            </Text>
-            <View style={styles.rowButtons}>
-              <TouchableOpacityButton
-                touchableOpacityStyles={[
-                  styles.protocolButton,
-                  server.vpnProtocol === 'Http/2'
-                    ? styles.modeButtonActive
-                    : styles.modeButtonInactive,
-                ]}
-                textStyles={[
-                  styles.modeButtonText,
-                  server.vpnProtocol !== 'Http/2' &&
-                    styles.modeButtonTextInactive,
-                ]}
-                title="Http/2"
-                onPress={() => updateServer({ vpnProtocol: 'Http/2' })}
-              />
-              <View style={styles.rowSpacer} />
-              <TouchableOpacityButton
-                touchableOpacityStyles={[
-                  styles.protocolButton,
-                  server.vpnProtocol === 'QUIC'
-                    ? styles.modeButtonActive
-                    : styles.modeButtonInactive,
-                ]}
-                textStyles={[
-                  styles.modeButtonText,
-                  server.vpnProtocol !== 'QUIC' &&
-                    styles.modeButtonTextInactive,
-                ]}
-                title="QUIC"
-                onPress={() => updateServer({ vpnProtocol: 'QUIC' })}
-              />
-            </View>
+            <Text style={styles.rowLabel}>Protocol</Text>
           </View>
+          <SegmentedControl
+            testID="profile-protocol"
+            options={protocolOptions}
+            value={server.vpnProtocol}
+            onChange={vpnProtocol => updateServer({ vpnProtocol })}
+          />
           <Text style={styles.sectionTitle}>Routing</Text>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Mode: {routingMode}</Text>
-            <View style={styles.rowButtons}>
-              <TouchableOpacityButton
-                touchableOpacityStyles={[
-                  styles.modeButton,
-                  routingMode === 'general'
-                    ? styles.modeButtonActive
-                    : styles.modeButtonInactive,
-                ]}
-                textStyles={[
-                  styles.modeButtonText,
-                  routingMode !== 'general' && styles.modeButtonTextInactive,
-                ]}
-                title="General"
-                onPress={() => updateProfile({ routingMode: 'general' })}
-              />
-              <View style={styles.rowSpacer} />
-              <TouchableOpacityButton
-                touchableOpacityStyles={[
-                  styles.modeButton,
-                  styles.modeButtonWide,
-                  routingMode === 'selective'
-                    ? styles.modeButtonActive
-                    : styles.modeButtonInactive,
-                ]}
-                textStyles={[
-                  styles.modeButtonText,
-                  routingMode !== 'selective' && styles.modeButtonTextInactive,
-                ]}
-                title="Selective"
-                onPress={() => updateProfile({ routingMode: 'selective' })}
-              />
-            </View>
+            <Text style={styles.rowLabel}>Mode</Text>
           </View>
+          <SegmentedControl
+            testID="profile-routing"
+            options={routingOptions}
+            value={routingMode}
+            onChange={mode => updateProfile({ routingMode: mode })}
+          />
           <Text style={styles.inputDescription}>
             In most cases, "Selective" mode is recommended for better
             performance and battery life.
@@ -538,12 +494,6 @@ function createStyles(theme: AppTheme) {
       flex: 1,
       color: colors.textPrimary,
     },
-    rowButtons: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderRadius: radius.sm,
-      overflow: 'hidden',
-    },
     rowSpacer: { width: spacing.sm },
     line: {
       height: 1,
@@ -574,24 +524,10 @@ function createStyles(theme: AppTheme) {
     actionButtonDisabled: {
       backgroundColor: colors.buttonInactive,
     },
-    protocolButton: {
-      width: 60,
-      height: 40,
-      padding: spacing.xs,
-    },
-    modeButtonActive: {
-      backgroundColor: colors.buttonPrimary,
-    },
-    modeButtonInactive: {
-      backgroundColor: colors.buttonInactive,
-    },
     modeButtonText: {
       ...typography.caption,
       fontWeight: '600',
       color: colors.buttonPrimaryText,
-    },
-    modeButtonTextInactive: {
-      color: colors.buttonInactiveText,
     },
   });
 }

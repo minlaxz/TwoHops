@@ -1684,3 +1684,31 @@ test('Settings tab shows theme picker and app version', async () => {
     renderer.unmount();
   });
 });
+
+test('Profile editor: protocol and routing mode are segmented controls (#104)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await openCreateEditor(renderer);
+  await press(renderer, 'profile-advanced-toggle');
+
+  // Draft seeded from env: QUIC, selective.
+  const checked = (testID: string) =>
+    pressableByTestID(renderer, testID)!.props.accessibilityState.checked;
+  expect(checked('profile-protocol-QUIC')).toBe(true);
+  expect(checked('profile-protocol-Http/2')).toBe(false);
+  expect(checked('profile-routing-selective')).toBe(true);
+  expect(checked('profile-routing-general')).toBe(false);
+
+  await press(renderer, 'profile-protocol-Http/2');
+  await press(renderer, 'profile-routing-general');
+
+  expect(checked('profile-protocol-Http/2')).toBe(true);
+  expect(checked('profile-protocol-QUIC')).toBe(false);
+  expect(checked('profile-routing-general')).toBe(true);
+  expect(checked('profile-routing-selective')).toBe(false);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
