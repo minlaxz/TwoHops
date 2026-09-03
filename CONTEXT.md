@@ -11,7 +11,7 @@ Every Setup Profile the app remembers. May be empty on a fresh install.
 _Avoid_: profiles array
 
 **Selected Profile**:
-The one Setup Profile that tunnel commands act on and the Dashboard shows. The Dashboard shows only this Profile (name, domain, protocol) with its Edit and Share actions; the rest of the Profile List lives behind the Profile Picker. Can only change while the Display State is Stopped. Deleting it while Stopped selects another Profile, or none.
+The one Setup Profile that tunnel commands act on and the Dashboard shows. The Dashboard shows only this Profile (name, domain, protocol) with its Edit and Share actions; the rest of the Profile List lives behind the Profile Picker. Can only change or be edited while the Display State is Stopped; otherwise the Edit tap is refused with a Toast. Share is never locked. Deleting it while Stopped selects another Profile, or none.
 _Avoid_: active profile, current profile
 
 **Profile Picker**:
