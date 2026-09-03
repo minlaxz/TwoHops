@@ -16,6 +16,10 @@ class MainActivity : ReactActivity() {
   override fun getMainComponentName(): String = "TwoHops"
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    // SplashTheme (manifest) shows the launcher splash on cold start; switch
+    // to the plain-background AppTheme before the window is created so screen
+    // transitions never bleed the splash through.
+    setTheme(R.style.AppTheme)
     supportFragmentManager.fragmentFactory = RNScreensFragmentFactory()
     super.onCreate(savedInstanceState)
   }
