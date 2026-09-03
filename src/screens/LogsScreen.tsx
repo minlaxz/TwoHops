@@ -8,7 +8,11 @@ import PressableScale from '../components/PressableScale';
 import { useLogs } from '../context/LogsContext';
 import { useLogSettings } from '../context/LogSettingsContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
+import { useSetupProfile } from '../context/SetupProfileContext';
+import { useAppToast } from '../components/AppToast';
 import { displayState } from '../services/tunnelSession';
+import { addLocalRule, hasRule } from '../services/setupProfile';
+import { registrableDomain } from '../services/routingRules';
 import type { DebugEntry } from '../services/tunnelSession';
 import type { QueryLogRow } from '../types';
 import type { AppTheme } from '../theme/colors';
@@ -196,14 +200,7 @@ function AnimatedLogRow({
 }
 
 function toWildcardDomain(domain: string): string {
-  const parts = domain.split('.');
-
-  if (parts.length <= 2) {
-    // example.com -> *.example.com
-    return `*.${domain}`;
-  }
-
-  return `*.${parts.slice(-2).join('.')}`;
+  return `*.${registrableDomain(domain)}`;
 }
 
 type LogRowsProps<T extends object> = {
@@ -257,24 +254,57 @@ type RowsProps<T extends object> = Pick<
 
 function TrafficRows(props: RowsProps<QueryLogRow>) {
   const { styles } = props;
+  const { profile, selectedId, saveProfile } = useSetupProfile();
+  const toast = useAppToast();
+  // One-tap add of a bypassed domain to the Selected Profile's Local Rules
+  // (issue #98). Only in `selective` mode: in `general` mode bypass rows are
+  // exclusions, and adding them to the rules is the wrong direction.
+  const canAdd = profile.routingMode === 'selective' && selectedId !== null;
+  const addRule = (rule: string) => {
+    if (selectedId === null) {
+      return;
+    }
+    saveProfile(selectedId, addLocalRule(profile, rule));
+    // Android `updateConfiguration` is a no-op; the user reconnects.
+    toast('Added. Reconnect to apply.');
+  };
   return (
     <LogRows
       {...props}
       testID="logs-traffic-list"
       emptyText="No Traffic Logs yet. Rows collect while the tunnel is running."
       stampOf={log => log.stamp}
-      renderBody={log => (
-        <>
-          <Text style={styles.logTitle}>
-            {log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain:{' '}
-            {toWildcardDomain(log.domain ?? '-')}
-          </Text>
-          <Text style={styles.logLine}>
-            {log.source} {'->'} {log.destination ?? 'unknown'}
-          </Text>
-          <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
-        </>
-      )}
+      renderBody={log => {
+        const rule = log.domain ? registrableDomain(log.domain) : null;
+        const showAdd =
+          canAdd &&
+          log.action === 'bypass' &&
+          rule !== null &&
+          !hasRule(profile, rule);
+        return (
+          <>
+            <Text style={styles.logTitle}>
+              {log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain:{' '}
+              {toWildcardDomain(log.domain ?? '-')}
+            </Text>
+            <Text style={styles.logLine}>
+              {log.source} {'->'} {log.destination ?? 'unknown'}
+            </Text>
+            <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
+            {showAdd ? (
+              <PressableScale
+                testID={`logs-add-rule-${rule}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${rule} to Local Rules`}
+                style={styles.addRuleButton}
+                onPress={() => addRule(rule)}
+              >
+                <Text style={styles.addRuleLabel}>Add {rule} to rules</Text>
+              </PressableScale>
+            ) : null}
+          </>
+        );
+      }}
     />
   );
 }
@@ -387,6 +417,21 @@ function createStyles(theme: AppTheme) {
       ...typography.caption,
       color: colors.textSecondary,
       marginTop: spacing.xs,
+    },
+    addRuleButton: {
+      alignSelf: 'flex-start',
+      marginTop: spacing.sm,
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    addRuleLabel: {
+      ...typography.caption,
+      fontWeight: '600',
+      color: colors.textPrimary,
     },
   });
 }

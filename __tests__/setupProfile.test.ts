@@ -6,6 +6,8 @@ import {
   applyProfileLink,
   profileLink,
   effectiveRules,
+  addLocalRule,
+  hasRule,
   importRemoteRules,
   missingFields,
   tunnelStartInput,
@@ -122,6 +124,35 @@ describe('effectiveRules', () => {
 
   test('empty profile yields no rules', () => {
     expect(effectiveRules(defaultProfile(env))).toEqual([]);
+  });
+});
+
+describe('addLocalRule / hasRule (#98)', () => {
+  test('appends to Local Rules and becomes effective', () => {
+    const profile = updateProfile(defaultProfile(env), {
+      localRulesText: 'a.com',
+    });
+    const next = addLocalRule(profile, 'facebook.com');
+    expect(next.localRulesText).toBe('a.com\nfacebook.com');
+    expect(hasRule(next, 'facebook.com')).toBe(true);
+  });
+
+  test('empty Local Rules gets the rule alone', () => {
+    expect(addLocalRule(defaultProfile(env), 'a.com').localRulesText).toBe(
+      'a.com',
+    );
+  });
+
+  test('already listed (local or imported) is a no-op', () => {
+    const profile = updateProfile(defaultProfile(env), {
+      localRulesText: 'a.com',
+      importedRules: ['b.com'],
+    });
+    expect(hasRule(profile, 'a.com')).toBe(true);
+    expect(hasRule(profile, 'b.com')).toBe(true);
+    expect(hasRule(profile, 'c.com')).toBe(false);
+    expect(addLocalRule(profile, 'a.com')).toBe(profile);
+    expect(addLocalRule(profile, 'b.com')).toBe(profile);
   });
 });
 

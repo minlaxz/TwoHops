@@ -7,7 +7,12 @@ import type {
   VpnProtocol,
   VpnStartInput,
 } from '../types';
-import { fetchRemoteRules, mergeRules, parseRules } from './routingRules';
+import {
+  fetchRemoteRules,
+  mergeRules,
+  parseRules,
+  serializeRules,
+} from './routingRules';
 
 export type { ServerCredentials };
 
@@ -234,6 +239,28 @@ export async function importRemoteRules(
 
 export function effectiveRules(profile: SetupProfile): string[] {
   return mergeRules(parseRules(profile.localRulesText), profile.importedRules);
+}
+
+/** True when `rule` is already in the Effective Rules (local or imported). */
+export function hasRule(profile: SetupProfile, rule: string): boolean {
+  return effectiveRules(profile).includes(rule);
+}
+
+/** Appends `rule` to the Local Rules; returns the same profile when it is
+ * already effective (#98). */
+export function addLocalRule(
+  profile: SetupProfile,
+  rule: string,
+): SetupProfile {
+  if (hasRule(profile, rule)) {
+    return profile;
+  }
+  return updateProfile(profile, {
+    localRulesText: serializeRules([
+      ...parseRules(profile.localRulesText),
+      rule,
+    ]),
+  });
 }
 
 // What the Dashboard card and Profile Picker show under the name (#90):
