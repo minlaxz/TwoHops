@@ -7,7 +7,15 @@ import type {
   VpnProtocol,
   VpnStartInput,
 } from '../types';
-import { fetchRemoteRules, mergeRules, parseRules } from './routingRules';
+import {
+  fetchRemoteRules,
+  isDomainLike,
+  mergeRules,
+  parseRules,
+  registrableDomain,
+  serializeRules,
+} from './routingRules';
+import type { QueryLogRow } from '../types';
 
 export type { ServerCredentials };
 
@@ -234,6 +242,54 @@ export async function importRemoteRules(
 
 export function effectiveRules(profile: SetupProfile): string[] {
   return mergeRules(parseRules(profile.localRulesText), profile.importedRules);
+}
+
+/** True when `rule` is already in the Effective Rules (local or imported). */
+// `example.com` and `*.example.com` are one family to `expandRules`, so they
+// are one family here too; case-insensitive like DNS.
+const ruleKey = (rule: string) => rule.toLowerCase().replace(/^\*\./, '');
+
+export function hasEffectiveRule(profile: SetupProfile, rule: string): boolean {
+  const key = ruleKey(rule);
+  return effectiveRules(profile).some(entry => ruleKey(entry) === key);
+}
+
+/** Appends `rule` to the Local Rules; returns the same profile when it is
+ * already effective (#98). */
+export function addLocalRule(
+  profile: SetupProfile,
+  rule: string,
+): SetupProfile {
+  if (hasEffectiveRule(profile, rule)) {
+    return profile;
+  }
+  return updateProfile(profile, {
+    localRulesText: serializeRules([
+      ...parseRules(profile.localRulesText),
+      rule,
+    ]),
+  });
+}
+
+/**
+ * The Local Rule a Traffic Log row can offer to add (#98), or null. Only a
+ * `bypass` row in `selective` mode (in `general` mode bypass rows are
+ * exclusions; adding them is the wrong direction), with a hostname not yet
+ * in the Effective Rules.
+ */
+export function offerableLocalRule(
+  profile: SetupProfile,
+  row: Pick<QueryLogRow, 'action' | 'domain'>,
+): string | null {
+  if (profile.routingMode !== 'selective' || row.action !== 'bypass') {
+    return null;
+  }
+  const domain = row.domain?.trim().replace(/\.$/, '') ?? '';
+  if (!isDomainLike(domain)) {
+    return null;
+  }
+  const rule = registrableDomain(domain);
+  return hasEffectiveRule(profile, rule) ? null : rule;
 }
 
 // What the Dashboard card and Profile Picker show under the name (#90):

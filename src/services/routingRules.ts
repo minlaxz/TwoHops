@@ -16,6 +16,16 @@ export function mergeRules(local: string[], remote: string[]): string[] {
   return [...new Set([...local, ...remote])];
 }
 
+/**
+ * Collapse a hostname to its rule form (`www.facebook.com` -> `facebook.com`).
+ * Storing the bare domain is enough: `expandRules` emits the `*.` form.
+ */
+// ponytail: last-two-labels heuristic; `bbc.co.uk` -> `co.uk`. Upgrade path:
+// a public-suffix list (e.g. the `psl` package) if that bites.
+export function registrableDomain(domain: string): string {
+  return domain.split('.').slice(-2).join('.');
+}
+
 /** Canonical stored form: newline-joined. */
 export function serializeRules(rules: string[]): string {
   return rules.join('\n');
@@ -47,7 +57,7 @@ export function expandRules(rules: string[]): string[] {
   return [...addresses, ...domains];
 }
 
-function isDomainLike(value: string): boolean {
+export function isDomainLike(value: string): boolean {
   if (value.startsWith('[') || value.includes('/') || value.includes(':')) {
     return false;
   }

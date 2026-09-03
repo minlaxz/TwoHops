@@ -6,6 +6,9 @@ import {
   applyProfileLink,
   profileLink,
   effectiveRules,
+  addLocalRule,
+  hasEffectiveRule,
+  offerableLocalRule,
   importRemoteRules,
   missingFields,
   tunnelStartInput,
@@ -122,6 +125,81 @@ describe('effectiveRules', () => {
 
   test('empty profile yields no rules', () => {
     expect(effectiveRules(defaultProfile(env))).toEqual([]);
+  });
+});
+
+describe('addLocalRule / hasRule (#98)', () => {
+  test('appends to Local Rules and becomes effective', () => {
+    const profile = updateProfile(defaultProfile(env), {
+      localRulesText: 'a.com',
+    });
+    const next = addLocalRule(profile, 'facebook.com');
+    expect(next.localRulesText).toBe('a.com\nfacebook.com');
+    expect(hasEffectiveRule(next, 'facebook.com')).toBe(true);
+  });
+
+  test('empty Local Rules gets the rule alone', () => {
+    expect(addLocalRule(defaultProfile(env), 'a.com').localRulesText).toBe(
+      'a.com',
+    );
+  });
+
+  test('already listed (local or imported) is a no-op', () => {
+    const profile = updateProfile(defaultProfile(env), {
+      localRulesText: 'a.com',
+      importedRules: ['b.com'],
+    });
+    expect(hasEffectiveRule(profile, 'a.com')).toBe(true);
+    expect(hasEffectiveRule(profile, 'b.com')).toBe(true);
+    expect(hasEffectiveRule(profile, 'c.com')).toBe(false);
+    expect(addLocalRule(profile, 'a.com')).toBe(profile);
+    expect(addLocalRule(profile, 'b.com')).toBe(profile);
+  });
+
+  test('wildcard and case variants count as listed', () => {
+    const profile = updateProfile(defaultProfile(env), {
+      localRulesText: '*.Facebook.com',
+    });
+    expect(hasEffectiveRule(profile, 'facebook.com')).toBe(true);
+    expect(addLocalRule(profile, 'facebook.com')).toBe(profile);
+  });
+});
+
+describe('offerableLocalRule (#98)', () => {
+  const selective = updateProfile(defaultProfile(env), {
+    localRulesText: 'listed.com',
+  });
+  const bypass = (domain: string | null) => ({
+    action: 'bypass' as const,
+    domain,
+  });
+
+  test('bypass row in selective mode offers the collapsed domain', () => {
+    expect(offerableLocalRule(selective, bypass('www.facebook.com'))).toBe(
+      'facebook.com',
+    );
+  });
+
+  test('null for tunnel rows, listed domains, general mode, non-hostnames', () => {
+    expect(
+      offerableLocalRule(selective, { action: 'tunnel', domain: 'x.com' }),
+    ).toBeNull();
+    expect(offerableLocalRule(selective, bypass('cdn.listed.com'))).toBeNull();
+    expect(
+      offerableLocalRule(
+        updateProfile(selective, { routingMode: 'general' }),
+        bypass('y.com'),
+      ),
+    ).toBeNull();
+    expect(offerableLocalRule(selective, bypass('1.2.3.4'))).toBeNull();
+    expect(offerableLocalRule(selective, bypass(null))).toBeNull();
+    expect(offerableLocalRule(selective, bypass('localhost'))).toBeNull();
+  });
+
+  test('trailing-dot FQDN is trimmed', () => {
+    expect(offerableLocalRule(selective, bypass('example.com.'))).toBe(
+      'example.com',
+    );
   });
 });
 

@@ -4,6 +4,7 @@ import {
   serializeRules,
   expandRules,
   fetchRemoteRules,
+  registrableDomain,
 } from '../src/services/routingRules';
 
 describe('parseRules', () => {
@@ -104,5 +105,17 @@ describe('fetchRemoteRules', () => {
     await expect(
       fetchRemoteRules('https://x/rules.txt', fetchImpl as any),
     ).rejects.toThrow('offline');
+  });
+});
+
+describe('registrableDomain', () => {
+  test('collapses to the last two labels', () => {
+    expect(registrableDomain('www.facebook.com')).toBe('facebook.com');
+    expect(registrableDomain('static.xx.fbcdn.net')).toBe('fbcdn.net');
+  });
+
+  test('bare domain is unchanged', () => {
+    expect(registrableDomain('facebook.com')).toBe('facebook.com');
+    expect(registrableDomain('localhost')).toBe('localhost');
   });
 });

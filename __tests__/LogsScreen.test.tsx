@@ -1,18 +1,27 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { FlatList } from 'react-native';
+import { FlatList, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LogsScreen from '../src/screens/LogsScreen';
 import { LogsProvider } from '../src/context/LogsContext';
 import { LogSettingsProvider } from '../src/context/LogSettingsContext';
 import { TunnelSessionProvider } from '../src/context/TunnelSessionContext';
 import { ThemeProvider } from '../src/context/ThemeContext';
+import { SetupProfileProvider } from '../src/context/SetupProfileContext';
+import { ToastProvider } from '../src/components/AppToast';
 import { createLogBuffer } from '../src/services/logBuffer';
+import PressableScale from '../src/components/PressableScale';
+import { PROFILES_STORAGE_KEY } from '../src/services/profileStore';
 import type { DebugEntry, TunnelSession } from '../src/services/tunnelSession';
 import type { QueryLogRow } from '../src/types';
 
 // Not exercising the real adapter; keep the native registry out of this test.
 jest.mock('../src/services/vpn', () => ({ VpnClient: {} }));
+jest.mock('react-native-config', () => ({
+  ENV_SERVER_NAME: 'env-server',
+  ENV_PROTOCOL: 'QUIC',
+  ENV_DNS_SERVERS: '',
+}));
 
 const snapshot = { state: 'disconnected', lastError: null } as const;
 const session: TunnelSession = {
@@ -23,7 +32,10 @@ const session: TunnelSession = {
   onDebug: () => () => {},
 };
 
-function trafficRow(stamp: Date): QueryLogRow {
+function trafficRow(
+  stamp: Date,
+  overrides: Partial<QueryLogRow> = {},
+): QueryLogRow {
   return {
     action: 'bypass',
     protocol: 'tcp',
@@ -31,6 +43,38 @@ function trafficRow(stamp: Date): QueryLogRow {
     destination: '1.2.3.4:443',
     domain: 'example.com',
     stamp,
+    ...overrides,
+  };
+}
+
+function profileList(
+  routingMode: 'selective' | 'general',
+  localRulesText = '',
+) {
+  return {
+    version: 1,
+    selectedId: 'p1',
+    profiles: [
+      {
+        id: 'p1',
+        name: 'Test',
+        version: 1,
+        server: {
+          name: 'Test',
+          ipAddress: '1.1.1.1',
+          domain: 'vpn.test',
+          login: 'u',
+          password: 'p',
+          vpnProtocol: 'QUIC',
+        },
+        dnsServers: [],
+        routingMode,
+        localRulesText,
+        remoteRulesURL: '',
+        importedRules: [],
+        importedAt: null,
+      },
+    ],
   };
 }
 
@@ -44,29 +88,47 @@ async function mount(trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 })) {
   await ReactTestRenderer.act(async () => {
     renderer = ReactTestRenderer.create(
       <ThemeProvider>
-        <TunnelSessionProvider session={session}>
-          <LogSettingsProvider>
-            <LogsProvider trafficLogs={trafficLogs} debugLogs={debugLogs}>
-              <LogsScreen />
-            </LogsProvider>
-          </LogSettingsProvider>
-        </TunnelSessionProvider>
+        <ToastProvider>
+          <SetupProfileProvider>
+            <TunnelSessionProvider session={session}>
+              <LogSettingsProvider>
+                <LogsProvider trafficLogs={trafficLogs} debugLogs={debugLogs}>
+                  <LogsScreen />
+                </LogsProvider>
+              </LogSettingsProvider>
+            </TunnelSessionProvider>
+          </SetupProfileProvider>
+        </ToastProvider>
       </ThemeProvider>,
     );
   });
   // The reanimated mock renders Animated.View as a plain View, so a row's
   // `entering` prop is observable: set only on rows that animate in.
   const rowsAnimating = () =>
-    renderer.root
-      .findAll(node => node.props.entering !== undefined && !node.parent?.props.entering)
-      .length;
-  const rowsShown = () =>
-    renderer.root.findByType(FlatList).props.data.length;
+    renderer.root.findAll(
+      node => node.props.entering !== undefined && !node.parent?.props.entering,
+    ).length;
+  const rowsShown = () => renderer.root.findByType(FlatList).props.data.length;
   const press = (testID: string) =>
     ReactTestRenderer.act(async () => {
       renderer.root.findByProps({ testID }).props.onPress();
     });
-  return { rowsAnimating, rowsShown, press };
+  const addButtons = () =>
+    renderer.root
+      .findAllByType(PressableScale)
+      .filter(node => String(node.props.testID).startsWith('logs-add-rule-'));
+  const toastText = () =>
+    renderer.root
+      .findAll(node => node.props.testID === 'app-toast')
+      .map(node => node.findAllByType(Text)[0]?.props.children)[0];
+  return { rowsAnimating, rowsShown, press, addButtons, toastText };
+}
+
+async function seedProfiles(...args: Parameters<typeof profileList>) {
+  await AsyncStorage.setItem(
+    PROFILES_STORAGE_KEY,
+    JSON.stringify(profileList(...args)),
+  );
 }
 
 beforeEach(() => AsyncStorage.clear());
@@ -106,4 +168,42 @@ test('a row animates once: remounting the list does not replay it (#97)', async 
 test('empty buffer shows the empty copy', async () => {
   const { rowsShown } = await mount();
   expect(rowsShown()).toBe(0);
+});
+
+describe('add bypassed domain to Local Rules (#98)', () => {
+  const now = () => new Date();
+
+  test('selective mode: bypass row offers Add; press appends the collapsed domain and toasts', async () => {
+    await seedProfiles('selective', 'a.com');
+    const trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 });
+    trafficLogs.append(trafficRow(now(), { domain: 'www.facebook.com' }));
+    const { addButtons, press, toastText } = await mount(trafficLogs);
+    expect(addButtons()).toHaveLength(1);
+
+    await press('logs-add-rule-facebook.com');
+    const stored = JSON.parse(
+      (await AsyncStorage.getItem(PROFILES_STORAGE_KEY)) ?? '{}',
+    );
+    expect(stored.profiles[0].localRulesText).toBe('a.com\nfacebook.com');
+    expect(toastText()).toBe('Added. Reconnect to apply.');
+    // Now listed: the affordance goes away.
+    expect(addButtons()).toHaveLength(0);
+  });
+
+  test('hidden for tunnel rows, listed domains, and general mode', async () => {
+    await seedProfiles('selective', 'listed.com');
+    const trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 });
+    trafficLogs.append(
+      trafficRow(now(), { action: 'tunnel', domain: 'x.com' }),
+    );
+    trafficLogs.append(trafficRow(now(), { domain: 'cdn.listed.com' }));
+    const { addButtons } = await mount(trafficLogs);
+    expect(addButtons()).toHaveLength(0);
+
+    await seedProfiles('general');
+    const generalLogs = createLogBuffer<QueryLogRow>({ cap: 10 });
+    generalLogs.append(trafficRow(now(), { domain: 'y.com' }));
+    const general = await mount(generalLogs);
+    expect(general.addButtons()).toHaveLength(0);
+  });
 });
