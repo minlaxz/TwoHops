@@ -1,4 +1,10 @@
-import React, { useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { Text, View, FlatList, StyleSheet } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -257,12 +263,22 @@ type RowsProps<T extends object> = Pick<
 function TrafficRows(props: RowsProps<QueryLogRow>) {
   const { styles } = props;
   const { profile, selectedId, saveProfile } = useSetupProfile();
+  const { trafficLogs } = useLogs();
   const toast = useAppToast();
   // Direct Probe verdicts per row (#99), keyed like the list. On-demand only;
   // never probe every bypassed domain automatically.
   const [probes, setProbes] = useState<
     Record<string, ProbeResult | 'testing'>
   >({});
+  // Clear drops the rows, so drop their verdicts too.
+  useEffect(
+    () => trafficLogs.subscribe(() => {
+      if (trafficLogs.getRows().length === 0) {
+        setProbes({});
+      }
+    }),
+    [trafficLogs],
+  );
   const testDirect = async (row: QueryLogRow, domain: string) => {
     const key = rowKey(row);
     setProbes(prev => ({ ...prev, [key]: 'testing' }));

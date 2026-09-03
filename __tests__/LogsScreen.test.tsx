@@ -236,6 +236,14 @@ describe('Test direct probe for a bypassed domain (#99)', () => {
     probeMock.mockResolvedValueOnce('works');
     await press('logs-test-direct-www.facebook.com');
     expect(texts()).toContain('Direct works.');
+
+    // Clear drops the rows and their verdicts.
+    await press('logs-clear');
+    await ReactTestRenderer.act(async () => {
+      trafficLogs.append(trafficRow(new Date(), { domain: 'www.facebook.com' }));
+    });
+    expect(texts()).not.toContain('Direct works.');
+    expect(texts()).toContain('Test direct');
   });
 
   test('not offered where Add is not offered (tunnel rows, general mode)', async () => {

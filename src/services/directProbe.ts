@@ -2,6 +2,12 @@
 // direct? The core gives no failure signal for bypass connections (see
 // docs/research/bypass-block-detection.md), so an on-demand active probe is
 // the only app-side detection that does not guess. Never run automatically.
+//
+// Path: in selective mode the core routes a non-listed domain direct, so the
+// probe takes the same path the browser did. Whether the AAR also excludes
+// this package from the TUN is not verifiable from the app (the Tun config
+// exposes no app-exclusion field); if it does, the probe goes direct without
+// the core, and the verdict is the same.
 
 export const DIRECT_PROBE_TIMEOUT_MS = 5000;
 
