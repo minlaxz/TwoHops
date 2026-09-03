@@ -11,6 +11,7 @@ import { SetupProfileProvider } from '../src/context/SetupProfileContext';
 import { ToastProvider } from '../src/components/AppToast';
 import { createLogBuffer } from '../src/services/logBuffer';
 import PressableScale from '../src/components/PressableScale';
+import { PROFILES_STORAGE_KEY } from '../src/services/profileStore';
 import type { DebugEntry, TunnelSession } from '../src/services/tunnelSession';
 import type { QueryLogRow } from '../src/types';
 
@@ -46,7 +47,6 @@ function trafficRow(
   };
 }
 
-const PROFILE_LIST_KEY = '@twohops/setup/profiles';
 function profileList(
   routingMode: 'selective' | 'general',
   localRulesText = '',
@@ -126,7 +126,7 @@ async function mount(trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 })) {
 
 async function seedProfiles(...args: Parameters<typeof profileList>) {
   await AsyncStorage.setItem(
-    PROFILE_LIST_KEY,
+    PROFILES_STORAGE_KEY,
     JSON.stringify(profileList(...args)),
   );
 }
@@ -182,7 +182,7 @@ describe('add bypassed domain to Local Rules (#98)', () => {
 
     await press('logs-add-rule-facebook.com');
     const stored = JSON.parse(
-      (await AsyncStorage.getItem(PROFILE_LIST_KEY)) ?? '{}',
+      (await AsyncStorage.getItem(PROFILES_STORAGE_KEY)) ?? '{}',
     );
     expect(stored.profiles[0].localRulesText).toBe('a.com\nfacebook.com');
     expect(toastText()).toBe('Added. Reconnect to apply.');

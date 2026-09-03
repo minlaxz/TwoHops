@@ -17,10 +17,8 @@ export function mergeRules(local: string[], remote: string[]): string[] {
 }
 
 /**
- * Collapse a hostname to its rule form: the last two labels
- * (`www.facebook.com` -> `facebook.com`). Bare / single-label input is
- * returned unchanged. Storing the bare domain is enough: `expandRules`
- * emits the `*.` form on encode.
+ * Collapse a hostname to its rule form (`www.facebook.com` -> `facebook.com`).
+ * Storing the bare domain is enough: `expandRules` emits the `*.` form.
  */
 // ponytail: last-two-labels heuristic; `bbc.co.uk` -> `co.uk`. Upgrade path:
 // a public-suffix list (e.g. the `psl` package) if that bites.
@@ -59,7 +57,7 @@ export function expandRules(rules: string[]): string[] {
   return [...addresses, ...domains];
 }
 
-function isDomainLike(value: string): boolean {
+export function isDomainLike(value: string): boolean {
   if (value.startsWith('[') || value.includes('/') || value.includes(':')) {
     return false;
   }

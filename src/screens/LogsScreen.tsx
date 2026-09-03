@@ -11,7 +11,7 @@ import { useTunnelSession } from '../context/TunnelSessionContext';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useAppToast } from '../components/AppToast';
 import { displayState } from '../services/tunnelSession';
-import { addLocalRule, hasRule } from '../services/setupProfile';
+import { addLocalRule, offerableLocalRule } from '../services/setupProfile';
 import { registrableDomain } from '../services/routingRules';
 import type { DebugEntry } from '../services/tunnelSession';
 import type { QueryLogRow } from '../types';
@@ -257,14 +257,13 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
   const { profile, selectedId, saveProfile } = useSetupProfile();
   const toast = useAppToast();
   // One-tap add of a bypassed domain to the Selected Profile's Local Rules
-  // (issue #98). Only in `selective` mode: in `general` mode bypass rows are
-  // exclusions, and adding them to the rules is the wrong direction.
-  const canAdd = profile.routingMode === 'selective' && selectedId !== null;
+  // (issue #98). Eligibility lives in `offerableLocalRule`.
   const addRule = (rule: string) => {
-    if (selectedId === null) {
+    const next = addLocalRule(profile, rule);
+    if (selectedId === null || next === profile) {
       return;
     }
-    saveProfile(selectedId, addLocalRule(profile, rule));
+    saveProfile(selectedId, next);
     // Android `updateConfiguration` is a no-op; the user reconnects.
     toast('Added. Reconnect to apply.');
   };
@@ -275,12 +274,8 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
       emptyText="No Traffic Logs yet. Rows collect while the tunnel is running."
       stampOf={log => log.stamp}
       renderBody={log => {
-        const rule = log.domain ? registrableDomain(log.domain) : null;
-        const showAdd =
-          canAdd &&
-          log.action === 'bypass' &&
-          rule !== null &&
-          !hasRule(profile, rule);
+        const rule =
+          selectedId === null ? null : offerableLocalRule(profile, log);
         return (
           <>
             <Text style={styles.logTitle}>
@@ -291,7 +286,7 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
               {log.source} {'->'} {log.destination ?? 'unknown'}
             </Text>
             <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
-            {showAdd ? (
+            {rule !== null ? (
               <PressableScale
                 testID={`logs-add-rule-${rule}`}
                 accessibilityRole="button"
@@ -299,7 +294,9 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
                 style={styles.addRuleButton}
                 onPress={() => addRule(rule)}
               >
-                <Text style={styles.addRuleLabel}>Add {rule} to rules</Text>
+                <Text style={styles.addRuleLabel}>
+                  Add {rule} to Local Rules
+                </Text>
               </PressableScale>
             ) : null}
           </>
