@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useSyncExternalStore } from 'react';
-import { Text, View, ScrollView, StyleSheet } from 'react-native';
+import React, { useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Text, View, FlatList, StyleSheet } from 'react-native';
 import Animated, {
   FadeInDown,
   useReducedMotion,
@@ -28,6 +28,10 @@ export default function LogsScreen() {
   const { snapshot } = useTunnelSession();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  // Rows already buffered when the screen opens mount in place; only rows
+  // that arrive afterwards get the entry animation (issue #97). One
+  // watermark for both segments, so a segment switch does not re-animate.
+  const mountedAt = useRef(Date.now()).current;
 
   // A segment tab hides when its logging toggle is OFF (issue #69); fall
   // back to the visible one so the sticky selection never shows a hidden tab.
@@ -94,17 +98,11 @@ export default function LogsScreen() {
           ) : null}
         </View>
         <View style={styles.logScrollContainer}>
-          <ScrollView
-            style={styles.logScroll}
-            contentContainerStyle={styles.logScrollContent}
-            showsVerticalScrollIndicator
-          >
-            {shownSegment === 'traffic' ? (
-              <TrafficRows logs={traffic} styles={styles} />
-            ) : (
-              <DebugRows logs={debug} styles={styles} />
-            )}
-          </ScrollView>
+          {shownSegment === 'traffic' ? (
+            <TrafficRows logs={traffic} styles={styles} mountedAt={mountedAt} />
+          ) : (
+            <DebugRows logs={debug} styles={styles} mountedAt={mountedAt} />
+          )}
         </View>
       </View>
     </View>
@@ -147,23 +145,38 @@ function SegmentButton({
 // keys would shift on every append and remount (re-animate) the whole list.
 // Identity of the row object is stable inside the buffer; key off that.
 let nextRowKey = 1;
-const rowKeys = new WeakMap<object, number>();
-function rowKey(row: object): number {
+const rowKeys = new WeakMap<object, string>();
+function rowKey(row: object): string {
   let key = rowKeys.get(row);
   if (key === undefined) {
-    key = nextRowKey++;
+    key = String(nextRowKey++);
     rowKeys.set(row, key);
   }
   return key;
+}
+
+// A row animates in at most once. FlatList virtualisation remounts rows that
+// scroll back into view and a segment switch remounts the whole list; without
+// this every post-mount row would replay its entry each time (issue #97).
+const animatedRows = new WeakSet<object>();
+function shouldAnimate(row: object, stamp: Date, mountedAt: number): boolean {
+  if (stamp.getTime() <= mountedAt || animatedRows.has(row)) {
+    return false;
+  }
+  animatedRows.add(row);
+  return true;
 }
 
 /** Fades and slides a freshly mounted log row into place (issue #70). It is
  * decoration, so reduce-motion mounts the row in place (issue #80). */
 function AnimatedLogRow({
   style,
+  animate,
   children,
 }: {
   style: LogsScreenStyles['logRow'];
+  /** False mounts in place: rows that pre-date the screen (issue #97). */
+  animate: boolean;
   children: React.ReactNode;
 }) {
   const { theme } = useAppTheme();
@@ -172,7 +185,7 @@ function AnimatedLogRow({
     <Animated.View
       style={style}
       entering={
-        reduceMotion
+        reduceMotion || !animate
           ? undefined
           : FadeInDown.duration(theme.motion.duration.fast)
       }
@@ -193,22 +206,65 @@ function toWildcardDomain(domain: string): string {
   return `*.${parts.slice(-2).join('.')}`;
 }
 
-function TrafficRows({
+type LogRowsProps<T extends object> = {
+  testID: string;
+  logs: readonly T[];
+  styles: LogsScreenStyles;
+  /** Screen mount time (ms); rows stamped after it animate in. */
+  mountedAt: number;
+  emptyText: string;
+  stampOf: (row: T) => Date;
+  renderBody: (row: T) => React.ReactNode;
+};
+
+// FlatList renders only the visible window; a ScrollView + map mounted every
+// buffered row (up to 250) at once, which is what made opening the tab slow
+// on low-end devices (issue #97).
+function LogRows<T extends object>({
+  testID,
   logs,
   styles,
-}: {
-  logs: readonly QueryLogRow[];
-  styles: LogsScreenStyles;
-}) {
+  mountedAt,
+  emptyText,
+  stampOf,
+  renderBody,
+}: LogRowsProps<T>) {
   return (
-    <>
-      {logs.length === 0 ? (
-        <Text style={styles.logEmpty}>
-          No Traffic Logs yet. Rows collect while the tunnel is running.
-        </Text>
-      ) : null}
-      {logs.map(log => (
-        <AnimatedLogRow style={styles.logRow} key={rowKey(log)}>
+    <FlatList
+      testID={testID}
+      style={styles.logScroll}
+      contentContainerStyle={styles.logScrollContent}
+      showsVerticalScrollIndicator
+      data={logs}
+      keyExtractor={rowKey}
+      ListEmptyComponent={<Text style={styles.logEmpty}>{emptyText}</Text>}
+      renderItem={({ item: log }) => (
+        <AnimatedLogRow
+          style={styles.logRow}
+          animate={shouldAnimate(log, stampOf(log), mountedAt)}
+        >
+          {renderBody(log)}
+        </AnimatedLogRow>
+      )}
+    />
+  );
+}
+
+type RowsProps<T extends object> = Pick<
+  LogRowsProps<T>,
+  'logs' | 'styles' | 'mountedAt'
+>;
+
+function TrafficRows(props: RowsProps<QueryLogRow>) {
+  const { styles } = props;
+  return (
+    <LogRows
+      {...props}
+      testID="logs-traffic-list"
+      emptyText="No Traffic Logs yet. Rows collect while the tunnel is running."
+      stampOf={log => log.stamp}
+      renderBody={log => (
+        <>
           <Text style={styles.logTitle}>
             {log.action.toUpperCase()} {log.protocol.toUpperCase()} Domain:{' '}
             {toWildcardDomain(log.domain ?? '-')}
@@ -217,31 +273,27 @@ function TrafficRows({
             {log.source} {'->'} {log.destination ?? 'unknown'}
           </Text>
           <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
-        </AnimatedLogRow>
-      ))}
-    </>
+        </>
+      )}
+    />
   );
 }
 
-function DebugRows({
-  logs,
-  styles,
-}: {
-  logs: readonly DebugEntry[];
-  styles: LogsScreenStyles;
-}) {
+function DebugRows(props: RowsProps<DebugEntry>) {
+  const { styles } = props;
   return (
-    <>
-      {logs.length === 0 ? (
-        <Text style={styles.logEmpty}>No Debug Logs yet.</Text>
-      ) : null}
-      {logs.map(log => (
-        <AnimatedLogRow style={styles.logRow} key={rowKey(log)}>
+    <LogRows
+      {...props}
+      testID="logs-debug-list"
+      emptyText="No Debug Logs yet."
+      stampOf={log => log.at}
+      renderBody={log => (
+        <>
           <Text style={styles.logLine}>{log.message}</Text>
           <Text style={styles.logTime}>{log.at.toISOString()}</Text>
-        </AnimatedLogRow>
-      ))}
-    </>
+        </>
+      )}
+    />
   );
 }
 
