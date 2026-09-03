@@ -267,16 +267,17 @@ function TrafficRows(props: RowsProps<QueryLogRow>) {
   const toast = useAppToast();
   // Direct Probe verdicts per row (#99), keyed like the list. On-demand only;
   // never probe every bypassed domain automatically.
-  const [probes, setProbes] = useState<
-    Record<string, ProbeResult | 'testing'>
-  >({});
+  const [probes, setProbes] = useState<Record<string, ProbeResult | 'testing'>>(
+    {},
+  );
   // Clear drops the rows, so drop their verdicts too.
   useEffect(
-    () => trafficLogs.subscribe(() => {
-      if (trafficLogs.getRows().length === 0) {
-        setProbes({});
-      }
-    }),
+    () =>
+      trafficLogs.subscribe(() => {
+        if (trafficLogs.getRows().length === 0) {
+          setProbes({});
+        }
+      }),
     [trafficLogs],
   );
   const testDirect = async (row: QueryLogRow, domain: string) => {

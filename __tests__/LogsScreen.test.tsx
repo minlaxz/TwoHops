@@ -240,7 +240,9 @@ describe('Test direct probe for a bypassed domain (#99)', () => {
     // Clear drops the rows and their verdicts.
     await press('logs-clear');
     await ReactTestRenderer.act(async () => {
-      trafficLogs.append(trafficRow(new Date(), { domain: 'www.facebook.com' }));
+      trafficLogs.append(
+        trafficRow(new Date(), { domain: 'www.facebook.com' }),
+      );
     });
     expect(texts()).not.toContain('Direct works.');
     expect(texts()).toContain('Test direct');

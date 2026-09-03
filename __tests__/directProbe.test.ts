@@ -28,9 +28,9 @@ describe('probeDirect (#99)', () => {
 
   test('a 4xx/5xx still counts as works: the path is open', async () => {
     const fetch403 = jest.fn(async () => ({ status: 403 } as Response));
-    await expect(
-      probeDirect('x.com', { fetchImpl: fetch403 }),
-    ).resolves.toBe('works');
+    await expect(probeDirect('x.com', { fetchImpl: fetch403 })).resolves.toBe(
+      'works',
+    );
   });
 
   test('connection failure means direct failed', async () => {
