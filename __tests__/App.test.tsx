@@ -612,6 +612,62 @@ test('tapping the Selected Profile in a recovery state is locked too', async () 
   });
 });
 
+test('tapping Edit while Running raises a Toast and stays on the Dashboard (#105)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
+  await press(renderer, 'profile-edit');
+
+  const text = renderedText(renderer);
+  expect(text).toContain('Stop the tunnel to edit the profile.');
+  expect(pressableByTestID(renderer, 'profile-save')).toBeNull();
+  // Share stays live.
+  const share = jest.spyOn(Share, 'share').mockResolvedValue({
+    action: Share.sharedAction,
+  });
+  await press(renderer, 'profile-share');
+  expect(share).toHaveBeenCalledTimes(1);
+  share.mockRestore();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  expect(renderedText(renderer)).not.toContain(
+    'Stop the tunnel to edit the profile.',
+  );
+  await press(renderer, 'profile-edit');
+  expect(pressableByTestID(renderer, 'profile-save')).toBeTruthy();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('tapping Edit while Busy is locked too (#105)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connecting');
+  });
+  await press(renderer, 'profile-edit');
+
+  expect(renderedText(renderer)).toContain(
+    'Stop the tunnel to edit the profile.',
+  );
+  expect(pressableByTestID(renderer, 'profile-save')).toBeNull();
+
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('disconnected');
+  });
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
 test('tunnel start reads the Selected Profile', async () => {
   await AsyncStorage.setItem(
     PROFILES_STORAGE_KEY,
@@ -1413,11 +1469,12 @@ test("saving the Running tunnel's profile raises the applies-on-next-connect Toa
     await seedTwoProfiles();
     const renderer = await renderApp();
 
+    // Open the editor while Stopped (#105 locks Edit once Running), then
+    // let the tunnel come up underneath it.
+    await press(renderer, 'profile-edit');
     await ReactTestRenderer.act(async () => {
       emitNativeState('connected');
     });
-    // Edit the Selected (Running) profile — allowed.
-    await press(renderer, 'profile-edit');
     const username = renderer.root.findAll(
       node =>
         node.props.placeholder === 'Username' &&
@@ -1460,10 +1517,10 @@ test('deleting the Selected Profile is blocked while Running', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
+  await press(renderer, 'profile-edit');
   await ReactTestRenderer.act(async () => {
     emitNativeState('connected');
   });
-  await press(renderer, 'profile-edit');
   await press(renderer, 'profile-delete');
 
   const text = renderedText(renderer);

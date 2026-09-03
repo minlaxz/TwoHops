@@ -107,6 +107,22 @@ export default function DashboardScreen() {
     }
   };
 
+  const selected = profiles.find(entry => entry.id === selectedId) ?? null;
+
+  // Edit (#105): same lock as the Picker. Rendered dimmed, still tappable,
+  // so the refusal can explain itself. Share is never locked.
+  const editLocked = display !== 'stopped';
+  const handleEdit = () => {
+    if (editLocked) {
+      appendDebugLog('Profile edit refused: tunnel is not stopped.');
+      toast('Stop the tunnel to edit the profile.');
+      return;
+    }
+    if (selected) {
+      navigation.navigate('Profile', { profileId: selected.id });
+    }
+  };
+
   // Share Profile (#90): link only, no title; the OS sheet is the feedback.
   // The link carries the password, so the Debug Log never echoes it.
   const handleShare = () => {
@@ -118,8 +134,6 @@ export default function DashboardScreen() {
         ),
     );
   };
-
-  const selected = profiles.find(entry => entry.id === selectedId) ?? null;
 
   // Hidden only with no Profile List. An incomplete legacy Selected Profile
   // keeps the control; its only guard is the connect-refusal alert (#61) —
@@ -220,10 +234,8 @@ export default function DashboardScreen() {
               testID="profile-edit"
               accessibilityRole="button"
               accessibilityLabel={`Edit profile ${selected.name}`}
-              style={styles.action}
-              onPress={() =>
-                navigation.navigate('Profile', { profileId: selected.id })
-              }
+              style={[styles.action, editLocked && styles.actionDimmed]}
+              onPress={handleEdit}
             >
               <Ionicons
                 name="pencil"
@@ -376,6 +388,9 @@ function createStyles(theme: AppTheme) {
       alignItems: 'center',
       gap: spacing.xs,
       paddingVertical: spacing.xs,
+    },
+    actionDimmed: {
+      opacity: 0.4,
     },
     actionDivider: {
       width: StyleSheet.hairlineWidth,
