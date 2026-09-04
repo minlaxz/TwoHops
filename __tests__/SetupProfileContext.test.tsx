@@ -204,7 +204,7 @@ test('selectProfile switches the Selected Profile and persists', async () => {
 
 function defaultsProfile(name: string) {
   return {
-    version: 1 as const,
+    version: 2 as const,
     server: {
       name,
       ipAddress: '',
@@ -214,6 +214,7 @@ function defaultsProfile(name: string) {
       vpnProtocol: 'QUIC' as const,
     },
     dnsServers: [],
+    bypassDnsServers: [],
     routingMode: 'selective' as const,
     localRulesText: '',
     remoteRulesURL: '',

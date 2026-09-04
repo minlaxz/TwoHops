@@ -270,6 +270,23 @@ describe('saveProfileList / loadProfileList', () => {
     expect(map.size).toBe(0);
   });
 
+  test('v1 entries gain empty Bypass DNS Servers on load (#116)', async () => {
+    const list = twoProfileList();
+    const stored = {
+      ...list,
+      profiles: list.profiles.map(({ bypassDnsServers: _omit, ...entry }) => ({
+        ...entry,
+        version: 1,
+      })),
+    };
+    const { storage } = memoryStorage({
+      [PROFILES_STORAGE_KEY]: JSON.stringify(stored),
+    });
+    const loaded = await loadProfileList(storage, env);
+    expect(loaded).toEqual(list);
+    expect(loaded.profiles.every(entry => entry.version === 2)).toBe(true);
+  });
+
   test('corrupt list document warns and yields defaults', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const { storage } = memoryStorage({ [PROFILES_STORAGE_KEY]: '{not json' });

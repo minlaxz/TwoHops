@@ -55,7 +55,7 @@ function completeProfile(): SetupProfile {
 describe('defaultProfile', () => {
   test('seeds name, protocol, DNS from env; selective; rest empty', () => {
     expect(defaultProfile(env)).toEqual({
-      version: 1,
+      version: 2,
       server: {
         name: 'env-server',
         ipAddress: '',
@@ -65,6 +65,7 @@ describe('defaultProfile', () => {
         vpnProtocol: 'Http/2',
       },
       dnsServers: ['1.1.1.1', '8.8.8.8'],
+      bypassDnsServers: [],
       routingMode: 'selective',
       localRulesText: '',
       remoteRulesURL: '',
@@ -229,11 +230,16 @@ describe('tunnelStartInput', () => {
       localRulesText: 'a.com',
       importedRules: ['a.com', 'b.com'],
       routingMode: 'general',
+      bypassDnsServers: ['https://dns.adguard.com/dns-query'],
     });
     expect(tunnelStartInput(profile)).toEqual({
       ok: true,
       value: {
-        server: { ...profile.server, dnsServers: ['1.1.1.1', '8.8.8.8'] },
+        server: {
+          ...profile.server,
+          dnsServers: ['1.1.1.1', '8.8.8.8'],
+          bypassDnsServers: ['https://dns.adguard.com/dns-query'],
+        },
         routing: { mode: 'general', rules: ['a.com', 'b.com'] },
       },
     });
@@ -268,7 +274,7 @@ describe('saveProfile / loadProfile', () => {
     expect(map.size).toBe(0);
   });
 
-  test('legacy keys migrate to v1 document and are removed', async () => {
+  test('legacy keys migrate to the current document and are removed', async () => {
     const { storage, map } = memoryStorage({
       [LEGACY_STORAGE_KEYS.serverName]: '',
       [LEGACY_STORAGE_KEYS.serverIpAddress]: '10.0.0.1',
@@ -283,7 +289,7 @@ describe('saveProfile / loadProfile', () => {
       [LEGACY_STORAGE_KEYS.rulesText]: 'a.com\nb.com\nz.com',
     });
     const expected: SetupProfile = {
-      version: 1,
+      version: 2,
       server: {
         name: 'env-server',
         ipAddress: '10.0.0.1',
@@ -293,6 +299,7 @@ describe('saveProfile / loadProfile', () => {
         vpnProtocol: 'QUIC',
       },
       dnsServers: ['9.9.9.9', '1.0.0.1'],
+      bypassDnsServers: [],
       routingMode: 'general',
       localRulesText: 'a.com\nb.com',
       remoteRulesURL: 'https://x/rules.txt',
@@ -314,6 +321,18 @@ describe('saveProfile / loadProfile', () => {
     expect(profile).toEqual(
       updateServer(defaultProfile(env), { login: 'user' }),
     );
+  });
+
+  test('v1 document loads as v2 with empty Bypass DNS Servers (#116)', async () => {
+    const v1: Partial<SetupProfile> = { ...completeProfile() };
+    delete v1.bypassDnsServers;
+    const { storage } = memoryStorage({
+      [PROFILE_STORAGE_KEY]: JSON.stringify({ ...v1, version: 1 }),
+    });
+    await expect(loadProfile(storage, env)).resolves.toEqual({
+      ...completeProfile(),
+      bypassDnsServers: [],
+    });
   });
 
   test('corrupt JSON warns and yields defaults; nothing written', async () => {

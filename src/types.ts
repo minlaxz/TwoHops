@@ -21,9 +21,12 @@ export interface ServerCredentials {
   vpnProtocol: VpnProtocol;
 }
 
-/** Server Credentials plus the DNS Servers list, as handed to the tunnel. */
+/** Server Credentials plus both DNS lists, as handed to the tunnel. */
 export interface ServerConfig extends ServerCredentials {
+  /** Tunnel DNS Servers — resolvers for Tunnel-side Queries. */
   dnsServers: string[];
+  /** Bypass DNS Servers — resolvers for Bypass-side Queries; empty = system. */
+  bypassDnsServers: string[];
 }
 
 export interface RoutingConfig {

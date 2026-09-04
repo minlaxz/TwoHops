@@ -5,6 +5,7 @@ import {
   applyProfileLink,
   defaultProfile,
   loadProfile,
+  migrateProfileDocument,
   LEGACY_STORAGE_KEYS,
   PROFILE_STORAGE_KEY,
   type ProfileEnv,
@@ -187,7 +188,15 @@ export async function loadProfileList(
         throw new Error(`unknown version ${parsed?.version}`);
       }
       // ponytail: trust v1 shape; add field validation if corrupt docs show up
-      return parsed as ProfileList;
+      // Each entry carries its own document version (ADR 0003).
+      return {
+        ...parsed,
+        profiles: (parsed.profiles as ProfileEntry[]).map(entry => ({
+          ...migrateProfileDocument(entry),
+          id: entry.id,
+          name: entry.name,
+        })),
+      } as ProfileList;
     } catch (error) {
       console.warn('Profile List unreadable, using defaults:', error);
       return defaultProfileList(env);

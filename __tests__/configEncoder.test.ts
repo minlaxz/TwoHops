@@ -10,6 +10,7 @@ test('exclusions line uses expanded Routing Rules (addresses first, then domains
       password: 'p',
       vpnProtocol: 'QUIC',
       dnsServers: [],
+      bypassDnsServers: [],
     },
     routing: {
       mode: 'general',
@@ -34,6 +35,7 @@ const baseInput = {
     password: 'p',
     vpnProtocol: 'QUIC' as const,
     dnsServers: [],
+    bypassDnsServers: [],
   },
   routing: { mode: 'general' as const, rules: [] },
 };
@@ -52,6 +54,32 @@ test('explicit excluded routes override the default', () => {
   const config = encodeConfig({ ...baseInput, excludedRoutes: ['1.1.1.0/24'] });
   expect(config).toContain('excluded_routes = ["1.1.1.0/24"]');
   expect(config).not.toContain('10.0.0.0/8');
+});
+
+test('direct_dns_upstreams sits under [endpoint] beside dns_upstreams, same quoting (#116)', () => {
+  const config = encodeConfig({
+    ...baseInput,
+    server: {
+      ...baseInput.server,
+      dnsServers: ['tls://1.1.1.1'],
+      bypassDnsServers: ['https://dns.adguard.com/dns-query', '9.9.9.9:53'],
+    },
+  });
+
+  const endpoint = config.indexOf('[endpoint]');
+  const dns = config.indexOf('dns_upstreams = ["tls://1.1.1.1"]');
+  const direct = config.indexOf(
+    'direct_dns_upstreams = ["https://dns.adguard.com/dns-query", "9.9.9.9:53"]',
+  );
+  const listener = config.indexOf('[listener]');
+
+  expect(dns).toBeGreaterThan(endpoint);
+  expect(direct).toBeGreaterThan(dns);
+  expect(direct).toBeLessThan(listener);
+});
+
+test('empty Bypass DNS Servers encodes as an empty list', () => {
+  expect(encodeConfig(baseInput)).toContain('direct_dns_upstreams = []');
 });
 
 test('dns_upstreams lives under [endpoint] (trusttunnel-client >= 1.0.45 ignores root-level key)', () => {

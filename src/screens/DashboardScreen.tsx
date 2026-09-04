@@ -48,11 +48,13 @@ export default function DashboardScreen() {
   const pickerRef = useRef<BottomSheetModal>(null);
 
   const setupSummary = useMemo(() => {
-    const { server, routingMode, dnsServers } = profile;
+    const { server, routingMode, dnsServers, bypassDnsServers } = profile;
     return `server=${server.ipAddress} domain=${server.domain} user=${
       server.login
     } protocol=${server.vpnProtocol}; dns=${
       dnsServers.join(', ') || '-'
+    }; bypassDns=${
+      bypassDnsServers.join(', ') || '-'
     }; routeMode=${routingMode}; rules=${effectiveRules(profile).length};`;
   }, [profile]);
 

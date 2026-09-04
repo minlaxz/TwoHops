@@ -93,6 +93,13 @@ export default function ServerScreen() {
       parseRules(prev).join(',') === dnsList ? prev : dnsList,
     );
   }, [dnsList]);
+  const bypassDnsList = (profile?.bypassDnsServers ?? []).join(',');
+  const [bypassDnsText, setBypassDnsText] = useState(bypassDnsList);
+  useEffect(() => {
+    setBypassDnsText(prev =>
+      parseRules(prev).join(',') === bypassDnsList ? prev : bypassDnsList,
+    );
+  }, [bypassDnsList]);
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const reduceMotion = useReducedMotion();
@@ -295,15 +302,27 @@ export default function ServerScreen() {
             onChangeText={value => updateServer({ password: value })}
             secureTextEntry
           />
-          <Text style={styles.inputLabel}>DNS Servers:</Text>
+          <Text style={styles.inputLabel}>Tunnel DNS Servers:</Text>
           <TextInput
             style={styles.input}
-            placeholder="DNS Servers (comma-separated)"
+            placeholder="Tunnel DNS Servers (comma-separated)"
             placeholderTextColor={placeholderTextColor}
             value={dnsText}
             onChangeText={value => {
               setDnsText(value);
               updateProfile({ dnsServers: parseRules(value) });
+            }}
+            autoCapitalize="none"
+          />
+          <Text style={styles.inputLabel}>Bypass DNS Servers:</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Bypass DNS Servers (comma-separated)"
+            placeholderTextColor={placeholderTextColor}
+            value={bypassDnsText}
+            onChangeText={value => {
+              setBypassDnsText(value);
+              updateProfile({ bypassDnsServers: parseRules(value) });
             }}
             autoCapitalize="none"
           />
