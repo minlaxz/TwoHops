@@ -11,13 +11,13 @@ or URL; nothing comes from secondary write-ups.
 
 ## 1. TL;DR verdict: partly correct, but the order is backwards
 
-- **The DNS query is itself a routed connection, and it is routed by the *domain name*, before any
+- **The DNS query is itself a routed connection, and it is routed by the _domain name_, before any
   IP exists.** The core intercepts every UDP/TCP packet to port 53 on the TUN and matches the
   question name (qname) against the rules to pick which resolver answers it.
 - **The tunnel/bypass decision for the real connection is made per connection, from three signals
   in this order:** (1) rule match on the destination IP/CIDR, (2) "this IP came back in a DNS answer
   for an excluded domain" (a hint seeded by the DNS step), (3) the hostname sniffed from the first
-  packet (TLS SNI / HTTP Host / QUIC). The resolved IP alone decides only when the rule *is* an IP or
+  packet (TLS SNI / HTTP Host / QUIC). The resolved IP alone decides only when the rule _is_ an IP or
   CIDR.
 - **The device never talks to 1.1.1.1 directly.** When the Profile lists DNS Servers, Android is
   told the VPN's DNS server is the fake address `198.18.53.53`; the core answers as that address and
@@ -45,7 +45,7 @@ app          Android stub resolver        TUN / TrustTunnel core                
 ```
 
 For a non-rule domain (`facebook.com`) the qname is "included": the query goes to the Profile's
-resolver *through the tunnel*, no suspect is recorded, and the later TCP connect takes the mode's
+resolver _through the tunnel_, no suspect is recorded, and the later TCP connect takes the mode's
 default (general: TUNNEL) unless the sniffed SNI later matches a rule.
 
 ## 2. Step-by-step, with code
@@ -123,12 +123,12 @@ The reply is then returned to the app unchanged otherwise.
 When the app opens TCP/UDP to the resolved IP, `finalize_connect_action` runs
 (`core/src/tunnel.cpp:1021-1062`) using `DomainFilter::match_tag` (`core/src/domain_filter.cpp:160-188`):
 
-| Check (in order)                                | Result                                            |
-| ----------------------------------------------- | ------------------------------------------------- |
-| dst IP[:port] or CIDR is a rule                 | EXCLUSION: action inverted from the mode default  |
-| IP previously mapped to a domain by SNI sniff   | `match_domain(cached name)`                        |
-| IP is a DNS-seeded suspect and port is 443/80/8080/8008 | `CONNF_SUSPECT_EXCLUSION` (`tunnel.cpp:388-393`) |
-| none                                            | mode default: general=TUNNEL, selective=BYPASS (`tunnel.cpp:467-483`) |
+| Check (in order)                                        | Result                                                                |
+| ------------------------------------------------------- | --------------------------------------------------------------------- |
+| dst IP[:port] or CIDR is a rule                         | EXCLUSION: action inverted from the mode default                      |
+| IP previously mapped to a domain by SNI sniff           | `match_domain(cached name)`                                           |
+| IP is a DNS-seeded suspect and port is 443/80/8080/8008 | `CONNF_SUSPECT_EXCLUSION` (`tunnel.cpp:388-393`)                      |
+| none                                                    | mode default: general=TUNNEL, selective=BYPASS (`tunnel.cpp:467-483`) |
 
 Suspect connections are parked on a fake upstream while the first bytes are read
 (`tunnel.cpp:921-926`); the domain extractor pulls SNI / Host / QUIC SNI
@@ -147,29 +147,29 @@ The final action and sniffed domain are what TwoHops shows per row in Logs
 `addRule` appends the registrable domain to Local Rules (`src/screens/LogsScreen.tsx:310-317`,
 `src/services/setupProfile.ts:259`). Nothing changes until reconnect, because
 `updateConfiguration` is a no-op on Android (comment at `LogsScreen.tsx:316`). After reconnect the
-rule is a *domain* exclusion: it steers the DNS query (2.4), seeds suspects (2.5) and matches SNI
+rule is a _domain_ exclusion: it steers the DNS query (2.4), seeds suspects (2.5) and matches SNI
 (2.6). It never becomes an IP route; the Android routing table is unchanged.
 
 ## 3. Where the user's model goes wrong, point by point
 
 1. "Device -> 1.1.1.1": the device sends to the VPN-assigned DNS address inside the TUN; the core
-   decides *which* resolver sees the query, by qname. 1.1.1.1 is only reached if it is in the
+   decides _which_ resolver sees the query, by qname. 1.1.1.1 is only reached if it is in the
    Profile's DNS Servers, and then through the tunnel.
 2. "Query returns 1.2.3.1 -> decide": the decision is not "look up the IP in a table". Domain rules
    are matched on names (qname, then SNI). The IP only matters for IP/CIDR rules and as a TTL-bound
    hint that a hostname check is worth doing.
-3. Order: for a rule domain the *DNS query itself* is already bypassed (or tunneled, in selective
+3. Order: for a rule domain the _DNS query itself_ is already bypassed (or tunneled, in selective
    mode) before the app ever sees an IP. "Resolve, then decide" is true only of the data connection,
    and even there the final say is the sniffed hostname.
 
 ## 4. Open questions (not confirmed from primary sources)
 
-- Whether dnslibs' outbound sockets for the *system* DNS proxy are also `VpnService.protect`ed on
+- Whether dnslibs' outbound sockets for the _system_ DNS proxy are also `VpnService.protect`ed on
   Android, or rely solely on the `outbound_interface` binding seen in `dns_proxy_accessor.cpp:28,53`.
   Either way they bypass the TUN; the mechanism was not traced into the dnslibs dependency.
 - Behaviour for DNS-over-TLS/HTTPS clients on the device (Android Private DNS): those flows are
   not port 53 and so are not intercepted; how Android treats Private DNS while a VPN sets
   `addDnsServer` was not verified against Android source.
-- The DNS answer for a *non-rule* domain (included) does not seed suspects; a later SNI hit on such
+- The DNS answer for a _non-rule_ domain (included) does not seed suspects; a later SNI hit on such
   a connection can still flip it, but only on the first packet. Whether QUIC (UDP 443) retries make
   that reliable in practice was not tested on a device.
