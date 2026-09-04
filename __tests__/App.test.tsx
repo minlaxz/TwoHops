@@ -1704,7 +1704,7 @@ test('Settings tab shows theme picker and app version', async () => {
   expect(text).toContain('About');
   expect(text).toContain(`${require('../package.json').version} (2025010100)`);
   expect(text).toContain('Core Version');
-  expect(text).toContain('1.1.3');
+  expect(text).toContain('1.1.5-twohops.1');
   expect(text).toContain('App License');
   expect(text).toContain('Core License');
   expect(text).toContain('Apache-2.0');
