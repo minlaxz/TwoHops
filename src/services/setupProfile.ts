@@ -20,9 +20,12 @@ import type { QueryLogRow } from '../types';
 export type { ServerCredentials };
 
 export interface SetupProfile {
-  version: 1;
+  version: 2;
   server: ServerCredentials;
+  /** Tunnel DNS Servers (storage key kept from v1). */
   dnsServers: string[];
+  /** Bypass DNS Servers (v2); empty means the device's system resolvers. */
+  bypassDnsServers: string[];
   routingMode: RoutingMode;
   localRulesText: string;
   remoteRulesURL: string;
@@ -99,7 +102,7 @@ const REQUIRED_FIELDS: MissingField[] = [
 
 export function defaultProfile(env: ProfileEnv): SetupProfile {
   return {
-    version: 1,
+    version: 2,
     server: {
       name: env.ENV_SERVER_NAME || '',
       ipAddress: '',
@@ -109,6 +112,7 @@ export function defaultProfile(env: ProfileEnv): SetupProfile {
       vpnProtocol: env.ENV_PROTOCOL || 'QUIC',
     },
     dnsServers: parseRules(env.ENV_DNS_SERVERS || ''),
+    bypassDnsServers: [],
     routingMode: 'selective',
     localRulesText: '',
     remoteRulesURL: '',
@@ -316,7 +320,11 @@ export function tunnelStartInput(
   return {
     ok: true,
     value: {
-      server: { ...profile.server, dnsServers: profile.dnsServers },
+      server: {
+        ...profile.server,
+        dnsServers: profile.dnsServers,
+        bypassDnsServers: profile.bypassDnsServers,
+      },
       routing: { mode: profile.routingMode, rules: effectiveRules(profile) },
     },
   };
@@ -340,15 +348,30 @@ export async function loadProfile(
     return (await migrateLegacy(storage, env)) ?? defaultProfile(env);
   }
   try {
-    const parsed = JSON.parse(raw);
-    if (parsed?.version !== 1) {
-      throw new Error(`unknown version ${parsed?.version}`);
-    }
-    // ponytail: trust v1 shape; add field validation if corrupt docs show up
-    return parsed as SetupProfile;
+    return migrateProfileDocument(JSON.parse(raw));
   } catch (error) {
     console.warn('Setup Profile unreadable, using defaults:', error);
     return defaultProfile(env);
+  }
+}
+
+// Per-document migration (ADR 0001; per entry inside the list, ADR 0003).
+// v1 -> v2: Bypass DNS Servers added, default empty (#116).
+// ponytail: trust the known-version shape; add field validation if corrupt
+// docs show up
+export function migrateProfileDocument(parsed: unknown): SetupProfile {
+  const doc = parsed as { version?: unknown } | null;
+  switch (doc?.version) {
+    case 1:
+      return {
+        ...(doc as Omit<SetupProfile, 'version' | 'bypassDnsServers'>),
+        bypassDnsServers: [],
+        version: 2,
+      };
+    case 2:
+      return doc as SetupProfile;
+    default:
+      throw new Error(`unknown version ${doc?.version}`);
   }
 }
 

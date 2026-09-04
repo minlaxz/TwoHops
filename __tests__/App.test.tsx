@@ -1285,6 +1285,37 @@ test('edit mode has no link input and opens Advanced expanded', async () => {
   });
 });
 
+test('Profile screen labels Tunnel DNS Servers and offers Bypass DNS Servers; v1 entries load empty and Save persists the list (#116)', async () => {
+  await seedTwoProfiles('b'); // seeded entries are v1: no bypassDnsServers
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-edit');
+
+  const text = renderedText(renderer);
+  expect(text).toContain('Tunnel DNS Servers:');
+  expect(text).toContain('Bypass DNS Servers:');
+  const bypass = renderer.root.findAll(
+    node =>
+      node.props.placeholder === 'Bypass DNS Servers (comma-separated)' &&
+      typeof node.props.onChangeText === 'function',
+  )[0];
+  expect(bypass.props.value).toBe('');
+
+  await ReactTestRenderer.act(async () => {
+    bypass.props.onChangeText('https://dns.adguard.com/dns-query, 9.9.9.9');
+  });
+  await press(renderer, 'profile-save');
+
+  expect(
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[1]
+      .bypassDnsServers,
+  ).toEqual(['https://dns.adguard.com/dns-query', '9.9.9.9']);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
 test('edit mode holds a draft: rename reaches the card and storage only on Save', async () => {
   await seedTwoProfiles('b');
   const renderer = await renderApp();

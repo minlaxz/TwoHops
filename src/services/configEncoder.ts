@@ -26,6 +26,7 @@ export function encodeConfig(input: VpnStartInput): string {
 
   const exclusions = parseToConfigList(expandRules(routing.rules));
   const dnsUpStreams = parseToConfigList(server.dnsServers);
+  const directDnsUpStreams = parseToConfigList(server.bypassDnsServers);
   const hostName = parseToConfigString(server.domain);
 
   const hasIpv6 = false;
@@ -60,6 +61,7 @@ export function encodeConfig(input: VpnStartInput): string {
     postQuantumGroupEnabled,
     exclusions,
     dnsUpStreams,
+    directDnsUpStreams,
     hostName,
     addresses,
     hasIpv6,
@@ -135,6 +137,7 @@ type TemplateInput = {
   postQuantumGroupEnabled: boolean;
   exclusions: string;
   dnsUpStreams: string;
+  directDnsUpStreams: string;
   hostName: string;
   addresses: string;
   hasIpv6: boolean;
@@ -241,6 +244,10 @@ anti_dpi = ${input.antiDpi}
 #   * sdns://... -- DNS stamp (see https://dnscrypt.info/stamps-specifications)
 #   * quic://dns.adguard.com:8853 -- DNS-over-QUIC
 dns_upstreams = ${input.dnsUpStreams}
+# Bypass DNS Servers (TwoHops fork, ADR 0006): resolvers for queries whose
+# name routes outside the tunnel. Same formats as dns_upstreams; empty keeps
+# the device's system resolvers.
+direct_dns_upstreams = ${input.directDnsUpStreams}
 
 # Defines the way to listen to network traffic by the kind of the nested table.
 # Possible types:

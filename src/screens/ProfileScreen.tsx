@@ -54,6 +54,18 @@ export type ProfileScreenParams = {
   focus?: 'link';
 };
 
+// A comma-separated text field is only a display of its list (Tunnel DNS
+// Servers, Bypass DNS Servers); local state keeps the user's in-progress
+// punctuation while the list stays the source of truth.
+function useListText(list: string[] | undefined) {
+  const joined = (list ?? []).join(',');
+  const [text, setText] = useState(joined);
+  useEffect(() => {
+    setText(prev => (parseRules(prev).join(',') === joined ? prev : joined));
+  }, [joined]);
+  return [text, setText] as const;
+}
+
 export default function ServerScreen() {
   const { profiles, selectedId, createProfile, saveProfile, deleteProfile } =
     useSetupProfile();
@@ -84,15 +96,10 @@ export default function ServerScreen() {
 
   const profile = isCreateMode || entry ? draft : undefined;
 
-  // DNS text is only a display of the DNS Servers list; local state keeps
-  // the user's in-progress punctuation while the list is the source of truth.
-  const dnsList = (profile?.dnsServers ?? []).join(',');
-  const [dnsText, setDnsText] = useState(dnsList);
-  useEffect(() => {
-    setDnsText(prev =>
-      parseRules(prev).join(',') === dnsList ? prev : dnsList,
-    );
-  }, [dnsList]);
+  const [dnsText, setDnsText] = useListText(profile?.dnsServers);
+  const [bypassDnsText, setBypassDnsText] = useListText(
+    profile?.bypassDnsServers,
+  );
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const reduceMotion = useReducedMotion();
@@ -295,15 +302,27 @@ export default function ServerScreen() {
             onChangeText={value => updateServer({ password: value })}
             secureTextEntry
           />
-          <Text style={styles.inputLabel}>DNS Servers:</Text>
+          <Text style={styles.inputLabel}>Tunnel DNS Servers:</Text>
           <TextInput
             style={styles.input}
-            placeholder="DNS Servers (comma-separated)"
+            placeholder="Tunnel DNS Servers (comma-separated)"
             placeholderTextColor={placeholderTextColor}
             value={dnsText}
             onChangeText={value => {
               setDnsText(value);
               updateProfile({ dnsServers: parseRules(value) });
+            }}
+            autoCapitalize="none"
+          />
+          <Text style={styles.inputLabel}>Bypass DNS Servers:</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Bypass DNS Servers (comma-separated)"
+            placeholderTextColor={placeholderTextColor}
+            value={bypassDnsText}
+            onChangeText={value => {
+              setBypassDnsText(value);
+              updateProfile({ bypassDnsServers: parseRules(value) });
             }}
             autoCapitalize="none"
           />
