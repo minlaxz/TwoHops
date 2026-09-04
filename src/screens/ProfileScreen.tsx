@@ -326,7 +326,14 @@ export default function ServerScreen() {
             value={bypassDnsText}
             onChangeText={value => {
               setBypassDnsText(value);
-              updateProfile({ bypassDnsServers: parseRules(value) });
+              const bypassDnsServers = parseRules(value);
+              // Route is meaningless without a list; clearing it resets to
+              // Direct so the control reappears at its default (#117).
+              updateProfile(
+                bypassDnsServers.length
+                  ? { bypassDnsServers }
+                  : { bypassDnsServers, bypassDnsRoute: 'direct' },
+              );
             }}
             autoCapitalize="none"
           />

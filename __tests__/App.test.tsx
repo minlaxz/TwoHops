@@ -1311,6 +1311,19 @@ test('Profile screen labels Tunnel DNS Servers and offers Bypass DNS Servers; v1
       .accessibilityState.checked,
   ).toBe(true);
   await press(renderer, 'profile-bypass-route-tunnel');
+  // Clearing the list hides the control and resets the route to Direct.
+  await ReactTestRenderer.act(async () => {
+    bypass.props.onChangeText('');
+  });
+  expect(pressableByTestID(renderer, 'profile-bypass-route-tunnel')).toBeNull();
+  await ReactTestRenderer.act(async () => {
+    bypass.props.onChangeText('https://dns.adguard.com/dns-query, 9.9.9.9');
+  });
+  expect(
+    pressableByTestID(renderer, 'profile-bypass-route-direct')!.props
+      .accessibilityState.checked,
+  ).toBe(true);
+  await press(renderer, 'profile-bypass-route-tunnel');
   await press(renderer, 'profile-save');
 
   expect(
