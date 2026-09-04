@@ -15,9 +15,9 @@ import type { AppTheme, ThemePreference } from '../theme/colors';
 // Build number is CI-injected via .env (ENV_BUILD_NUMBER); absent in local dev.
 const BUILD_NUMBER: string | undefined = Config.ENV_BUILD_NUMBER;
 // TrustTunnel core library version. Source of truth: android/app/build.gradle
-// ("com.adguard.trusttunnel:trusttunnel-client-android:1.1.3") — update by
+// ("io.github.minlaxz:trusttunnel-client-android:1.1.5-twohops.1") — update by
 // hand on pin bumps. iOS bundles no core today.
-const CORE_VERSION = '1.1.3';
+const CORE_VERSION = '1.1.5-twohops.1';
 
 const aboutRows: [string, string][] = [
   [
