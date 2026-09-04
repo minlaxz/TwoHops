@@ -2,6 +2,7 @@
 // derivations, persistence and legacy migration. See CONTEXT.md and ADR 0001.
 
 import type {
+  BypassDnsRoute,
   RoutingMode,
   ServerCredentials,
   VpnProtocol,
@@ -26,6 +27,8 @@ export interface SetupProfile {
   dnsServers: string[];
   /** Bypass DNS Servers (v2); empty means the device's system resolvers. */
   bypassDnsServers: string[];
+  /** Bypass DNS Route (v2, #117); meaningless while the list is empty. */
+  bypassDnsRoute: BypassDnsRoute;
   routingMode: RoutingMode;
   localRulesText: string;
   remoteRulesURL: string;
@@ -85,6 +88,7 @@ export const LEGACY_STORAGE_KEYS = {
 } as const;
 
 const ROUTING_MODES: RoutingMode[] = ['general', 'selective'];
+const BYPASS_DNS_ROUTES: BypassDnsRoute[] = ['direct', 'tunnel'];
 const PROTOCOLS: VpnProtocol[] = ['Http/2', 'QUIC'];
 const pick = <T extends string>(
   value: string | null | undefined,
@@ -113,6 +117,7 @@ export function defaultProfile(env: ProfileEnv): SetupProfile {
     },
     dnsServers: parseRules(env.ENV_DNS_SERVERS || ''),
     bypassDnsServers: [],
+    bypassDnsRoute: 'direct',
     routingMode: 'selective',
     localRulesText: '',
     remoteRulesURL: '',
@@ -137,7 +142,8 @@ export function updateServer(
   return { ...profile, server: { ...profile.server, ...patch } };
 }
 
-// Profile Link: twohops://…?login=&password=&ip=&domain=&protocol=&dns=&remoteRules=
+// Profile Link: twohops://…?login=&password=&ip=&domain=&protocol=&dns=
+//   &bypassDns=&bypassDnsRoute=&remoteRules=
 // Overwrites only the fields the link carries; a link cannot carry the server
 // name, so an empty one defaults from the link's domain (user can overwrite).
 // Pure — no network.
@@ -187,6 +193,10 @@ export function applyProfileLink(
   const patch: Partial<SetupProfile> = {};
   const dns = params.get('dns');
   if (dns !== undefined) patch.dnsServers = parseRules(dns);
+  const bypassDns = params.get('bypassDns');
+  if (bypassDns !== undefined) patch.bypassDnsServers = parseRules(bypassDns);
+  const bypassDnsRoute = pick(params.get('bypassDnsRoute'), BYPASS_DNS_ROUTES);
+  if (bypassDnsRoute !== undefined) patch.bypassDnsRoute = bypassDnsRoute;
   const remoteRules = params.get('remoteRules');
   if (remoteRules !== undefined) patch.remoteRulesURL = remoteRules;
   return {
@@ -207,6 +217,12 @@ export function profileLink(profile: SetupProfile): string {
     ['domain', server.domain],
     ['protocol', server.vpnProtocol],
     ['dns', profile.dnsServers.join(',')],
+    ['bypassDns', profile.bypassDnsServers.join(',')],
+    // Route is meaningless without a list; omit it alongside.
+    [
+      'bypassDnsRoute',
+      profile.bypassDnsServers.length ? profile.bypassDnsRoute : '',
+    ],
     ['remoteRules', profile.remoteRulesURL],
   ];
   const query = fields
@@ -324,6 +340,7 @@ export function tunnelStartInput(
         ...profile.server,
         dnsServers: profile.dnsServers,
         bypassDnsServers: profile.bypassDnsServers,
+        bypassDnsRoute: profile.bypassDnsRoute,
       },
       routing: { mode: profile.routingMode, rules: effectiveRules(profile) },
     },
@@ -356,20 +373,24 @@ export async function loadProfile(
 }
 
 // Per-document migration (ADR 0001; per entry inside the list, ADR 0003).
-// v1 -> v2: Bypass DNS Servers added, default empty (#116).
+// v1 -> v2: Bypass DNS Servers (empty) and Bypass DNS Route (direct) added
+// (#116, #117). v2 shipped unreleased without the route, so it is defaulted
+// on read too.
 // ponytail: trust the known-version shape; add field validation if corrupt
 // docs show up
 export function migrateProfileDocument(parsed: unknown): SetupProfile {
   const doc = parsed as { version?: unknown } | null;
   switch (doc?.version) {
     case 1:
+    case 2: {
+      const partial = doc as Partial<SetupProfile>;
       return {
-        ...(doc as Omit<SetupProfile, 'version' | 'bypassDnsServers'>),
-        bypassDnsServers: [],
+        ...partial,
+        bypassDnsServers: partial.bypassDnsServers ?? [],
+        bypassDnsRoute: partial.bypassDnsRoute ?? 'direct',
         version: 2,
-      };
-    case 2:
-      return doc as SetupProfile;
+      } as SetupProfile;
+    }
     default:
       throw new Error(`unknown version ${doc?.version}`);
   }

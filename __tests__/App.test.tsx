@@ -1300,16 +1300,27 @@ test('Profile screen labels Tunnel DNS Servers and offers Bypass DNS Servers; v1
       typeof node.props.onChangeText === 'function',
   )[0];
   expect(bypass.props.value).toBe('');
+  // Bypass DNS Route is absent while the list is empty (#117).
+  expect(pressableByTestID(renderer, 'profile-bypass-route-direct')).toBeNull();
 
   await ReactTestRenderer.act(async () => {
     bypass.props.onChangeText('https://dns.adguard.com/dns-query, 9.9.9.9');
   });
+  expect(
+    pressableByTestID(renderer, 'profile-bypass-route-direct')!.props
+      .accessibilityState.checked,
+  ).toBe(true);
+  await press(renderer, 'profile-bypass-route-tunnel');
   await press(renderer, 'profile-save');
 
   expect(
     JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[1]
       .bypassDnsServers,
   ).toEqual(['https://dns.adguard.com/dns-query', '9.9.9.9']);
+  expect(
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[1]
+      .bypassDnsRoute,
+  ).toBe('tunnel');
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();

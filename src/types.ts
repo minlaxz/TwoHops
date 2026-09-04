@@ -12,6 +12,9 @@ export type VpnManagerState =
 
 export type RoutingMode = 'general' | 'selective';
 
+/** Bypass DNS Route — which network a Bypass-side Query travels on. */
+export type BypassDnsRoute = 'direct' | 'tunnel';
+
 export interface ServerCredentials {
   name: string;
   ipAddress: string;
@@ -27,6 +30,8 @@ export interface ServerConfig extends ServerCredentials {
   dnsServers: string[];
   /** Bypass DNS Servers — resolvers for Bypass-side Queries; empty = system. */
   bypassDnsServers: string[];
+  /** Bypass DNS Route — meaningless while bypassDnsServers is empty. */
+  bypassDnsRoute: BypassDnsRoute;
 }
 
 export interface RoutingConfig {

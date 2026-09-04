@@ -274,10 +274,12 @@ describe('saveProfileList / loadProfileList', () => {
     const list = twoProfileList();
     const stored = {
       ...list,
-      profiles: list.profiles.map(({ bypassDnsServers: _omit, ...entry }) => ({
-        ...entry,
-        version: 1,
-      })),
+      profiles: list.profiles.map(
+        ({ bypassDnsServers: _a, bypassDnsRoute: _b, ...entry }) => ({
+          ...entry,
+          version: 1,
+        }),
+      ),
     };
     const { storage } = memoryStorage({
       [PROFILES_STORAGE_KEY]: JSON.stringify(stored),

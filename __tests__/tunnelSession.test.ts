@@ -16,6 +16,7 @@ const input: VpnStartInput = {
     vpnProtocol: 'QUIC',
     dnsServers: [],
     bypassDnsServers: [],
+    bypassDnsRoute: 'direct' as const,
   },
   routing: { mode: 'general', rules: [] },
 };

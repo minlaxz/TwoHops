@@ -35,11 +35,15 @@ import {
 import { displayState } from '../services/tunnelSession';
 import { useAppTheme } from '../context/ThemeContext';
 import type { AppTheme } from '../theme/colors';
-import type { RoutingMode, VpnProtocol } from '../types';
+import type { BypassDnsRoute, RoutingMode, VpnProtocol } from '../types';
 
 const protocolOptions: { value: VpnProtocol; label: string }[] = [
   { value: 'Http/2', label: 'Http/2' },
   { value: 'QUIC', label: 'QUIC' },
+];
+const bypassRouteOptions: { value: BypassDnsRoute; label: string }[] = [
+  { value: 'direct', label: 'Direct' },
+  { value: 'tunnel', label: 'Tunnel' },
 ];
 const routingOptions: { value: RoutingMode; label: string }[] = [
   { value: 'general', label: 'General' },
@@ -326,6 +330,19 @@ export default function ServerScreen() {
             }}
             autoCapitalize="none"
           />
+          {profile.bypassDnsServers.length > 0 && (
+            <>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Bypass DNS Route</Text>
+              </View>
+              <SegmentedControl
+                testID="profile-bypass-route"
+                options={bypassRouteOptions}
+                value={profile.bypassDnsRoute}
+                onChange={bypassDnsRoute => updateProfile({ bypassDnsRoute })}
+              />
+            </>
+          )}
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Protocol</Text>
           </View>

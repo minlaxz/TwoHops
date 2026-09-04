@@ -11,6 +11,7 @@ test('exclusions line uses expanded Routing Rules (addresses first, then domains
       vpnProtocol: 'QUIC',
       dnsServers: [],
       bypassDnsServers: [],
+      bypassDnsRoute: 'direct',
     },
     routing: {
       mode: 'general',
@@ -36,6 +37,7 @@ const baseInput = {
     vpnProtocol: 'QUIC' as const,
     dnsServers: [],
     bypassDnsServers: [],
+    bypassDnsRoute: 'direct' as const,
   },
   routing: { mode: 'general' as const, rules: [] },
 };
@@ -80,6 +82,24 @@ test('direct_dns_upstreams sits under [endpoint] beside dns_upstreams, same quot
 
 test('empty Bypass DNS Servers encodes as an empty list', () => {
   expect(encodeConfig(baseInput)).toContain('direct_dns_upstreams = []');
+});
+
+test('direct_dns_via_tunnel is true only with a non-empty list and Tunnel route (#117)', () => {
+  const withRoute = (
+    bypassDnsServers: string[],
+    bypassDnsRoute: 'direct' | 'tunnel',
+  ) =>
+    encodeConfig({
+      ...baseInput,
+      server: { ...baseInput.server, bypassDnsServers, bypassDnsRoute },
+    });
+  expect(withRoute(['9.9.9.9'], 'tunnel')).toContain(
+    'direct_dns_via_tunnel = true',
+  );
+  expect(withRoute(['9.9.9.9'], 'direct')).toContain(
+    'direct_dns_via_tunnel = false',
+  );
+  expect(withRoute([], 'tunnel')).toContain('direct_dns_via_tunnel = false');
 });
 
 test('dns_upstreams lives under [endpoint] (trusttunnel-client >= 1.0.45 ignores root-level key)', () => {
