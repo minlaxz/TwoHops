@@ -21,6 +21,6 @@ We fork `TrustTunnel/TrustTunnelClient` at `v1.1.5` and add two config keys besi
 - We own a native build: Python, CMake, Conan 2, Go, Ninja, NDK on a GitHub runner. First run is slow; Conan cache makes later runs tolerable. Local builds stay off by default.
 - Every upstream release means a rebase and a re-publish. The patch touches roughly eleven files across core, trusttunnel, and both platform adapters, so conflicts are possible but small.
 - The Kotlin adapter drops unknown TOML keys, so the new keys must be added to `VpnServiceConfig` or they silently vanish. The Swift adapter gets them as optionals so iOS keeps compiling.
-- TwoHops' Gradle points at the fork's package repository; the package must be public for `GITHUB_TOKEN` in CI to read it.
+- TwoHops' Gradle points at the fork's package repository; the package must be public for `GITHUB_TOKEN` in CI to read it. Concretely: fork `minlaxz/TrustTunnelClient`, branch `twohops`, workflow `publish-android-twohops.yml` runs on tags matching `*-twohops.*` and publishes `io.github.minlaxz:trusttunnel-client-android:<tag>` to `https://maven.pkg.github.com/minlaxz/TrustTunnelClient`.
 - The Profile Link and Share Profile grow two parameters; old links without them leave the new fields empty.
 - Out of scope, by decision: a DNS `reject` action for blocklists without an upstream filter, iOS, automatic fallback.
