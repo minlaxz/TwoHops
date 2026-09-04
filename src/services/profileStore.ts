@@ -187,14 +187,13 @@ export async function loadProfileList(
       if (parsed?.version !== 1) {
         throw new Error(`unknown version ${parsed?.version}`);
       }
-      // ponytail: trust v1 shape; add field validation if corrupt docs show up
-      // Each entry carries its own document version (ADR 0003).
+      // ponytail: trust the list shape; add field validation if corrupt docs
+      // show up. Each entry carries its own document version (ADR 0003).
       return {
         ...parsed,
         profiles: (parsed.profiles as ProfileEntry[]).map(entry => ({
+          ...entry,
           ...migrateProfileDocument(entry),
-          id: entry.id,
-          name: entry.name,
         })),
       } as ProfileList;
     } catch (error) {
