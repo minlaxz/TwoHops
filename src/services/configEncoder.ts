@@ -27,6 +27,8 @@ export function encodeConfig(input: VpnStartInput): string {
   const exclusions = parseToConfigList(expandRules(routing.rules));
   const dnsUpStreams = parseToConfigList(server.dnsServers);
   const directDnsUpStreams = parseToConfigList(server.bypassDnsServers);
+  const directDnsViaTunnel =
+    server.bypassDnsServers.length > 0 && server.bypassDnsRoute === 'tunnel';
   const hostName = parseToConfigString(server.domain);
 
   const hasIpv6 = false;
@@ -62,6 +64,7 @@ export function encodeConfig(input: VpnStartInput): string {
     exclusions,
     dnsUpStreams,
     directDnsUpStreams,
+    directDnsViaTunnel,
     hostName,
     addresses,
     hasIpv6,
@@ -138,6 +141,7 @@ type TemplateInput = {
   exclusions: string;
   dnsUpStreams: string;
   directDnsUpStreams: string;
+  directDnsViaTunnel: boolean;
   hostName: string;
   addresses: string;
   hasIpv6: boolean;
@@ -248,6 +252,10 @@ dns_upstreams = ${input.dnsUpStreams}
 # name routes outside the tunnel. Same formats as dns_upstreams; empty keeps
 # the device's system resolvers.
 direct_dns_upstreams = ${input.directDnsUpStreams}
+# Bypass DNS Route (#117): true reaches direct_dns_upstreams through the
+# tunnel, for networks that block public resolvers. Only the query detours;
+# the connection to the answer still goes direct.
+direct_dns_via_tunnel = ${input.directDnsViaTunnel}
 
 # Defines the way to listen to network traffic by the kind of the nested table.
 # Possible types:

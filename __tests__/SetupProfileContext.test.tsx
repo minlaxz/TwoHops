@@ -215,6 +215,7 @@ function defaultsProfile(name: string) {
     },
     dnsServers: [],
     bypassDnsServers: [],
+    bypassDnsRoute: 'direct' as const,
     routingMode: 'selective' as const,
     localRulesText: '',
     remoteRulesURL: '',

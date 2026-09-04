@@ -14,6 +14,6 @@ The Setup Profile was spread across 11 flat AsyncStorage keys with six mirrored 
 
 ## Consequences
 
-- Any future shape change bumps `version` and adds a migration step; there is no other way to evolve stored data.
+- Any future shape change bumps `version` and adds a migration step; there is no other way to evolve stored data. One exception: a version that has not shipped in a release may be amended in place, with the loader defaulting the added fields (v2 gained Bypass DNS Route this way, #117).
 - Corrupt or unknown-version documents fall back to the default profile with a warning; no backup copy is kept.
 - First tunnel start after upgrade has no Imported Rules until the user re-imports.

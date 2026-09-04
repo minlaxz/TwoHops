@@ -66,6 +66,7 @@ describe('defaultProfile', () => {
       },
       dnsServers: ['1.1.1.1', '8.8.8.8'],
       bypassDnsServers: [],
+      bypassDnsRoute: 'direct',
       routingMode: 'selective',
       localRulesText: '',
       remoteRulesURL: '',
@@ -239,6 +240,7 @@ describe('tunnelStartInput', () => {
           ...profile.server,
           dnsServers: ['1.1.1.1', '8.8.8.8'],
           bypassDnsServers: ['https://dns.adguard.com/dns-query'],
+          bypassDnsRoute: 'direct',
         },
         routing: { mode: 'general', rules: ['a.com', 'b.com'] },
       },
@@ -300,6 +302,7 @@ describe('saveProfile / loadProfile', () => {
       },
       dnsServers: ['9.9.9.9', '1.0.0.1'],
       bypassDnsServers: [],
+      bypassDnsRoute: 'direct',
       routingMode: 'general',
       localRulesText: 'a.com\nb.com',
       remoteRulesURL: 'https://x/rules.txt',
@@ -323,15 +326,17 @@ describe('saveProfile / loadProfile', () => {
     );
   });
 
-  test('v1 document loads as v2 with empty Bypass DNS Servers (#116)', async () => {
+  test('v1 document loads as v2 with empty Bypass DNS Servers and direct route (#116, #117)', async () => {
     const v1: Partial<SetupProfile> = { ...completeProfile() };
     delete v1.bypassDnsServers;
+    delete v1.bypassDnsRoute;
     const { storage } = memoryStorage({
       [PROFILE_STORAGE_KEY]: JSON.stringify({ ...v1, version: 1 }),
     });
     await expect(loadProfile(storage, env)).resolves.toEqual({
       ...completeProfile(),
       bypassDnsServers: [],
+      bypassDnsRoute: 'direct',
     });
   });
 
@@ -409,10 +414,42 @@ describe('profileLink', () => {
     expect(result.value.dnsServers).toEqual(shared.dnsServers);
     expect(result.value.remoteRulesURL).toBe(shared.remoteRulesURL);
   });
+
+  test('carries bypassDns and bypassDnsRoute only when the list is non-empty; round-trips (#117)', () => {
+    const shared = updateProfile(completeProfile(), {
+      bypassDnsServers: ['https://dns.adguard.com/dns-query', '9.9.9.9'],
+      bypassDnsRoute: 'tunnel',
+    });
+    const link = profileLink(shared);
+    expect(link).toContain(
+      '&bypassDns=https%3A%2F%2Fdns.adguard.com%2Fdns-query%2C9.9.9.9',
+    );
+    expect(link).toContain('&bypassDnsRoute=tunnel');
+    const result = applyProfileLink(defaultProfile(env), link);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.bypassDnsServers).toEqual(shared.bypassDnsServers);
+    expect(result.value.bypassDnsRoute).toBe('tunnel');
+
+    const empty = profileLink(
+      updateProfile(completeProfile(), { bypassDnsRoute: 'tunnel' }),
+    );
+    expect(empty).not.toContain('bypassDns');
+  });
 });
 
 describe('applyProfileLink', () => {
   const base = completeProfile();
+
+  test('link without bypass params leaves defaults; bogus route ignored (#117)', () => {
+    const result = applyProfileLink(base, 'twohops://x?login=a');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.bypassDnsServers).toEqual([]);
+    expect(result.value.bypassDnsRoute).toBe('direct');
+    const bogus = applyProfileLink(base, 'twohops://x?bypassDnsRoute=bogus');
+    expect(bogus.ok && bogus.value.bypassDnsRoute).toBe('direct');
+  });
 
   test('wrong scheme is an error', () => {
     expect(applyProfileLink(base, 'https://x?login=a')).toEqual({
