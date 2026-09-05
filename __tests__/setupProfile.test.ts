@@ -18,6 +18,8 @@ import {
   saveProfile,
   PROFILE_STORAGE_KEY,
   LEGACY_STORAGE_KEYS,
+  DEFAULT_ADVANCED_SETTINGS,
+  migrateProfileDocument,
   type ProfileEnv,
   type ProfileStorage,
   type SetupProfile,
@@ -57,7 +59,7 @@ function completeProfile(): SetupProfile {
 describe('defaultProfile', () => {
   test('seeds name, protocol, DNS from env; selective; rest empty', () => {
     expect(defaultProfile(env)).toEqual({
-      version: 3,
+      version: 4,
       server: {
         name: 'env-server',
         ipAddress: '',
@@ -75,6 +77,21 @@ describe('defaultProfile', () => {
       remoteRulesURL: '',
       importedRules: [],
       importedAt: null,
+      advanced: {
+        killSwitch: true,
+        antiDpi: false,
+        mtu: 1500,
+        fallbackProtocol: null,
+        excludedRoutes: [
+          '10.0.0.0/8',
+          '100.64.0.0/10',
+          '169.254.0.0/16',
+          '172.16.0.0/12',
+          '192.0.0.0/24',
+          '192.168.0.0/16',
+          '255.255.255.255/32',
+        ],
+      },
     });
   });
 
@@ -262,7 +279,7 @@ describe('splitHostPort / joinHostPort', () => {
 });
 
 describe('tunnelStartInput', () => {
-  test('complete profile yields server with DNS, routing with effective rules, no excluded routes', () => {
+  test('complete profile yields server with DNS, routing with effective rules, Advanced Settings', () => {
     const profile = updateProfile(completeProfile(), {
       localRulesText: 'a.com',
       importedRules: ['a.com', 'b.com'],
@@ -281,8 +298,23 @@ describe('tunnelStartInput', () => {
           bypassDnsRoute: 'direct',
         },
         routing: { mode: 'general', rules: ['a.com', 'b.com'] },
+        advanced: DEFAULT_ADVANCED_SETTINGS,
       },
     });
+  });
+
+  test('hands the profile Advanced Settings to the core as-is (#132)', () => {
+    const advanced = {
+      killSwitch: false,
+      antiDpi: true,
+      mtu: 1280,
+      fallbackProtocol: 'Http/2' as const,
+      excludedRoutes: [],
+    };
+    const input = tunnelStartInput(
+      updateProfile(completeProfile(), { advanced }),
+    );
+    expect(input.ok && input.value.advanced).toEqual(advanced);
   });
 
   test('same-as-tunnel hands the Tunnel DNS Servers as the Bypass DNS Servers; the core never sees the flag (#125)', () => {
@@ -341,7 +373,7 @@ describe('saveProfile / loadProfile', () => {
       [LEGACY_STORAGE_KEYS.rulesText]: 'a.com\nb.com\nz.com',
     });
     const expected: SetupProfile = {
-      version: 3,
+      version: 4,
       server: {
         name: 'env-server',
         ipAddress: '10.0.0.1',
@@ -359,6 +391,7 @@ describe('saveProfile / loadProfile', () => {
       remoteRulesURL: 'https://x/rules.txt',
       importedRules: [],
       importedAt: null,
+      advanced: DEFAULT_ADVANCED_SETTINGS,
     };
     await expect(loadProfile(storage, env)).resolves.toEqual(expected);
     expect([...map.keys()]).toEqual([PROFILE_STORAGE_KEY]);
@@ -386,12 +419,14 @@ describe('saveProfile / loadProfile', () => {
     delete v1.bypassDnsServers;
     delete v1.bypassDnsRoute;
     delete v1.bypassDnsSource;
+    delete v1.advanced;
     const { storage } = memoryStorage({
       [PROFILE_STORAGE_KEY]: JSON.stringify({ ...v1, version: 1 }),
     });
     await expect(loadProfile(storage, env)).resolves.toEqual({
       ...completeProfile(),
-      version: 3,
+      version: 4,
+      advanced: DEFAULT_ADVANCED_SETTINGS,
       bypassDnsSource: 'custom',
       bypassDnsServers: [],
       bypassDnsRoute: 'direct',
@@ -405,16 +440,45 @@ describe('saveProfile / loadProfile', () => {
       bypassDnsRoute: 'tunnel',
     };
     delete v2.bypassDnsSource;
+    delete v2.advanced;
     const { storage } = memoryStorage({
       [PROFILE_STORAGE_KEY]: JSON.stringify({ ...v2, version: 2 }),
     });
     await expect(loadProfile(storage, env)).resolves.toEqual({
       ...completeProfile(),
-      version: 3,
+      version: 4,
+      advanced: DEFAULT_ADVANCED_SETTINGS,
       bypassDnsSource: 'custom',
       bypassDnsServers: ['9.9.9.9'],
       bypassDnsRoute: 'tunnel',
     });
+  });
+
+  test('v3 document loads as v4 with Advanced Settings equal to the old constants (#132)', async () => {
+    const v3: Partial<SetupProfile> = { ...completeProfile() };
+    delete v3.advanced;
+    const { storage } = memoryStorage({
+      [PROFILE_STORAGE_KEY]: JSON.stringify({ ...v3, version: 3 }),
+    });
+    await expect(loadProfile(storage, env)).resolves.toEqual({
+      ...completeProfile(),
+      version: 4,
+      advanced: DEFAULT_ADVANCED_SETTINGS,
+    });
+  });
+
+  test('v4 document keeps its own Advanced Settings (#132)', () => {
+    const advanced = {
+      killSwitch: false,
+      antiDpi: true,
+      mtu: 1400,
+      fallbackProtocol: 'QUIC' as const,
+      excludedRoutes: ['1.1.1.0/24'],
+    };
+    const doc = { ...completeProfile(), advanced };
+    expect(migrateProfileDocument(JSON.parse(JSON.stringify(doc)))).toEqual(
+      doc,
+    );
   });
 
   test('corrupt JSON warns and yields defaults; nothing written', async () => {

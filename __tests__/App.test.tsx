@@ -1519,7 +1519,7 @@ test('new profile defaults to same-as-tunnel: Share omits bypassDns and the core
   const stored = JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!)
     .profiles[2];
   expect(stored).toMatchObject({
-    version: 3,
+    version: 4,
     bypassDnsSource: 'same-as-tunnel',
     bypassDnsServers: [],
     bypassDnsRoute: 'tunnel',

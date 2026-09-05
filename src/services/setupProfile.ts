@@ -2,6 +2,7 @@
 // derivations, persistence and legacy migration. See CONTEXT.md and ADR 0001.
 
 import type {
+  AdvancedSettings,
   BypassDnsRoute,
   RoutingMode,
   ServerCredentials,
@@ -24,7 +25,7 @@ export type { ServerCredentials };
 export type BypassDnsSource = 'same-as-tunnel' | 'custom';
 
 export interface SetupProfile {
-  version: 3;
+  version: 4;
   server: ServerCredentials;
   /** Tunnel DNS Servers (storage key kept from v1). */
   dnsServers: string[];
@@ -39,7 +40,32 @@ export interface SetupProfile {
   remoteRulesURL: string;
   importedRules: string[];
   importedAt: string | null;
+  /** Advanced Settings (v4, ADR 0008); JSON Mode is the only editor. */
+  advanced: AdvancedSettings;
 }
+
+/** What the app hard-coded before v4; seed via `seedAdvanced()`, never by reference. */
+export const DEFAULT_ADVANCED_SETTINGS: Readonly<AdvancedSettings> = {
+  killSwitch: true,
+  antiDpi: false,
+  mtu: 1500,
+  fallbackProtocol: null,
+  excludedRoutes: [
+    '10.0.0.0/8',
+    '100.64.0.0/10',
+    '169.254.0.0/16',
+    '172.16.0.0/12',
+    '192.0.0.0/24',
+    '192.168.0.0/16',
+    '255.255.255.255/32',
+  ],
+};
+
+// Fresh copy per profile so no two documents share one routes array.
+const seedAdvanced = (): AdvancedSettings => ({
+  ...DEFAULT_ADVANCED_SETTINGS,
+  excludedRoutes: [...DEFAULT_ADVANCED_SETTINGS.excludedRoutes],
+});
 
 export type ProfileEnv = {
   ENV_SERVER_NAME?: string;
@@ -140,7 +166,7 @@ export function joinHostPort(host: string, port: string): string {
 
 export function defaultProfile(env: ProfileEnv): SetupProfile {
   return {
-    version: 3,
+    version: 4,
     server: {
       name: env.ENV_SERVER_NAME || '',
       ipAddress: '',
@@ -158,6 +184,7 @@ export function defaultProfile(env: ProfileEnv): SetupProfile {
     remoteRulesURL: '',
     importedRules: [],
     importedAt: null,
+    advanced: seedAdvanced(),
   };
 }
 
@@ -392,6 +419,7 @@ export function tunnelStartInput(
         bypassDnsRoute: profile.bypassDnsRoute,
       },
       routing: { mode: profile.routingMode, rules: effectiveRules(profile) },
+      advanced: profile.advanced,
     },
   };
 }
@@ -425,7 +453,8 @@ export async function loadProfile(
 // v1 -> v2: Bypass DNS Servers (empty) and Bypass DNS Route (direct) added
 // (#116, #117). v2 shipped unreleased without the route, so it is defaulted
 // on read too. v2 -> v3: Bypass DNS Source; absent means `custom`, so a
-// stored profile keeps exactly what it had (ADR 0007).
+// stored profile keeps exactly what it had (ADR 0007). v3 -> v4: Advanced
+// Settings, seeded with the constants the encoder used to hard-code (#132).
 // ponytail: trust the known-version shape; add field validation if corrupt
 // docs show up
 export function migrateProfileDocument(parsed: unknown): SetupProfile {
@@ -433,14 +462,16 @@ export function migrateProfileDocument(parsed: unknown): SetupProfile {
   switch (doc?.version) {
     case 1:
     case 2:
-    case 3: {
+    case 3:
+    case 4: {
       const partial = doc as Partial<SetupProfile>;
       return {
         ...partial,
         bypassDnsSource: partial.bypassDnsSource ?? 'custom',
         bypassDnsServers: partial.bypassDnsServers ?? [],
         bypassDnsRoute: partial.bypassDnsRoute ?? 'direct',
-        version: 3,
+        advanced: partial.advanced ?? seedAdvanced(),
+        version: 4,
       } as SetupProfile;
     }
     default:

@@ -5,6 +5,7 @@ import {
   type TunnelNativePort,
 } from '../src/services/tunnelSession';
 import type { VpnStartInput } from '../src/types';
+import { DEFAULT_ADVANCED_SETTINGS } from '../src/services/setupProfile';
 
 const input: VpnStartInput = {
   server: {
@@ -19,6 +20,7 @@ const input: VpnStartInput = {
     bypassDnsRoute: 'direct' as const,
   },
   routing: { mode: 'general', rules: [] },
+  advanced: DEFAULT_ADVANCED_SETTINGS,
 };
 
 function fakePort(initial: NativeStateReport = 'disconnected') {
