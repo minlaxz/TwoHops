@@ -108,18 +108,18 @@ export default function ServerScreen() {
   const isCreateMode = params?.mode === 'create';
   // Link Mode (#127): the screen's paste-link face. Local state so Modify can
   // flip to the Profile Form with the same Draft; the Form never flips back.
-  const [face, setFace] = useState<'form' | 'link'>(() =>
-    isCreateMode && params?.focus === 'link' ? 'link' : 'form',
+  const [isLinkMode, setIsLinkMode] = useState(
+    isCreateMode && params?.focus === 'link',
   );
-  const isLinkMode = face === 'link';
   const entry = profiles.find(candidate => candidate.id === params?.profileId);
   const [url, setURL] = useState<string>('');
-  // Link Mode status is derived, not stored: the last apply's parse result
-  // plus the Draft's missing fields. `null` = nothing applied yet.
-  const [linkResult, setLinkResult] = useState<
-    { ok: true } | { ok: false; error: ProfileLinkError } | null
-  >(null);
-  const linkApplied = linkResult?.ok === true;
+  // Link Mode status: the last Apply's parse failure (kept so the reason
+  // stays on screen) and whether any link has applied — sticky, so a later
+  // bad paste never hides Modify or the missing list of the applied Draft.
+  const [linkError, setLinkError] = useState<ProfileLinkError | null>(null);
+  const [linkApplied, setLinkApplied] = useState(false);
+  // The Link Mode rule: Save and the missing list wait for an applied link.
+  const linkGateOpen = !isLinkMode || linkApplied;
   // The Profile Draft: in-memory until Save commits it (blank for create,
   // seeded from the entry for edit). Its only name is the server name (#89).
   const [draft, setDraft] = useState<SetupProfile>(() =>
@@ -195,10 +195,8 @@ export default function ServerScreen() {
   // Link Mode additionally needs an applied link: Save is for what the link
   // yielded, never for an env-seeded blank Draft.
   const canCommit =
-    missing.length === 0 &&
-    (isCreateMode || isTouched) &&
-    (!isLinkMode || linkApplied);
-  const showMissing = missing.length > 0 && (!isLinkMode || linkApplied);
+    missing.length === 0 && (isCreateMode || isTouched) && linkGateOpen;
+  const showMissing = missing.length > 0 && linkGateOpen;
   const handleCommit = () => {
     if (committedRef.current) {
       return; // a second tap before the pop lands must not commit twice
@@ -328,12 +326,12 @@ export default function ServerScreen() {
             Paste a Profile Link to fill this profile's details in
             automatically.
           </Text>
-          {linkResult && !linkResult.ok ? (
+          {linkError ? (
             <Text
               testID="profile-link-error"
               style={[styles.inputDescription, styles.warning]}
             >
-              {profileLinkErrorMessage(linkResult.error)}
+              {profileLinkErrorMessage(linkError)}
             </Text>
           ) : null}
           <TouchableOpacityButton
@@ -347,10 +345,11 @@ export default function ServerScreen() {
               // shows inline and leaves the Draft as it was.
               const result = applyProfileLink(profile, url);
               if (!result.ok) {
-                setLinkResult(result);
+                setLinkError(result.error);
                 return;
               }
-              setLinkResult({ ok: true });
+              setLinkError(null);
+              setLinkApplied(true);
               patchDraft(() => result.value);
               setURL('');
             }}
@@ -604,7 +603,7 @@ export default function ServerScreen() {
             textStyles={styles.modifyActionButtonText}
             title="Modify"
             testID="profile-modify"
-            onPress={() => setFace('form')}
+            onPress={() => setIsLinkMode(false)}
           />
         ) : null}
         <TouchableOpacityButton

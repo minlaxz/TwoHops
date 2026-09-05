@@ -1194,6 +1194,14 @@ test('Link Mode: an incomplete link lists the missing fields and shows Modify; S
   );
   // Still Link Mode: no form groups.
   expect(textInputByTestID(renderer, 'server-login-input')).toBeUndefined();
+
+  // A bad paste after an applied link shows its reason but keeps the applied
+  // Draft's status: Modify and the missing list stay.
+  await applyLink(renderer, 'https://not-a-profile-link');
+  const after = renderedText(renderer);
+  expect(after).toContain('Link must start with twohops://');
+  expect(after).toContain('Missing: address, password');
+  expect(pressableByTestID(renderer, 'profile-modify')).toBeTruthy();
   expect(await openPicker(renderer)).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
