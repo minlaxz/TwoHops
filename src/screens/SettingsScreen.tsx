@@ -11,6 +11,7 @@ import { useUpdateCheck } from '../context/UpdateCheckContext';
 import PressableScale from '../components/PressableScale';
 import { INSTALLED_VERSION } from '../services/updateCheck';
 import type { AppTheme, ThemePreference } from '../theme/colors';
+import { CORE_LOG_LEVELS, type CoreLogLevel } from '../services/coreLog';
 
 // Build number is CI-injected via .env (ENV_BUILD_NUMBER); absent in local dev.
 const BUILD_NUMBER: string | undefined = Config.ENV_BUILD_NUMBER;
@@ -28,6 +29,9 @@ const aboutRows: [string, string][] = [
   ['App License', 'Apache-2.0'],
   ['Core License', 'Apache-2.0'],
 ];
+
+const coreLevelOptions: { value: CoreLogLevel; label: string }[] =
+  CORE_LOG_LEVELS.map(value => ({ value, label: value }));
 
 const themeOptions: { value: ThemePreference; label: string }[] = [
   { value: 'system', label: 'System' },
@@ -74,8 +78,12 @@ export default function SettingsScreen() {
   const {
     debugLoggingEnabled,
     trafficLoggingEnabled,
+    coreLoggingEnabled,
+    coreLogLevel,
     setDebugLoggingEnabled,
     setTrafficLoggingEnabled,
+    setCoreLoggingEnabled,
+    setCoreLogLevel,
   } = useLogSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
   // The theme already defines switch colors (issue #81 applies them).
@@ -162,10 +170,34 @@ export default function SettingsScreen() {
             {...switchColors(trafficLoggingEnabled)}
           />
         </View>
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Core Logging</Text>
+          <Switch
+            testID="settings-core-logging"
+            value={coreLoggingEnabled}
+            onValueChange={setCoreLoggingEnabled}
+            {...switchColors(coreLoggingEnabled)}
+          />
+        </View>
+        {coreLoggingEnabled ? (
+          <>
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>Core Log Level</Text>
+            </View>
+            <SegmentedControl
+              testID="settings-core-log-level"
+              options={coreLevelOptions}
+              value={coreLogLevel}
+              onChange={setCoreLogLevel}
+            />
+          </>
+        ) : null}
         <Text style={styles.description}>
           Most users don't need these. Debug Logs narrate the app lifecycle for
-          troubleshooting; Traffic Logs record tunnel query activity. Turning a
-          toggle off stops capture but keeps what was already captured.
+          troubleshooting; Traffic Logs record tunnel query activity; Core Logs
+          show the tunnel core's own lines at the chosen level (debug shows DNS
+          queries). Turning a toggle off stops capture but keeps what was
+          already captured.
         </Text>
       </CollapsibleSection>
     </MainScreen>

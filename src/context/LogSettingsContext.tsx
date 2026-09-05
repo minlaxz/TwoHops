@@ -7,23 +7,31 @@ import React, {
   useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CORE_LOG_LEVELS, type CoreLogLevel } from '../services/coreLog';
 
 const STORAGE_KEY_LOG_SETTINGS = '@twohops/logs/settings';
 
-/** Debug Logging / Traffic Logging (glossary terms): both OFF by default. */
+/** Debug / Traffic / Core Logging (glossary terms): all OFF by default;
+ * Core Log Level defaults to info (issue #136). */
 type LogSettings = {
   debugLoggingEnabled: boolean;
   trafficLoggingEnabled: boolean;
+  coreLoggingEnabled: boolean;
+  coreLogLevel: CoreLogLevel;
 };
 
 const DEFAULT_SETTINGS: LogSettings = {
   debugLoggingEnabled: false,
   trafficLoggingEnabled: false,
+  coreLoggingEnabled: false,
+  coreLogLevel: 'info',
 };
 
 type LogSettingsContextValue = LogSettings & {
   setDebugLoggingEnabled: (enabled: boolean) => void;
   setTrafficLoggingEnabled: (enabled: boolean) => void;
+  setCoreLoggingEnabled: (enabled: boolean) => void;
+  setCoreLogLevel: (level: CoreLogLevel) => void;
 };
 
 const LogSettingsContext = createContext<LogSettingsContextValue | undefined>(
@@ -40,6 +48,12 @@ function parseSettings(raw: string): LogSettings {
     return {
       debugLoggingEnabled: record.debugLoggingEnabled === true,
       trafficLoggingEnabled: record.trafficLoggingEnabled === true,
+      coreLoggingEnabled: record.coreLoggingEnabled === true,
+      coreLogLevel: CORE_LOG_LEVELS.includes(
+        record.coreLogLevel as CoreLogLevel,
+      )
+        ? (record.coreLogLevel as CoreLogLevel)
+        : 'info',
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -94,9 +108,28 @@ export function LogSettingsProvider({
     setSettings(current => ({ ...current, trafficLoggingEnabled: enabled }));
   }, []);
 
+  const setCoreLoggingEnabled = useCallback((enabled: boolean) => {
+    setSettings(current => ({ ...current, coreLoggingEnabled: enabled }));
+  }, []);
+  const setCoreLogLevel = useCallback((level: CoreLogLevel) => {
+    setSettings(current => ({ ...current, coreLogLevel: level }));
+  }, []);
+
   const value = useMemo<LogSettingsContextValue>(
-    () => ({ ...settings, setDebugLoggingEnabled, setTrafficLoggingEnabled }),
-    [settings, setDebugLoggingEnabled, setTrafficLoggingEnabled],
+    () => ({
+      ...settings,
+      setDebugLoggingEnabled,
+      setTrafficLoggingEnabled,
+      setCoreLoggingEnabled,
+      setCoreLogLevel,
+    }),
+    [
+      settings,
+      setDebugLoggingEnabled,
+      setTrafficLoggingEnabled,
+      setCoreLoggingEnabled,
+      setCoreLogLevel,
+    ],
   );
 
   return (

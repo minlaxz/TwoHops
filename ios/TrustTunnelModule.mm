@@ -13,7 +13,7 @@
 RCT_EXPORT_MODULE(NativeTrustTunnel);
 
 - (NSArray<NSString *> *)supportedEvents {
-  return @[ @"vpn_state", @"vpn_query_log" ];
+  return @[ @"vpn_state", @"vpn_query_log", @"vpn_core_log" ];
 }
 
 RCT_REMAP_METHOD(start,
@@ -35,6 +35,16 @@ RCT_REMAP_METHOD(stop,
 RCT_REMAP_METHOD(updateConfiguration,
                  updateConfigurationWithServerName:(NSString * _Nullable)serverName
                  config:(NSString * _Nullable)config
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  resolve(nil);
+}
+
+// No bundled core on iOS: Core Logging is a no-op.
+RCT_REMAP_METHOD(setCoreLogging,
+                 setCoreLogging:(BOOL)enabled
+                 level:(NSString *)level
                  resolver:(RCTPromiseResolveBlock)resolve
                  rejecter:(RCTPromiseRejectBlock)reject)
 {

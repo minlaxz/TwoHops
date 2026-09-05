@@ -24,6 +24,8 @@ jest.mock('../src/services/vpn', () => ({
     getCurrentState: jest.fn().mockResolvedValue('disconnected'),
     onState: jest.fn(() => jest.fn()),
     onQueryLog: jest.fn(() => jest.fn()),
+    onCoreLog: jest.fn(() => jest.fn()),
+    setCoreLogging: jest.fn().mockResolvedValue(undefined),
   },
 }));
 jest.mock('@react-native-async-storage/async-storage', () =>

@@ -10,6 +10,8 @@ import { ThemeProvider } from '../src/context/ThemeContext';
 import { SetupProfileProvider } from '../src/context/SetupProfileContext';
 import { ToastProvider } from '../src/components/AppToast';
 import { createLogBuffer } from '../src/services/logBuffer';
+import type { CoreLogBuffer } from '../src/services/logBuffer';
+import type { CoreLogRow } from '../src/services/coreLog';
 import PressableScale from '../src/components/PressableScale';
 import { PROFILES_STORAGE_KEY } from '../src/services/profileStore';
 import type { DebugEntry, TunnelSession } from '../src/services/tunnelSession';
@@ -84,13 +86,23 @@ function profileList(
   };
 }
 
+function fakeCoreBuffer(): CoreLogBuffer {
+  return { ...createLogBuffer<CoreLogRow>({ cap: 10 }), setLevel: () => {} };
+}
+
 async function mount(
   trafficLogs = createLogBuffer<QueryLogRow>({ cap: 10 }),
   debugLogs = createLogBuffer<DebugEntry>({ cap: 10 }),
+  coreLogs = fakeCoreBuffer(),
+  coreLoggingEnabled = false,
 ) {
   await AsyncStorage.setItem(
     '@twohops/logs/settings',
-    JSON.stringify({ trafficLoggingEnabled: true, debugLoggingEnabled: true }),
+    JSON.stringify({
+      trafficLoggingEnabled: true,
+      debugLoggingEnabled: true,
+      coreLoggingEnabled,
+    }),
   );
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   await ReactTestRenderer.act(async () => {
@@ -100,7 +112,11 @@ async function mount(
           <SetupProfileProvider>
             <TunnelSessionProvider session={session}>
               <LogSettingsProvider>
-                <LogsProvider trafficLogs={trafficLogs} debugLogs={debugLogs}>
+                <LogsProvider
+                  trafficLogs={trafficLogs}
+                  debugLogs={debugLogs}
+                  coreLogs={coreLogs}
+                >
                   <LogsScreen />
                 </LogsProvider>
               </LogSettingsProvider>
@@ -150,7 +166,16 @@ async function mount(
     renderer.root
       .findAllByType(PressableScale)
       .filter(node => node.props.testID === 'logs-scroll-top');
+  const segments = () =>
+    renderer.root
+      .findAllByType(PressableScale)
+      .map(node => String(node.props.testID))
+      .filter(id => id.startsWith('logs-segment-'));
+  const list = () =>
+    renderer.root.findByType(FlatList).props.data as CoreLogRow[];
   return {
+    segments,
+    list,
     rowsAnimating,
     rowsShown,
     press,
@@ -341,4 +366,33 @@ describe('scroll to top (#103)', () => {
     await press('logs-clear');
     expect(scrollTopButton()).toHaveLength(0);
   });
+});
+
+// Core Logs (#136)
+function coreRow(tag: 'dns' | 'core', message: string): CoreLogRow {
+  return { level: 'debug', tag, message, stamp: new Date(Date.now() - 1000) };
+}
+
+test('Core tab shows only while Core Logging is ON (#136)', async () => {
+  const off = await mount(undefined, undefined, fakeCoreBuffer(), false);
+  expect(off.segments()).not.toContain('logs-segment-core');
+  const on = await mount(undefined, undefined, fakeCoreBuffer(), true);
+  expect(on.segments()).toContain('logs-segment-core');
+});
+
+test('Core tab renders tagged rows and tag chips filter them (#136)', async () => {
+  const coreLogs = fakeCoreBuffer();
+  coreLogs.append(coreRow('dns', 'qname: example.com -> DNS proxy'));
+  coreLogs.append(coreRow('core', 'started'));
+  const { press, list } = await mount(undefined, undefined, coreLogs, true);
+  await press('logs-segment-core');
+  expect(list()).toHaveLength(2);
+  await press('logs-core-tag-dns');
+  expect(list().map(r => r.message)).toEqual([
+    'qname: example.com -> DNS proxy',
+  ]);
+  await press('logs-core-tag-all');
+  expect(list()).toHaveLength(2);
+  await press('logs-clear');
+  expect(coreLogs.getRows()).toHaveLength(0);
 });

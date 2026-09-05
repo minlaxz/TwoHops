@@ -24,21 +24,25 @@ import { registrableDomain } from '../services/routingRules';
 import { probeDirect } from '../services/directProbe';
 import type { ProbeResult } from '../services/directProbe';
 import type { DebugEntry } from '../services/tunnelSession';
+import { CORE_LOG_TAGS } from '../services/coreLog';
+import type { CoreLogRow } from '../services/coreLog';
 import type { QueryLogRow } from '../types';
 import type { AppTheme } from '../theme/colors';
 import { useAppTheme } from '../context/ThemeContext';
 
-type Segment = 'traffic' | 'debug';
+type Segment = 'traffic' | 'debug' | 'core';
 
 export default function LogsScreen() {
-  const { trafficLogs, debugLogs } = useLogs();
+  const { trafficLogs, debugLogs, coreLogs } = useLogs();
   const [segment, setSegment] = useState<Segment>('traffic');
   const traffic = useSyncExternalStore(
     trafficLogs.subscribe,
     trafficLogs.getRows,
   );
   const debug = useSyncExternalStore(debugLogs.subscribe, debugLogs.getRows);
-  const { debugLoggingEnabled, trafficLoggingEnabled } = useLogSettings();
+  const core = useSyncExternalStore(coreLogs.subscribe, coreLogs.getRows);
+  const { debugLoggingEnabled, trafficLoggingEnabled, coreLoggingEnabled } =
+    useLogSettings();
   const { snapshot } = useTunnelSession();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -49,13 +53,18 @@ export default function LogsScreen() {
 
   // A segment tab hides when its logging toggle is OFF (issue #69); fall
   // back to the visible one so the sticky selection never shows a hidden tab.
-  const noneEnabled = !debugLoggingEnabled && !trafficLoggingEnabled;
-  const shownSegment: Segment =
-    segment === 'traffic' && !trafficLoggingEnabled
-      ? 'debug'
-      : segment === 'debug' && !debugLoggingEnabled
-      ? 'traffic'
-      : segment;
+  const enabled: Record<Segment, boolean> = {
+    traffic: trafficLoggingEnabled,
+    debug: debugLoggingEnabled,
+    core: coreLoggingEnabled,
+  };
+  const segments = (['traffic', 'debug', 'core'] as const).filter(
+    s => enabled[s],
+  );
+  const noneEnabled = segments.length === 0;
+  const shownSegment: Segment = enabled[segment] ? segment : segments[0];
+  const rows = { traffic, debug, core }[shownSegment];
+  const buffers = { traffic: trafficLogs, debug: debugLogs, core: coreLogs };
 
   if (noneEnabled) {
     return (
@@ -64,7 +73,7 @@ export default function LogsScreen() {
           <Text style={styles.logEmpty} testID="logs-disabled-placeholder">
             {displayState(snapshot.state) === 'running'
               ? 'Here I stand :)'
-              : 'Logging is turned off. Enable Debug or Traffic Logging in Settings.'}
+              : 'Logging is turned off. Enable Debug, Traffic or Core Logging in Settings.'}
           </Text>
         </View>
       </View>
@@ -97,15 +106,22 @@ export default function LogsScreen() {
                 styles={styles}
               />
             ) : null}
+            {coreLoggingEnabled ? (
+              <SegmentButton
+                label="Core"
+                testID="logs-segment-core"
+                active={shownSegment === 'core'}
+                onPress={() => setSegment('core')}
+                styles={styles}
+              />
+            ) : null}
           </View>
-          {(shownSegment === 'traffic' ? traffic : debug).length > 0 ? (
+          {rows.length > 0 ? (
             <PressableScale
               testID="logs-clear"
               accessibilityRole="button"
               style={styles.clearButton}
-              onPress={() =>
-                (shownSegment === 'traffic' ? trafficLogs : debugLogs).clear()
-              }
+              onPress={() => buffers[shownSegment].clear()}
             >
               <Text style={styles.clearLabel}>Clear</Text>
             </PressableScale>
@@ -113,8 +129,10 @@ export default function LogsScreen() {
         </View>
         {shownSegment === 'traffic' ? (
           <TrafficRows logs={traffic} styles={styles} mountedAt={mountedAt} />
-        ) : (
+        ) : shownSegment === 'debug' ? (
           <DebugRows logs={debug} styles={styles} mountedAt={mountedAt} />
+        ) : (
+          <CoreRows logs={core} styles={styles} mountedAt={mountedAt} />
         )}
       </View>
     </View>
@@ -427,6 +445,65 @@ function DebugRows(props: RowsProps<DebugEntry>) {
   );
 }
 
+// Core Logs (issue #136): raw core lines; tag chips filter, nothing to tap.
+const TAG_FILTERS = ['all', ...CORE_LOG_TAGS] as const;
+type TagFilter = (typeof TAG_FILTERS)[number];
+
+function CoreRows(props: RowsProps<CoreLogRow>) {
+  const { styles, logs } = props;
+  const [tagFilter, setTagFilter] = useState<TagFilter>('all');
+  const shown = useMemo(
+    () => (tagFilter === 'all' ? logs : logs.filter(l => l.tag === tagFilter)),
+    [logs, tagFilter],
+  );
+  return (
+    <>
+      <View style={styles.chipRow}>
+        {TAG_FILTERS.map(tag => {
+          const active = tag === tagFilter;
+          return (
+            <PressableScale
+              key={tag}
+              testID={`logs-core-tag-${tag}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => setTagFilter(tag)}
+            >
+              <Text
+                style={[styles.chipLabel, active && styles.chipLabelActive]}
+              >
+                {tag}
+              </Text>
+            </PressableScale>
+          );
+        })}
+      </View>
+      <LogRows
+        {...props}
+        logs={shown}
+        testID="logs-core-list"
+        emptyText="No Core Logs yet. Rows collect while the tunnel is running."
+        stampOf={log => log.stamp}
+        renderBody={log => (
+          <>
+            <Text style={styles.logTitle}>
+              [{log.tag}]{' '}
+              <Text
+                style={log.level === 'error' ? styles.levelError : undefined}
+              >
+                {log.level.toUpperCase()}
+              </Text>
+            </Text>
+            <Text style={styles.logLine}>{log.message}</Text>
+            <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
+          </>
+        )}
+      />
+    </>
+  );
+}
+
 function createStyles(theme: AppTheme) {
   const { colors, spacing, radius, typography, card } = theme;
   return StyleSheet.create({
@@ -537,6 +614,34 @@ function createStyles(theme: AppTheme) {
       ...typography.caption,
       marginTop: spacing.sm,
       color: colors.textPrimary,
+    },
+    chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    chip: {
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    chipActive: {
+      backgroundColor: colors.buttonPrimary,
+      borderColor: colors.buttonPrimary,
+    },
+    chipLabel: {
+      ...typography.caption,
+      color: colors.textPrimary,
+    },
+    chipLabelActive: {
+      color: colors.buttonPrimaryText,
+    },
+    levelError: {
+      color: colors.danger,
     },
   });
 }

@@ -2,8 +2,11 @@ import {
   createLogBuffer,
   createTrafficLogBuffer,
   TRAFFIC_LOG_CAP,
+  createCoreLogBuffer,
+  CORE_LOG_CAP,
 } from '../src/services/logBuffer';
 import type { QueryLogRow } from '../src/types';
+import type { CoreLogRow } from '../src/services/coreLog';
 
 function row(domain: string): QueryLogRow {
   return {
@@ -142,4 +145,58 @@ test('traffic buffer default cap matches the UI cap', () => {
     emit(row(`host-${i}.example.com`));
   }
   expect(buffer.getRows()).toHaveLength(TRAFFIC_LOG_CAP);
+});
+
+// Core Logs (#136): capture gate + level reach the native side as one call.
+function fakeCoreLogPort() {
+  let listener: ((r: CoreLogRow) => void) | null = null;
+  const calls: [boolean, string][] = [];
+  return {
+    port: {
+      onCoreLog: (l: (r: CoreLogRow) => void) => {
+        listener = l;
+        return () => {
+          listener = null;
+        };
+      },
+      setCoreLogging: async (enabled: boolean, level: string) => {
+        calls.push([enabled, level]);
+      },
+    },
+    calls,
+    emit: (r: CoreLogRow) => listener?.(r),
+  };
+}
+
+const coreRow = (message: string): CoreLogRow => ({
+  level: 'info',
+  tag: 'core',
+  message,
+  stamp: new Date('2026-01-01T00:00:00Z'),
+});
+
+test('core buffer caps at 500 by default and drops the oldest', () => {
+  const { port, emit } = fakeCoreLogPort();
+  const buffer = createCoreLogBuffer(port);
+  for (let i = 0; i < CORE_LOG_CAP + 5; i++) {
+    emit(coreRow(`line ${i}`));
+  }
+  expect(buffer.getRows()).toHaveLength(500);
+  expect(buffer.getRows()[0].message).toBe(`line ${CORE_LOG_CAP + 4}`);
+});
+
+test('core buffer forwards gate and level to the port; OFF keeps rows', () => {
+  const { port, calls, emit } = fakeCoreLogPort();
+  const buffer = createCoreLogBuffer(port, { cap: 5 });
+  buffer.setCaptureEnabled(true);
+  buffer.setLevel('debug');
+  expect(calls).toEqual([
+    [true, 'info'],
+    [true, 'debug'],
+  ]);
+  emit(coreRow('kept'));
+  buffer.setCaptureEnabled(false);
+  emit(coreRow('dropped'));
+  expect(calls[2]).toEqual([false, 'debug']);
+  expect(buffer.getRows().map(r => r.message)).toEqual(['kept']);
 });
