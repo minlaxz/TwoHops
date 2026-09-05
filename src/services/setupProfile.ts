@@ -100,13 +100,26 @@ const pick = <T extends string>(
   value: string | null | undefined,
   allowed: T[],
 ) => (allowed.includes(value as T) ? (value as T) : undefined);
-const REQUIRED_FIELDS: (keyof Omit<ServerCredentials, 'vpnProtocol'>)[] = [
-  'name',
-  'ipAddress',
-  'domain',
-  'login',
-  'password',
-];
+// Profile Completeness checks, in report order (port sits with the address).
+const COMPLETENESS_CHECKS: [MissingField, (s: ServerCredentials) => boolean][] =
+  [
+    ['name', s => isBlank(s.name)],
+    ['ipAddress', s => isBlank(s.ipAddress)],
+    ['port', s => hasInvalidPort(s.ipAddress)],
+    ['domain', s => isBlank(s.domain)],
+    ['login', s => isBlank(s.login)],
+    ['password', s => isBlank(s.password)],
+  ];
+const isBlank = (value: string) => value.trim().length === 0;
+// A port present in the server address (`host[:port]`) must be an integer
+// 1–65535; `host:` is 443.
+// ponytail: one-colon form only; bracketed IPv6 is out of scope (#124)
+const PORT_RE = /^[^:]+:([^:]*)$/;
+function hasInvalidPort(ipAddress: string): boolean {
+  const port = ipAddress.trim().match(PORT_RE)?.[1];
+  if (port === undefined || port === '') return false;
+  return !/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535;
+}
 
 // --- intents ---------------------------------------------------------------
 
@@ -234,7 +247,7 @@ export function profileLink(profile: SetupProfile): string {
     ['protocol', server.vpnProtocol],
     ['dns', profile.dnsServers.join(',')],
     ['bypassDns', bypassDnsServers.join(',')],
-    // Route is meaningless without a list; omit it alongside.
+    // Route is meaningless without a carried list; omit it alongside.
     ['bypassDnsRoute', bypassDnsServers.length ? profile.bypassDnsRoute : ''],
     ['remoteRules', profile.remoteRulesURL],
   ];
@@ -333,24 +346,10 @@ export function profileSubtitle({ server }: SetupProfile): string {
   return host ? `${host} · ${server.vpnProtocol}` : 'Incomplete';
 }
 
-// Profile Completeness: every required field non-blank, and a port present in
-// the server address (`host[:port]`) an integer 1–65535; `host:` is 443.
-// ponytail: one-colon form only; bracketed IPv6 is out of scope (#124)
-const PORT_RE = /^[^:]+:([^:]*)$/;
-function hasInvalidPort(ipAddress: string): boolean {
-  const port = ipAddress.trim().match(PORT_RE)?.[1];
-  if (port === undefined || port === '') return false;
-  return !/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535;
-}
-
 export function missingFields(profile: SetupProfile): MissingField[] {
-  const missing: MissingField[] = REQUIRED_FIELDS.filter(
-    field => profile.server[field].trim().length === 0,
+  return COMPLETENESS_CHECKS.filter(([, fails]) => fails(profile.server)).map(
+    ([field]) => field,
   );
-  if (hasInvalidPort(profile.server.ipAddress)) {
-    missing.splice(missing.indexOf('domain') + 1 || missing.length, 0, 'port');
-  }
-  return missing;
 }
 
 /** The Bypass DNS Servers after applying the Bypass DNS Source (ADR 0007). */

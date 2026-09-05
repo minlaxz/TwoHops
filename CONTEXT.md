@@ -27,7 +27,7 @@ The list of resolvers the tunnel uses for Tunnel-side Queries. Reached through t
 _Avoid_: DNS Servers (unqualified), dns servers text, dns upstreams (in UI copy)
 
 **Bypass DNS Source**:
-Where the Bypass DNS Servers come from: `same-as-tunnel` (the Bypass DNS Servers are the Tunnel DNS Servers, whatever they are at the time; the default for a new Setup Profile) or `custom` (a list the user typed; what every Setup Profile stored before this choice existed has). Part of the Setup Profile; a Profile Link that carries no Bypass DNS Servers leaves it at `same-as-tunnel`, one that does makes it `custom`.
+Where the Bypass DNS Servers come from: `same-as-tunnel` (the Bypass DNS Servers are the Tunnel DNS Servers, whatever they are at the time; the default for a new Setup Profile) or `custom` (a list the user typed; what every Setup Profile stored before this choice existed has). Part of the Setup Profile; a Profile Link that carries no Bypass DNS Servers leaves it unchanged, one that does makes it `custom`.
 _Avoid_: same as above (in code), inherit dns, dns mirror
 
 **Bypass DNS Servers**:
