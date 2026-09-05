@@ -26,6 +26,7 @@ import {
   effectiveRules,
   importRemoteRules,
   missingFields,
+  resolvedBypassDnsServers,
   profileLinkErrorMessage,
   updateProfile as updateProfileIntent,
   updateServer as updateServerIntent,
@@ -326,18 +327,17 @@ export default function ServerScreen() {
             value={bypassDnsText}
             onChangeText={value => {
               setBypassDnsText(value);
-              const bypassDnsServers = parseRules(value);
-              // Route is meaningless without a list; clearing it resets to
-              // Direct so the control reappears at its default (#117).
-              updateProfile(
-                bypassDnsServers.length
-                  ? { bypassDnsServers }
-                  : { bypassDnsServers, bypassDnsRoute: 'direct' },
-              );
+              // Typing here edits the custom list and selects it as the
+              // source (ADR 0007). The route is kept; it is simply hidden
+              // while the resolved list is empty.
+              updateProfile({
+                bypassDnsSource: 'custom',
+                bypassDnsServers: parseRules(value),
+              });
             }}
             autoCapitalize="none"
           />
-          {profile.bypassDnsServers.length > 0 && (
+          {resolvedBypassDnsServers(profile).length > 0 && (
             <>
               <View style={styles.row}>
                 <Text style={styles.rowLabel}>Bypass DNS Route</Text>

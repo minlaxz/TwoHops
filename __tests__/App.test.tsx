@@ -1311,7 +1311,7 @@ test('Profile screen labels Tunnel DNS Servers and offers Bypass DNS Servers; v1
       .accessibilityState.checked,
   ).toBe(true);
   await press(renderer, 'profile-bypass-route-tunnel');
-  // Clearing the list hides the control and resets the route to Direct.
+  // Clearing the list hides the control; the route is kept (#125).
   await ReactTestRenderer.act(async () => {
     bypass.props.onChangeText('');
   });
@@ -1320,21 +1320,89 @@ test('Profile screen labels Tunnel DNS Servers and offers Bypass DNS Servers; v1
     bypass.props.onChangeText('https://dns.adguard.com/dns-query, 9.9.9.9');
   });
   expect(
-    pressableByTestID(renderer, 'profile-bypass-route-direct')!.props
+    pressableByTestID(renderer, 'profile-bypass-route-tunnel')!.props
       .accessibilityState.checked,
   ).toBe(true);
-  await press(renderer, 'profile-bypass-route-tunnel');
   await press(renderer, 'profile-save');
 
-  expect(
-    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[1]
-      .bypassDnsServers,
-  ).toEqual(['https://dns.adguard.com/dns-query', '9.9.9.9']);
-  expect(
-    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[1]
-      .bypassDnsRoute,
-  ).toBe('tunnel');
+  const saved = JSON.parse(
+    (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
+  ).profiles[1];
+  expect(saved.bypassDnsSource).toBe('custom');
+  expect(saved.bypassDnsServers).toEqual([
+    'https://dns.adguard.com/dns-query',
+    '9.9.9.9',
+  ]);
+  expect(saved.bypassDnsRoute).toBe('tunnel');
 
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('new profile defaults to same-as-tunnel: Share omits bypassDns and the core gets the Tunnel DNS Servers through the tunnel (#125)', async () => {
+  await seedTwoProfiles();
+  const share = jest.spyOn(Share, 'share').mockResolvedValue({
+    action: 'sharedAction',
+  } as never);
+  const renderer = await renderApp();
+
+  await openCreateEditor(renderer);
+  await ReactTestRenderer.act(async () => {
+    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
+      'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com&dns=1.1.1.1',
+    );
+  });
+  await press(renderer, 'profile-link-apply');
+  // Tunnel DNS non-empty, so the resolved Bypass list is non-empty: the
+  // route control shows, at its new default Tunnel.
+  expect(
+    pressableByTestID(renderer, 'profile-bypass-route-tunnel')!.props
+      .accessibilityState.checked,
+  ).toBe(true);
+  await press(renderer, 'profile-create');
+
+  const stored = JSON.parse(
+    (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
+  ).profiles[2];
+  expect(stored).toMatchObject({
+    version: 3,
+    bypassDnsSource: 'same-as-tunnel',
+    bypassDnsServers: [],
+    bypassDnsRoute: 'tunnel',
+  });
+
+  const rows = await openPicker(renderer);
+  await ReactTestRenderer.act(async () => {
+    rows[2].props.onPress();
+  });
+  await press(renderer, 'profile-share');
+  expect(share).toHaveBeenCalledWith({
+    message:
+      'twohops://?login=bob&password=pw&ip=10.9.9.9' +
+      '&domain=d.example.com&protocol=QUIC&dns=1.1.1.1',
+  });
+
+  await ReactTestRenderer.act(async () => {
+    fab(renderer)!.props.onPress();
+  });
+  expect(VpnClient.start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      server: expect.objectContaining({
+        dnsServers: ['1.1.1.1'],
+        bypassDnsServers: ['1.1.1.1'],
+        bypassDnsRoute: 'tunnel',
+      }),
+    }),
+  );
+  expect(
+    (VpnClient.start as jest.Mock).mock.calls[0][0].server,
+  ).not.toHaveProperty('bypassDnsSource');
+
+  share.mockRestore();
+  await ReactTestRenderer.act(async () => {
+    emitNativeState('connected');
+  });
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
   });

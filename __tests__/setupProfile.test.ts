@@ -55,7 +55,7 @@ function completeProfile(): SetupProfile {
 describe('defaultProfile', () => {
   test('seeds name, protocol, DNS from env; selective; rest empty', () => {
     expect(defaultProfile(env)).toEqual({
-      version: 2,
+      version: 3,
       server: {
         name: 'env-server',
         ipAddress: '',
@@ -65,8 +65,9 @@ describe('defaultProfile', () => {
         vpnProtocol: 'Http/2',
       },
       dnsServers: ['1.1.1.1', '8.8.8.8'],
+      bypassDnsSource: 'same-as-tunnel',
       bypassDnsServers: [],
-      bypassDnsRoute: 'direct',
+      bypassDnsRoute: 'tunnel',
       routingMode: 'selective',
       localRulesText: '',
       remoteRulesURL: '',
@@ -223,6 +224,17 @@ describe('missingFields', () => {
   test('complete profile has none', () => {
     expect(missingFields(completeProfile())).toEqual([]);
   });
+
+  test('port in the server address must be an integer 1–65535; empty port is 443 (#125)', () => {
+    const withPort = (ipAddress: string) =>
+      missingFields(updateServer(completeProfile(), { ipAddress }));
+    expect(withPort('10.0.0.1:8443')).toEqual([]);
+    expect(withPort('10.0.0.1:')).toEqual([]);
+    expect(withPort('10.0.0.1:0')).toEqual(['port']);
+    expect(withPort('10.0.0.1:65536')).toEqual(['port']);
+    expect(withPort('10.0.0.1:abc')).toEqual(['port']);
+    expect(withPort('10.0.0.1:4.4')).toEqual(['port']);
+  });
 });
 
 describe('tunnelStartInput', () => {
@@ -231,7 +243,9 @@ describe('tunnelStartInput', () => {
       localRulesText: 'a.com',
       importedRules: ['a.com', 'b.com'],
       routingMode: 'general',
+      bypassDnsSource: 'custom',
       bypassDnsServers: ['https://dns.adguard.com/dns-query'],
+      bypassDnsRoute: 'direct',
     });
     expect(tunnelStartInput(profile)).toEqual({
       ok: true,
@@ -245,6 +259,18 @@ describe('tunnelStartInput', () => {
         routing: { mode: 'general', rules: ['a.com', 'b.com'] },
       },
     });
+  });
+
+  test('same-as-tunnel hands the Tunnel DNS Servers as the Bypass DNS Servers; the core never sees the flag (#125)', () => {
+    const profile = updateProfile(completeProfile(), {
+      bypassDnsServers: ['9.9.9.9'], // stale custom list, ignored
+    });
+    const input = tunnelStartInput(profile);
+    expect(input.ok).toBe(true);
+    if (!input.ok) return;
+    expect(input.value.server.bypassDnsServers).toEqual(['1.1.1.1', '8.8.8.8']);
+    expect(input.value.server.bypassDnsRoute).toBe('tunnel');
+    expect(input.value.server).not.toHaveProperty('bypassDnsSource');
   });
 
   test('incomplete profile fails with missing fields', () => {
@@ -291,7 +317,7 @@ describe('saveProfile / loadProfile', () => {
       [LEGACY_STORAGE_KEYS.rulesText]: 'a.com\nb.com\nz.com',
     });
     const expected: SetupProfile = {
-      version: 2,
+      version: 3,
       server: {
         name: 'env-server',
         ipAddress: '10.0.0.1',
@@ -301,6 +327,7 @@ describe('saveProfile / loadProfile', () => {
         vpnProtocol: 'QUIC',
       },
       dnsServers: ['9.9.9.9', '1.0.0.1'],
+      bypassDnsSource: 'custom',
       bypassDnsServers: [],
       bypassDnsRoute: 'direct',
       routingMode: 'general',
@@ -322,21 +349,47 @@ describe('saveProfile / loadProfile', () => {
     });
     const profile = await loadProfile(storage, env);
     expect(profile).toEqual(
-      updateServer(defaultProfile(env), { login: 'user' }),
+      updateProfile(updateServer(defaultProfile(env), { login: 'user' }), {
+        // legacy layouts are existing profiles: system resolvers, direct
+        bypassDnsSource: 'custom',
+        bypassDnsRoute: 'direct',
+      }),
     );
   });
 
-  test('v1 document loads as v2 with empty Bypass DNS Servers and direct route (#116, #117)', async () => {
+  test('v1 document loads as v3 with empty custom Bypass DNS Servers and direct route (#116, #117, #125)', async () => {
     const v1: Partial<SetupProfile> = { ...completeProfile() };
     delete v1.bypassDnsServers;
     delete v1.bypassDnsRoute;
+    delete v1.bypassDnsSource;
     const { storage } = memoryStorage({
       [PROFILE_STORAGE_KEY]: JSON.stringify({ ...v1, version: 1 }),
     });
     await expect(loadProfile(storage, env)).resolves.toEqual({
       ...completeProfile(),
+      version: 3,
+      bypassDnsSource: 'custom',
       bypassDnsServers: [],
       bypassDnsRoute: 'direct',
+    });
+  });
+
+  test('v2 document without the source loads as custom, keeping its list and route (#125)', async () => {
+    const v2: Partial<SetupProfile> = {
+      ...completeProfile(),
+      bypassDnsServers: ['9.9.9.9'],
+      bypassDnsRoute: 'tunnel',
+    };
+    delete v2.bypassDnsSource;
+    const { storage } = memoryStorage({
+      [PROFILE_STORAGE_KEY]: JSON.stringify({ ...v2, version: 2 }),
+    });
+    await expect(loadProfile(storage, env)).resolves.toEqual({
+      ...completeProfile(),
+      version: 3,
+      bypassDnsSource: 'custom',
+      bypassDnsServers: ['9.9.9.9'],
+      bypassDnsRoute: 'tunnel',
     });
   });
 
@@ -415,8 +468,9 @@ describe('profileLink', () => {
     expect(result.value.remoteRulesURL).toBe(shared.remoteRulesURL);
   });
 
-  test('carries bypassDns and bypassDnsRoute only when the list is non-empty; round-trips (#117)', () => {
+  test('carries bypassDns and bypassDnsRoute only when custom and non-empty; round-trips (#117, #125)', () => {
     const shared = updateProfile(completeProfile(), {
+      bypassDnsSource: 'custom',
       bypassDnsServers: ['https://dns.adguard.com/dns-query', '9.9.9.9'],
       bypassDnsRoute: 'tunnel',
     });
@@ -428,27 +482,56 @@ describe('profileLink', () => {
     const result = applyProfileLink(defaultProfile(env), link);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    expect(result.value.bypassDnsSource).toBe('custom');
     expect(result.value.bypassDnsServers).toEqual(shared.bypassDnsServers);
     expect(result.value.bypassDnsRoute).toBe('tunnel');
 
     const empty = profileLink(
-      updateProfile(completeProfile(), { bypassDnsRoute: 'tunnel' }),
+      updateProfile(completeProfile(), {
+        bypassDnsSource: 'custom',
+        bypassDnsRoute: 'tunnel',
+      }),
     );
     expect(empty).not.toContain('bypassDns');
+
+    // same-as-tunnel: the recipient gets follow-live, not a snapshot.
+    const same = profileLink(
+      updateProfile(completeProfile(), {
+        bypassDnsServers: ['9.9.9.9'],
+        bypassDnsRoute: 'direct',
+      }),
+    );
+    expect(same).not.toContain('bypassDns');
   });
 });
 
 describe('applyProfileLink', () => {
   const base = completeProfile();
 
-  test('link without bypass params leaves defaults; bogus route ignored (#117)', () => {
+  test('link without bypass params leaves source, list and route as they are; bogus route ignored (#117, #125)', () => {
     const result = applyProfileLink(base, 'twohops://x?login=a');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    expect(result.value.bypassDnsSource).toBe('same-as-tunnel');
     expect(result.value.bypassDnsServers).toEqual([]);
-    expect(result.value.bypassDnsRoute).toBe('direct');
+    expect(result.value.bypassDnsRoute).toBe('tunnel');
+    const custom = updateProfile(base, {
+      bypassDnsSource: 'custom',
+      bypassDnsServers: ['9.9.9.9'],
+    });
+    const kept = applyProfileLink(custom, 'twohops://x?login=a');
+    expect(kept.ok && kept.value.bypassDnsSource).toBe('custom');
+    expect(kept.ok && kept.value.bypassDnsServers).toEqual(['9.9.9.9']);
     const bogus = applyProfileLink(base, 'twohops://x?bypassDnsRoute=bogus');
-    expect(bogus.ok && bogus.value.bypassDnsRoute).toBe('direct');
+    expect(bogus.ok && bogus.value.bypassDnsRoute).toBe('tunnel');
+  });
+
+  test('link with bypassDns lands as a custom list (#125)', () => {
+    const result = applyProfileLink(base, 'twohops://x?bypassDns=9.9.9.9');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.bypassDnsSource).toBe('custom');
+    expect(result.value.bypassDnsServers).toEqual(['9.9.9.9']);
   });
 
   test('wrong scheme is an error', () => {

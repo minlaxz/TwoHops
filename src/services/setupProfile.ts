@@ -20,12 +20,17 @@ import type { QueryLogRow } from '../types';
 
 export type { ServerCredentials };
 
+/** Bypass DNS Source (v3, ADR 0007): where the Bypass DNS Servers come from. */
+export type BypassDnsSource = 'same-as-tunnel' | 'custom';
+
 export interface SetupProfile {
-  version: 2;
+  version: 3;
   server: ServerCredentials;
   /** Tunnel DNS Servers (storage key kept from v1). */
   dnsServers: string[];
-  /** Bypass DNS Servers (v2); empty means the device's system resolvers. */
+  /** Bypass DNS Source (v3): `same-as-tunnel` follows dnsServers live. */
+  bypassDnsSource: BypassDnsSource;
+  /** Bypass DNS Servers (v2); the custom list, read only under `custom`. Empty means the device's system resolvers. */
   bypassDnsServers: string[];
   /** Bypass DNS Route (v2, #117); meaningless while the list is empty. */
   bypassDnsRoute: BypassDnsRoute;
@@ -53,6 +58,7 @@ export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
 export type MissingField =
   | 'name'
   | 'ipAddress'
+  | 'port'
   | 'domain'
   | 'login'
   | 'password';
@@ -94,19 +100,32 @@ const pick = <T extends string>(
   value: string | null | undefined,
   allowed: T[],
 ) => (allowed.includes(value as T) ? (value as T) : undefined);
-const REQUIRED_FIELDS: MissingField[] = [
-  'name',
-  'ipAddress',
-  'domain',
-  'login',
-  'password',
-];
+// Profile Completeness checks, in report order (port sits with the address).
+const COMPLETENESS_CHECKS: [MissingField, (s: ServerCredentials) => boolean][] =
+  [
+    ['name', s => isBlank(s.name)],
+    ['ipAddress', s => isBlank(s.ipAddress)],
+    ['port', s => hasInvalidPort(s.ipAddress)],
+    ['domain', s => isBlank(s.domain)],
+    ['login', s => isBlank(s.login)],
+    ['password', s => isBlank(s.password)],
+  ];
+const isBlank = (value: string) => value.trim().length === 0;
+// A port present in the server address (`host[:port]`) must be an integer
+// 1–65535; `host:` is 443.
+// ponytail: one-colon form only; bracketed IPv6 is out of scope (#124)
+const PORT_RE = /^[^:]+:([^:]*)$/;
+function hasInvalidPort(ipAddress: string): boolean {
+  const port = ipAddress.trim().match(PORT_RE)?.[1];
+  if (port === undefined || port === '') return false;
+  return !/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535;
+}
 
 // --- intents ---------------------------------------------------------------
 
 export function defaultProfile(env: ProfileEnv): SetupProfile {
   return {
-    version: 2,
+    version: 3,
     server: {
       name: env.ENV_SERVER_NAME || '',
       ipAddress: '',
@@ -116,8 +135,9 @@ export function defaultProfile(env: ProfileEnv): SetupProfile {
       vpnProtocol: env.ENV_PROTOCOL || 'QUIC',
     },
     dnsServers: parseRules(env.ENV_DNS_SERVERS || ''),
+    bypassDnsSource: 'same-as-tunnel',
     bypassDnsServers: [],
-    bypassDnsRoute: 'direct',
+    bypassDnsRoute: 'tunnel',
     routingMode: 'selective',
     localRulesText: '',
     remoteRulesURL: '',
@@ -193,8 +213,13 @@ export function applyProfileLink(
   const patch: Partial<SetupProfile> = {};
   const dns = params.get('dns');
   if (dns !== undefined) patch.dnsServers = parseRules(dns);
+  // A link carrying a list lands as a custom list; one without leaves the
+  // source as it is (ADR 0007).
   const bypassDns = params.get('bypassDns');
-  if (bypassDns !== undefined) patch.bypassDnsServers = parseRules(bypassDns);
+  if (bypassDns !== undefined) {
+    patch.bypassDnsSource = 'custom';
+    patch.bypassDnsServers = parseRules(bypassDns);
+  }
   const bypassDnsRoute = pick(params.get('bypassDnsRoute'), BYPASS_DNS_ROUTES);
   if (bypassDnsRoute !== undefined) patch.bypassDnsRoute = bypassDnsRoute;
   const remoteRules = params.get('remoteRules');
@@ -207,9 +232,13 @@ export function applyProfileLink(
 
 // Share Profile: the inverse of applyProfileLink. Carries exactly the link
 // contract (no name, Routing Mode or Local Rules); empty fields are omitted.
+// Under same-as-tunnel the bypass params are omitted so the recipient gets
+// the same follow-live behaviour (ADR 0007).
 // Password travels in clear — CONTEXT.md "Share Profile" accepts this.
 export function profileLink(profile: SetupProfile): string {
   const { server } = profile;
+  const bypassDnsServers =
+    profile.bypassDnsSource === 'custom' ? profile.bypassDnsServers : [];
   const fields: [string, string][] = [
     ['login', server.login],
     ['password', server.password],
@@ -217,12 +246,9 @@ export function profileLink(profile: SetupProfile): string {
     ['domain', server.domain],
     ['protocol', server.vpnProtocol],
     ['dns', profile.dnsServers.join(',')],
-    ['bypassDns', profile.bypassDnsServers.join(',')],
-    // Route is meaningless without a list; omit it alongside.
-    [
-      'bypassDnsRoute',
-      profile.bypassDnsServers.length ? profile.bypassDnsRoute : '',
-    ],
+    ['bypassDns', bypassDnsServers.join(',')],
+    // Route is meaningless without a carried list; omit it alongside.
+    ['bypassDnsRoute', bypassDnsServers.length ? profile.bypassDnsRoute : ''],
     ['remoteRules', profile.remoteRulesURL],
   ];
   const query = fields
@@ -321,9 +347,16 @@ export function profileSubtitle({ server }: SetupProfile): string {
 }
 
 export function missingFields(profile: SetupProfile): MissingField[] {
-  return REQUIRED_FIELDS.filter(
-    field => profile.server[field].trim().length === 0,
+  return COMPLETENESS_CHECKS.filter(([, fails]) => fails(profile.server)).map(
+    ([field]) => field,
   );
+}
+
+/** The Bypass DNS Servers after applying the Bypass DNS Source (ADR 0007). */
+export function resolvedBypassDnsServers(profile: SetupProfile): string[] {
+  return profile.bypassDnsSource === 'same-as-tunnel'
+    ? profile.dnsServers
+    : profile.bypassDnsServers;
 }
 
 export function tunnelStartInput(
@@ -339,7 +372,8 @@ export function tunnelStartInput(
       server: {
         ...profile.server,
         dnsServers: profile.dnsServers,
-        bypassDnsServers: profile.bypassDnsServers,
+        // The core never sees the source; it gets the resolved list.
+        bypassDnsServers: resolvedBypassDnsServers(profile),
         bypassDnsRoute: profile.bypassDnsRoute,
       },
       routing: { mode: profile.routingMode, rules: effectiveRules(profile) },
@@ -375,20 +409,23 @@ export async function loadProfile(
 // Per-document migration (ADR 0001; per entry inside the list, ADR 0003).
 // v1 -> v2: Bypass DNS Servers (empty) and Bypass DNS Route (direct) added
 // (#116, #117). v2 shipped unreleased without the route, so it is defaulted
-// on read too.
+// on read too. v2 -> v3: Bypass DNS Source; absent means `custom`, so a
+// stored profile keeps exactly what it had (ADR 0007).
 // ponytail: trust the known-version shape; add field validation if corrupt
 // docs show up
 export function migrateProfileDocument(parsed: unknown): SetupProfile {
   const doc = parsed as { version?: unknown } | null;
   switch (doc?.version) {
     case 1:
-    case 2: {
+    case 2:
+    case 3: {
       const partial = doc as Partial<SetupProfile>;
       return {
         ...partial,
+        bypassDnsSource: partial.bypassDnsSource ?? 'custom',
         bypassDnsServers: partial.bypassDnsServers ?? [],
         bypassDnsRoute: partial.bypassDnsRoute ?? 'direct',
-        version: 2,
+        version: 3,
       } as SetupProfile;
     }
     default:
@@ -422,6 +459,9 @@ async function migrateLegacy(
     dnsServers: parseRules(
       get(LEGACY_STORAGE_KEYS.dnsServersText) ?? base.dnsServers.join(','),
     ),
+    // An existing profile keeps its behaviour: system resolvers, direct.
+    bypassDnsSource: 'custom',
+    bypassDnsRoute: 'direct',
     routingMode:
       pick(get(LEGACY_STORAGE_KEYS.routingMode), ROUTING_MODES) ??
       base.routingMode,
