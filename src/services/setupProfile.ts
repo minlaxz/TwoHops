@@ -121,6 +121,21 @@ function hasInvalidPort(ipAddress: string): boolean {
   return !/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535;
 }
 
+/** The Profile Form's two boxes over the one stored `host[:port]` (#126). */
+export function splitHostPort(ipAddress: string): {
+  host: string;
+  port: string;
+} {
+  const match = ipAddress.match(PORT_RE);
+  return match
+    ? { host: ipAddress.slice(0, ipAddress.lastIndexOf(':')), port: match[1] }
+    : { host: ipAddress, port: '' };
+}
+
+export function joinHostPort(host: string, port: string): string {
+  return port ? `${host}:${port}` : host;
+}
+
 // --- intents ---------------------------------------------------------------
 
 export function defaultProfile(env: ProfileEnv): SetupProfile {
