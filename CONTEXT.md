@@ -85,8 +85,16 @@ The profile screen as opened by "Paste profile link": only the Profile Link inpu
 _Avoid_: link screen, import mode
 
 **Profile Form**:
-The profile screen's full editor: the profile name on top, then four groups — Server (address and port, TLS domain, protocol), User (login, password), DNS (Tunnel DNS Servers, Bypass DNS Source and Servers, Bypass DNS Route), Routing (Remote Rules URL, Import, Local Rules, Effective Rules summary, Routing Mode). Nothing collapses. Save is always shown and disabled until the Draft is complete, with the missing fields listed beside it; Delete stays outside the groups for a stored Profile.
-_Avoid_: advanced settings, advanced section
+The profile screen's full editor: the profile name on top, then four groups — Server (address and port, TLS domain, protocol), User (login, password), DNS (Tunnel DNS Servers, Bypass DNS Source and Servers, Bypass DNS Route), Routing (Remote Rules URL, Import, Local Rules, Effective Rules summary, Routing Mode). Nothing collapses. Save is always shown and disabled until the Draft is complete, with the missing fields listed beside it; Delete stays outside the groups for a stored Profile. The Form never shows Advanced Settings.
+_Avoid_: advanced section, form mode
+
+**JSON Mode**:
+The profile screen's second face for the Profile Form, toggled from the header: the Profile Draft as one JSON document, edited as text and parsed back into the same Draft when the user toggles back or presses Save. A document that fails to parse blocks both; a document that parses goes through Profile Completeness like the Form. Shows every field except the storage version and the Imported Rules cache, the password in clear, and is the only face that shows Advanced Settings. Never reachable from Link Mode.
+_Avoid_: nerd mode, raw mode, advanced mode, config editor
+
+**Advanced Settings**:
+The core tunnel knobs a Setup Profile carries beyond what the Profile Form shows: kill switch, anti-DPI, MTU, fallback protocol, excluded routes. Editable only in JSON Mode; a new Profile gets the values the app used to hard-code. Not carried by a Profile Link.
+_Avoid_: nerd settings, expert options, core config
 
 **Profile Completeness**:
 Whether the Setup Profile has every field needed to start the tunnel: name, server address, domain, login, password, and a port (when given) between 1 and 65535. Expressed as the list of missing or out-of-range fields. Save requires a complete Profile Draft (for a stored Profile, Save additionally requires a touched Draft — touched-flag semantics, not value-diff, #71), so only Profiles stored before that rule can be incomplete — connecting refuses them. The connect control stays visible for an incomplete legacy profile (superseding the hide-when-incomplete rule from #40): with no Dashboard hint left to explain a hidden control, the connect-refusal alert is the only guard.
@@ -130,6 +138,14 @@ _Avoid_: query log (in UI copy), connection log
 **Traffic Logging**:
 Whether Traffic Logs are being captured. A persisted app setting, off by default, switched from the Settings screen. Off stops capture and hides the traffic tab on the Logs screen; already-captured rows are kept, not cleared.
 _Avoid_: traffic debug, traffic debug mode
+
+**DNS Logs**:
+One row per DNS query the native tunnel answered: the queried name, record type, which side answered it (Tunnel-side Query, Bypass-side Query, or the system resolvers while the tunnel is not yet connected), and the time. Distinct from Traffic Logs, which are per-connection; a DNS Log row says where a name was looked up, not where the connection then went. Same buffer rules as Traffic Logs: collected globally from tunnel start, capped, outside the Tunnel Session, cleared on each connect command and by hand from the Logs screen. Android only until iOS bundles a core.
+_Avoid_: DNS query log (in UI copy), resolver log, lookup log
+
+**DNS Logging**:
+Whether DNS Logs are being captured. A persisted app setting, off by default, switched from the Settings screen, independent of Traffic Logging. Off stops capture and hides the DNS tab on the Logs screen; already-captured rows are kept, not cleared.
+_Avoid_: dns debug, query logging
 
 **Debug Logging**:
 Whether Debug Logs are being captured. A persisted app setting, off by default, switched from the Settings screen. Off stops capture and hides the debug tab on the Logs screen; already-captured rows are kept, not cleared.
