@@ -344,10 +344,19 @@ export function profileJsonErrorMessage(error: ProfileJsonError): string {
 }
 
 export function serializeProfileJson(profile: SetupProfile): string {
-  const json: Record<string, unknown> = { ...profile };
-  delete json.version;
-  delete json.importedRules;
-  delete json.importedAt;
+  // Explicit pick: a Profile List entry also carries `id`/`name` (ADR 0003),
+  // and the document must not grow keys its own parser rejects.
+  const json: ProfileJson = {
+    server: profile.server,
+    dnsServers: profile.dnsServers,
+    bypassDnsSource: profile.bypassDnsSource,
+    bypassDnsServers: profile.bypassDnsServers,
+    bypassDnsRoute: profile.bypassDnsRoute,
+    routingMode: profile.routingMode,
+    localRulesText: profile.localRulesText,
+    remoteRulesURL: profile.remoteRulesURL,
+    advanced: profile.advanced,
+  };
   return JSON.stringify(json, null, 2);
 }
 

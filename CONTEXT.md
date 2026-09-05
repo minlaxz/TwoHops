@@ -89,7 +89,7 @@ The profile screen's full editor: the profile name on top, then four groups — 
 _Avoid_: advanced section, form mode
 
 **JSON Mode**:
-The profile screen's second face for the Profile Form, toggled from the header: the Profile Draft as one JSON document, edited as text and parsed back into the same Draft when the user toggles back or presses Save. A document that fails to parse blocks both; a document that parses goes through Profile Completeness like the Form. Shows every field except the storage version and the Imported Rules cache, the password in clear, and is the only face that shows Advanced Settings. Never reachable from Link Mode.
+The profile screen's second face for the Profile Form, toggled from the header: the Profile Draft as one JSON document, edited as text and parsed back into the same Draft when the user toggles back or presses Save. The text is parsed as it changes: a document that fails to parse shows the error under the editor and blocks both; a document that parses goes through Profile Completeness like the Form, so the missing list follows the editor. Format re-serialises a parsed document and does nothing to a broken one. Shows every field except the storage version and the Imported Rules cache, the password in clear, and is the only face that shows Advanced Settings. Never reachable from Link Mode.
 _Avoid_: nerd mode, raw mode, advanced mode, config editor
 
 **Advanced Settings**:

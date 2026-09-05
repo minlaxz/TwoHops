@@ -1,5 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Text, StyleSheet, View, TextInput } from 'react-native';
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  Linking,
+  Platform,
+  Text,
+  StyleSheet,
+  View,
+  TextInput,
+} from 'react-native';
 import Animated, {
   LinearTransition,
   useReducedMotion,
@@ -26,8 +39,11 @@ import {
   importRemoteRules,
   joinHostPort,
   missingFields,
+  parseProfileJson,
+  profileJsonErrorMessage,
   resolvedBypassDnsServers,
   profileLinkErrorMessage,
+  serializeProfileJson,
   splitHostPort,
   updateProfile as updateProfileIntent,
   updateServer as updateServerIntent,
@@ -127,8 +143,20 @@ export default function ServerScreen() {
   );
   const [isTouched, setIsTouched] = useState(false);
   const committedRef = useRef(false);
+  // JSON Mode (#133): the Form's second face. The editor text is parsed live
+  // so the Completeness gate and the missing list follow it; the Draft itself
+  // is only patched on toggle-back and Save.
+  const [isJsonMode, setIsJsonMode] = useState(false);
+  const [jsonText, setJsonText] = useState('');
+  const jsonParsed = useMemo(
+    () => (isJsonMode ? parseProfileJson(jsonText) : null),
+    [isJsonMode, jsonText],
+  );
+  // Set per render so the header button never closes over a stale Draft.
+  const toggleJsonRef = useRef<() => void>(() => {});
 
   const profile = isCreateMode || entry ? draft : undefined;
+  const showJsonToggle = !isLinkMode && profile !== undefined;
 
   const [dnsRows, setDnsRows] = useDnsRows(profile?.dnsServers ?? []);
   const [bypassRows, setBypassRows] = useDnsRows(
@@ -143,9 +171,41 @@ export default function ServerScreen() {
     : LinearTransition.duration(theme.motion.duration.base);
   const placeholderTextColor = theme.colors.placeholder;
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: showJsonToggle
+        ? () => (
+            <PressableScale
+              testID="profile-json-toggle"
+              accessibilityRole="button"
+              accessibilityLabel="JSON Mode"
+              accessibilityState={{ selected: isJsonMode }}
+              onPress={() => toggleJsonRef.current()}
+              style={styles.headerButton}
+            >
+              <Text
+                style={[
+                  styles.headerButtonText,
+                  isJsonMode && styles.headerButtonTextActive,
+                ]}
+              >
+                {'{ }'}
+              </Text>
+            </PressableScale>
+          )
+        : undefined,
+    });
+  }, [navigation, showJsonToggle, isJsonMode, styles]);
+
+  // Editor text that differs from the serialised Draft is a touched Draft.
+  const jsonTouched =
+    isJsonMode &&
+    profile !== undefined &&
+    jsonText !== serializeProfileJson(profile);
+
   // Header back and Android hardware back both funnel through here: a
   // touched Draft asks before discarding; a committed one passes through.
-  usePreventRemove(isTouched, ({ data }) => {
+  usePreventRemove(isTouched || jsonTouched, ({ data }) => {
     if (committedRef.current) {
       navigation.dispatch(data.action);
       return;
@@ -188,14 +248,39 @@ export default function ServerScreen() {
   const { host, port } = splitHostPort(server.ipAddress);
   const sameAsTunnel = profile.bypassDnsSource === 'same-as-tunnel';
 
+  // What Save and the missing list look at: the parsed editor in JSON Mode,
+  // the Draft otherwise. An unparsable editor falls back to the Draft for the
+  // list and blocks Save separately.
+  const jsonDraft =
+    jsonParsed?.ok === true
+      ? updateProfileIntent(draft, jsonParsed.value)
+      : draft;
+  toggleJsonRef.current = () => {
+    if (!isJsonMode) {
+      setJsonText(serializeProfileJson(profile));
+      setIsJsonMode(true);
+      return;
+    }
+    if (jsonParsed?.ok !== true) {
+      return; // the error under the editor says why
+    }
+    if (jsonTouched) {
+      patchDraft(() => jsonDraft);
+    }
+    setIsJsonMode(false);
+  };
+
   // The Completeness gate: Save can never mint an incomplete profile. Save
   // is additionally gated on the touched flag (issue #71): an untouched edit
   // draft has nothing to save, however complete it is.
-  const missing = missingFields(profile);
+  const missing = missingFields(jsonDraft);
   // Link Mode additionally needs an applied link: Save is for what the link
   // yielded, never for an env-seeded blank Draft.
   const canCommit =
-    missing.length === 0 && (isCreateMode || isTouched) && linkGateOpen;
+    missing.length === 0 &&
+    (isCreateMode || isTouched || jsonTouched) &&
+    linkGateOpen &&
+    (!isJsonMode || jsonParsed?.ok === true);
   const showMissing = missing.length > 0 && linkGateOpen;
   const handleCommit = () => {
     if (committedRef.current) {
@@ -203,9 +288,9 @@ export default function ServerScreen() {
     }
     committedRef.current = true;
     if (isCreateMode) {
-      createProfile(draft);
+      createProfile(jsonDraft);
     } else if (entry) {
-      saveProfile(entry.id, draft);
+      saveProfile(entry.id, jsonDraft);
       // The live tunnel keeps its config; only the next connect reads this.
       if (entry.id === selectedId && display !== 'stopped') {
         toast('Changes apply on next connect');
@@ -352,6 +437,41 @@ export default function ServerScreen() {
               setLinkApplied(true);
               patchDraft(() => result.value);
               setURL('');
+            }}
+          />
+        </View>
+      ) : isJsonMode ? (
+        <View style={styles.section}>
+          <TextInput
+            testID="profile-json-input"
+            style={styles.jsonInput}
+            value={jsonText}
+            onChangeText={setJsonText}
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            multiline
+            textAlignVertical="top"
+          />
+          {jsonParsed && !jsonParsed.ok ? (
+            <Text
+              testID="profile-json-error"
+              style={[styles.inputDescription, styles.warning]}
+            >
+              {profileJsonErrorMessage(jsonParsed.error)}
+            </Text>
+          ) : null}
+          <TouchableOpacityButton
+            touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
+            textStyles={styles.modeButtonText}
+            title="Format"
+            testID="profile-json-format"
+            onPress={() => {
+              // Re-serialise the parsed document; invalid JSON keeps its text
+              // and its error.
+              if (jsonParsed?.ok === true) {
+                setJsonText(serializeProfileJson(jsonDraft));
+              }
             }}
           />
         </View>
@@ -679,6 +799,23 @@ function createStyles(theme: AppTheme) {
     multilineInput: {
       ...input,
       minHeight: 100,
+    },
+    jsonInput: {
+      ...input,
+      fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
+      minHeight: 320,
+    },
+    headerButton: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    headerButtonText: {
+      ...typography.body,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    headerButtonTextActive: {
+      color: colors.accent,
     },
     dnsRow: {
       flexDirection: 'row',
