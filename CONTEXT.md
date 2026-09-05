@@ -3,7 +3,7 @@
 ## Language
 
 **Setup Profile**:
-One named, identified tunnel configuration: the user's Server Credentials, Tunnel DNS Servers, Bypass DNS Servers, Bypass DNS Route, Routing Mode, Local Rules, Remote Rules URL, plus the Imported Rules cache. The app keeps many; each is one document.
+One named, identified tunnel configuration: the user's Server Credentials, Tunnel DNS Servers, Bypass DNS Source, Bypass DNS Servers, Bypass DNS Route, Routing Mode, Local Rules, Remote Rules URL, plus the Imported Rules cache. The app keeps many; each is one document.
 _Avoid_: setup config, settings, saved profile
 
 **Profile List**:
@@ -19,19 +19,23 @@ The sheet opened by tapping the Selected Profile on the Dashboard, listing every
 _Avoid_: profile dropdown, profile menu, switcher
 
 **Server Credentials**:
-The server identity and login used to start the tunnel: name, IP address, domain, login, password, protocol. Name is the Profile's one and only name: what the Profile List, Dashboard and Profile Picker show, and the label the native tunnel is started with. It plays no part in the connection itself. There is no separate display name.
+The server identity and login used to start the tunnel: name, server address (IP address or hostname, with an optional port; 443 when absent), domain, login, password, protocol. The address and its port are one value; the profile screen shows them as two boxes. Name is the Profile's one and only name: what the Profile List, Dashboard and Profile Picker show, and the label the native tunnel is started with. It plays no part in the connection itself. There is no separate display name.
 _Avoid_: server config
 
 **Tunnel DNS Servers**:
-The list of resolvers the tunnel uses for Tunnel-side Queries. Reached through the tunnel. Part of the Setup Profile; the text field is only a display of the list. Empty means the core's own default resolvers.
+The list of resolvers the tunnel uses for Tunnel-side Queries. Reached through the tunnel. Part of the Setup Profile; the profile screen shows one row per server, at most three added by hand, more only when a Profile Link or an older profile brought them. Empty means the core's own default resolvers.
 _Avoid_: DNS Servers (unqualified), dns servers text, dns upstreams (in UI copy)
 
+**Bypass DNS Source**:
+Where the Bypass DNS Servers come from: `same-as-tunnel` (the Bypass DNS Servers are the Tunnel DNS Servers, whatever they are at the time; the default for a new Setup Profile) or `custom` (a list the user typed; what every Setup Profile stored before this choice existed has). Part of the Setup Profile; a Profile Link that carries no Bypass DNS Servers leaves it at `same-as-tunnel`, one that does makes it `custom`.
+_Avoid_: same as above (in code), inherit dns, dns mirror
+
 **Bypass DNS Servers**:
-The list of resolvers the tunnel uses for Bypass-side Queries. Part of the Setup Profile; the text field is only a display of the list. Empty means the device's system resolvers, as before this list existed, and hides the Bypass DNS Route control.
+The list of resolvers the tunnel uses for Bypass-side Queries. Decided by the Bypass DNS Source: a copy of the Tunnel DNS Servers, or the user's own list (same row limits as Tunnel DNS Servers). Empty — an empty Tunnel DNS Servers under `same-as-tunnel`, or nothing typed under `custom` — means the device's system resolvers, as before this list existed, and hides the Bypass DNS Route control. Not part of Profile Completeness.
 _Avoid_: direct DNS, system DNS override
 
 **Bypass DNS Route**:
-Which network a Bypass-side Query travels on to reach the Bypass DNS Servers: `direct` (the device's own network, the default) or `tunnel` (through the tunnel, for networks that block public resolvers). Only the query changes path; the connection to the answer still goes direct. Meaningless while Bypass DNS Servers is empty.
+Which network a Bypass-side Query travels on to reach the Bypass DNS Servers: `tunnel` (through the tunnel; the default for a new Setup Profile, so no resolver is exposed to the local network) or `direct` (the device's own network; what every Setup Profile stored before the default changed has). Choosing `direct` shows a persistent note that the resolver can be exposed. Only the query changes path; the connection to the answer still goes direct. Meaningless while Bypass DNS Servers is empty.
 _Avoid_: dns via tunnel, dns detour
 Paths and leak notes: `docs/dns-resolution-paths.md`.
 
@@ -65,7 +69,7 @@ Local Rules merged with Imported Rules, deduplicated, local first. Derived on de
 _Avoid_: merged rules text, rules text
 
 **Profile Link**:
-A `twohops:` URL that carries Server Credentials (except the server name), Tunnel DNS Servers, Bypass DNS Servers, Bypass DNS Route and a Remote Rules URL. Applying one fills profile fields without any network access; it never overwrites a stored Profile — on the profile screen it patches the Profile Draft in place, defaulting the missing server name from the domain.
+A `twohops:` URL that carries Server Credentials (except the server name), Tunnel DNS Servers, Bypass DNS Servers (present only under a `custom` Bypass DNS Source), Bypass DNS Route and a Remote Rules URL. Applying one fills profile fields without any network access; it never overwrites a stored Profile — on the profile screen it patches the Profile Draft in place, defaulting the missing server name from the domain. A link that parses is *applied*; the Profile Draft it produced may still be incomplete.
 _Avoid_: auto fill, import URL
 
 **Share Profile**:
@@ -73,11 +77,19 @@ Handing the Selected Profile to another device as a Profile Link through the OS 
 _Avoid_: export profile, copy config
 
 **Profile Draft**:
-The in-memory Setup Profile being created or edited on the profile screen. Not part of the Profile List and never persisted until Create (new) or Save (existing) is pressed; navigating away (header or Android back — there is no Cancel control, #71) discards it, after a discard confirmation when it has been touched. A new Draft starts blank — no generated name.
+The in-memory Setup Profile being created or edited on the profile screen. Not part of the Profile List and never persisted until Save is pressed; navigating away (header or Android back — there is no Cancel control, #71) discards it, after a discard confirmation when it has been touched. A new Draft starts blank — no generated name.
 _Avoid_: unsaved profile, pending profile, temp profile
 
+**Link Mode**:
+The profile screen as opened by "Paste profile link": only the Profile Link input, the outcome of applying it (parse failure, or the Profile Draft's missing fields), Save when the applied Draft is complete, and Modify. Modify switches the same screen to the Profile Form with the Draft kept. "New profile" and Edit never enter Link Mode.
+_Avoid_: link screen, import mode
+
+**Profile Form**:
+The profile screen's full editor: the profile name on top, then four groups — Server (address and port, TLS domain, protocol), User (login, password), DNS (Tunnel DNS Servers, Bypass DNS Source and Servers, Bypass DNS Route), Routing (Remote Rules URL, Import, Local Rules, Effective Rules summary, Routing Mode). Nothing collapses. Save is always shown and disabled until the Draft is complete, with the missing fields listed beside it; Delete stays outside the groups for a stored Profile.
+_Avoid_: advanced settings, advanced section
+
 **Profile Completeness**:
-Whether the Setup Profile has every field needed to start the tunnel: name, IP address, domain, login, password. Expressed as the list of missing fields. Create and Save require a complete Profile Draft (Save additionally requires a touched Draft — touched-flag semantics, not value-diff, #71), so only Profiles stored before that rule can be incomplete — connecting refuses them. The connect control stays visible for an incomplete legacy profile (superseding the hide-when-incomplete rule from #40): with no Dashboard hint left to explain a hidden control, the connect-refusal alert is the only guard.
+Whether the Setup Profile has every field needed to start the tunnel: name, server address, domain, login, password, and a port (when given) between 1 and 65535. Expressed as the list of missing or out-of-range fields. Save requires a complete Profile Draft (for a stored Profile, Save additionally requires a touched Draft — touched-flag semantics, not value-diff, #71), so only Profiles stored before that rule can be incomplete — connecting refuses them. The connect control stays visible for an incomplete legacy profile (superseding the hide-when-incomplete rule from #40): with no Dashboard hint left to explain a hidden control, the connect-refusal alert is the only guard.
 _Avoid_: is profile complete (boolean only)
 
 **Tunnel Start Input**:
