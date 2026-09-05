@@ -13,7 +13,7 @@ most traffic. It also made the DNS section the most-typed part of the profile
 screen: the same resolver list entered twice.
 
 A new Setup Profile now has a **Bypass DNS Source** of `same-as-tunnel` — the
-Bypass DNS Servers *are* the Tunnel DNS Servers, whatever they are at start
+Bypass DNS Servers _are_ the Tunnel DNS Servers, whatever they are at start
 time — and a Bypass DNS Route of `tunnel`. Every DNS query therefore leaves
 the device through the tunnel by default; the local network sees none. The
 user can switch the source to `custom` and type up to three resolvers, and

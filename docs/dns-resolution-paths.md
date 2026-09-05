@@ -13,14 +13,14 @@ capture yet.
 Both DNS lists accept the same formats. The app does not validate them; it
 splits on commas and hands the strings to the core.
 
-| Format | Example |
-|---|---|
-| Plain DNS | `8.8.8.8:53` |
-| Plain DNS over TCP | `tcp://8.8.8.8:53` |
-| DNS-over-TLS | `tls://1.1.1.1` |
-| DNS-over-HTTPS | `https://dns.adguard.com/dns-query` |
-| DNS-over-QUIC | `quic://dns.adguard.com:8853` |
-| DNS stamp | `sdns://...` |
+| Format             | Example                             |
+| ------------------ | ----------------------------------- |
+| Plain DNS          | `8.8.8.8:53`                        |
+| Plain DNS over TCP | `tcp://8.8.8.8:53`                  |
+| DNS-over-TLS       | `tls://1.1.1.1`                     |
+| DNS-over-HTTPS     | `https://dns.adguard.com/dns-query` |
+| DNS-over-QUIC      | `quic://dns.adguard.com:8853`       |
+| DNS stamp          | `sdns://...`                        |
 
 ## The three resolver proxies
 
@@ -65,11 +65,11 @@ happen in this app.
 A DoH or DoT server named by hostname must itself be resolved first. This
 "bootstrap" step is fixed by the core, not configurable:
 
-| Proxy | Route | DoH/DoT dial | Bootstrap resolver |
-|---|---|---|---|
-| User DNS proxy | always tunnel | through tunnel | AdGuard public IPs, through tunnel |
-| Direct DNS proxy | `direct` | phone interface | phone system resolvers, AdGuard IPs as fallback |
-| Direct DNS proxy | `tunnel` | through tunnel | AdGuard public IPs, through tunnel |
+| Proxy            | Route         | DoH/DoT dial    | Bootstrap resolver                              |
+| ---------------- | ------------- | --------------- | ----------------------------------------------- |
+| User DNS proxy   | always tunnel | through tunnel  | AdGuard public IPs, through tunnel              |
+| Direct DNS proxy | `direct`      | phone interface | phone system resolvers, AdGuard IPs as fallback |
+| Direct DNS proxy | `tunnel`      | through tunnel  | AdGuard public IPs, through tunnel              |
 
 The bootstrap connection carries the DoH hostname as its destination and is
 exempt from the rules, which prevents a routing loop. It never shows up in the

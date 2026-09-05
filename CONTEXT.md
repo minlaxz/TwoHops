@@ -69,7 +69,7 @@ Local Rules merged with Imported Rules, deduplicated, local first. Derived on de
 _Avoid_: merged rules text, rules text
 
 **Profile Link**:
-A `twohops:` URL that carries Server Credentials (except the server name), Tunnel DNS Servers, Bypass DNS Servers (present only under a `custom` Bypass DNS Source), Bypass DNS Route and a Remote Rules URL. Applying one fills profile fields without any network access; it never overwrites a stored Profile — on the profile screen it patches the Profile Draft in place, defaulting the missing server name from the domain. A link that parses is *applied*; the Profile Draft it produced may still be incomplete.
+A `twohops:` URL that carries Server Credentials (except the server name), Tunnel DNS Servers, Bypass DNS Servers (present only under a `custom` Bypass DNS Source), Bypass DNS Route and a Remote Rules URL. Applying one fills profile fields without any network access; it never overwrites a stored Profile — on the profile screen it patches the Profile Draft in place, defaulting the missing server name from the domain. A link that parses is _applied_; the Profile Draft it produced may still be incomplete.
 _Avoid_: auto fill, import URL
 
 **Share Profile**:
