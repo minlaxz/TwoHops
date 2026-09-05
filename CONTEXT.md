@@ -81,7 +81,7 @@ The in-memory Setup Profile being created or edited on the profile screen. Not p
 _Avoid_: unsaved profile, pending profile, temp profile
 
 **Link Mode**:
-The profile screen as opened by "Paste profile link": only the Profile Link input, the outcome of applying it (parse failure, or the Profile Draft's missing fields), Save when the applied Draft is complete, and Modify. Modify switches the same screen to the Profile Form with the Draft kept. "New profile" and Edit never enter Link Mode.
+The profile screen as opened by "Paste profile link": only the Profile Link input, the outcome of applying it shown inline (parse failure with its reason, or the applied Profile Draft's missing fields), Save enabled once the applied Draft is complete, and Modify once a link has applied. Modify switches the same screen to the Profile Form with the Draft kept; the Form never switches back. "New profile" and Edit never enter Link Mode.
 _Avoid_: link screen, import mode
 
 **Profile Form**:
