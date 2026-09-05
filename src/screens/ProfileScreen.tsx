@@ -475,20 +475,6 @@ export default function ServerScreen() {
         </Text>
 
         <Text style={styles.groupTitle}>Routing</Text>
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Mode</Text>
-        </View>
-        <SegmentedControl
-          testID="profile-routing"
-          options={routingOptions}
-          value={routingMode}
-          onChange={mode => updateProfile({ routingMode: mode })}
-        />
-        <Text style={styles.inputDescription}>
-          In most cases, "Selective" mode is recommended for better performance
-          and battery life.
-        </Text>
-        <View style={styles.line} />
         <Text style={styles.inputLabel}>Remote Rules URL:</Text>
         <TextInput
           style={styles.input}
@@ -549,6 +535,20 @@ export default function ServerScreen() {
             }}
           />
         </View>
+        <View style={styles.line} />
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Mode</Text>
+        </View>
+        <SegmentedControl
+          testID="profile-routing"
+          options={routingOptions}
+          value={routingMode}
+          onChange={mode => updateProfile({ routingMode: mode })}
+        />
+        <Text style={styles.inputDescription}>
+          In most cases, "Selective" mode is recommended for better performance
+          and battery life.
+        </Text>
       </Animated.View>
       {missing.length > 0 ? (
         <Text testID="profile-missing" style={styles.missing}>

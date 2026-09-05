@@ -114,9 +114,6 @@ beforeEach(async () => {
   // The RN Linking mock is already a jest.fn, so a deep-link test's
   // mockReturnValue would otherwise leak into every later test.
   (Linking.getInitialURL as jest.Mock).mockReset().mockResolvedValue(null);
-  // The RN Linking mock is already a jest.fn, so a deep-link test's
-  // mockReturnValue would otherwise leak into every later test.
-  (Linking.getInitialURL as jest.Mock).mockReset().mockResolvedValue(null);
   VpnClient.start.mockClear();
   VpnClient.stop.mockClear();
   emitNativeState('disconnected');
