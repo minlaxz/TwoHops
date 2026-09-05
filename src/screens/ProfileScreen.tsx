@@ -255,6 +255,8 @@ export default function ServerScreen() {
     jsonParsed?.ok === true
       ? updateProfileIntent(draft, jsonParsed.value)
       : draft;
+  // ponytail: ref written in render so the header button sees this render's
+  // Draft; move into an effect if React ever complains.
   toggleJsonRef.current = () => {
     if (!isJsonMode) {
       setJsonText(serializeProfileJson(profile));

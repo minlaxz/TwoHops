@@ -343,20 +343,41 @@ export function profileJsonErrorMessage(error: ProfileJsonError): string {
   return error.path ? `${error.path}: ${error.message}` : error.message;
 }
 
+// One key list feeds both the serialiser's pick and the parser's allow-list
+// so the two cannot drift. A Profile List entry also carries `id`/`name`
+// (ADR 0003), which is why the serialiser picks rather than spreads.
+const PROFILE_JSON_KEYS: (keyof ProfileJson)[] = [
+  'server',
+  'dnsServers',
+  'bypassDnsSource',
+  'bypassDnsServers',
+  'bypassDnsRoute',
+  'routingMode',
+  'localRulesText',
+  'remoteRulesURL',
+  'advanced',
+];
+const SERVER_KEYS: (keyof ServerCredentials)[] = [
+  'name',
+  'ipAddress',
+  'domain',
+  'login',
+  'password',
+  'vpnProtocol',
+];
+const ADVANCED_KEYS: (keyof AdvancedSettings)[] = [
+  'killSwitch',
+  'antiDpi',
+  'mtu',
+  'fallbackProtocol',
+  'excludedRoutes',
+];
+
 export function serializeProfileJson(profile: SetupProfile): string {
-  // Explicit pick: a Profile List entry also carries `id`/`name` (ADR 0003),
-  // and the document must not grow keys its own parser rejects.
-  const json: ProfileJson = {
-    server: profile.server,
-    dnsServers: profile.dnsServers,
-    bypassDnsSource: profile.bypassDnsSource,
-    bypassDnsServers: profile.bypassDnsServers,
-    bypassDnsRoute: profile.bypassDnsRoute,
-    routingMode: profile.routingMode,
-    localRulesText: profile.localRulesText,
-    remoteRulesURL: profile.remoteRulesURL,
-    advanced: profile.advanced,
-  };
+  const json: Partial<ProfileJson> = {};
+  for (const key of PROFILE_JSON_KEYS) {
+    (json as Record<string, unknown>)[key] = profile[key];
+  }
   return JSON.stringify(json, null, 2);
 }
 
@@ -430,32 +451,11 @@ export function parseProfileJson(
     };
   }
   try {
-    const root = obj(raw, '', [
-      'server',
-      'dnsServers',
-      'bypassDnsSource',
-      'bypassDnsServers',
-      'bypassDnsRoute',
-      'routingMode',
-      'localRulesText',
-      'remoteRulesURL',
-      'advanced',
-    ]);
-    const server = obj(root.server, 'server', [
-      'name',
-      'ipAddress',
-      'domain',
-      'login',
-      'password',
-      'vpnProtocol',
-    ]);
-    const advanced = obj(root.advanced, 'advanced', [
-      'killSwitch',
-      'antiDpi',
-      'mtu',
-      'fallbackProtocol',
-      'excludedRoutes',
-    ]);
+    const root = obj(raw, '', PROFILE_JSON_KEYS);
+    const server = obj(root.server, 'server', SERVER_KEYS);
+    const advanced = obj(root.advanced, 'advanced', ADVANCED_KEYS);
+    // Missing keys read as what a new Profile gets, by reference not by literal.
+    const base = defaultProfile({});
     const d = DEFAULT_ADVANCED_SETTINGS;
     return {
       ok: true,
@@ -469,25 +469,25 @@ export function parseProfileJson(
           vpnProtocol: oneOf(PROTOCOLS)(
             server.vpnProtocol,
             'server.vpnProtocol',
-            'QUIC',
+            base.server.vpnProtocol,
           ),
         },
         dnsServers: strList(root.dnsServers, 'dnsServers'),
         bypassDnsSource: oneOf(BYPASS_DNS_SOURCES)(
           root.bypassDnsSource,
           'bypassDnsSource',
-          'same-as-tunnel',
+          base.bypassDnsSource,
         ),
         bypassDnsServers: strList(root.bypassDnsServers, 'bypassDnsServers'),
         bypassDnsRoute: oneOf(BYPASS_DNS_ROUTES)(
           root.bypassDnsRoute,
           'bypassDnsRoute',
-          'tunnel',
+          base.bypassDnsRoute,
         ),
         routingMode: oneOf(ROUTING_MODES)(
           root.routingMode,
           'routingMode',
-          'selective',
+          base.routingMode,
         ),
         localRulesText: str(root.localRulesText, 'localRulesText'),
         remoteRulesURL: str(root.remoteRulesURL, 'remoteRulesURL'),

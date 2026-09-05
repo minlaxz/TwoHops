@@ -2230,6 +2230,8 @@ test('Same as above: on by default, unchecking reveals rows, Direct shows the ex
 
 // --- JSON Mode (#133) ------------------------------------------------------
 
+const { Text } = require('react-native');
+
 function jsonEditor(renderer: ReactTestRenderer.ReactTestRenderer) {
   return textInputByTestID(renderer, 'profile-json-input');
 }
@@ -2239,7 +2241,6 @@ function jsonError(renderer: ReactTestRenderer.ReactTestRenderer) {
   )[0];
   return node ? String(node.props.children) : null;
 }
-const { Text } = require('react-native');
 
 test('JSON Mode: header { } toggles Form <-> editor; edits flow both ways through the one Draft (#133)', async () => {
   await seedTwoProfiles('b');
