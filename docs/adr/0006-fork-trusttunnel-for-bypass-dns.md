@@ -24,3 +24,5 @@ We fork `TrustTunnel/TrustTunnelClient` at `v1.1.5` and add two config keys besi
 - TwoHops' Gradle points at the fork's package repository; the package must be public for `GITHUB_TOKEN` in CI to read it. Concretely: fork `minlaxz/TrustTunnelClient`, branch `twohops`, workflow `publish-android-twohops.yml` runs on tags matching `*-twohops.*` and publishes `io.github.minlaxz:trusttunnel-client-android:<tag>` to `https://maven.pkg.github.com/minlaxz/TrustTunnelClient`.
 - The Profile Link and Share Profile grow two parameters; old links without them leave the new fields empty.
 - Out of scope, by decision: a DNS `reject` action for blocklists without an upstream filter, iOS, automatic fallback.
+
+See `docs/dns-resolution-paths.md` for how each query is routed, DoH/DoT bootstrap, and what the ISP can still see.

@@ -33,6 +33,7 @@ _Avoid_: direct DNS, system DNS override
 **Bypass DNS Route**:
 Which network a Bypass-side Query travels on to reach the Bypass DNS Servers: `direct` (the device's own network, the default) or `tunnel` (through the tunnel, for networks that block public resolvers). Only the query changes path; the connection to the answer still goes direct. Meaningless while Bypass DNS Servers is empty.
 _Avoid_: dns via tunnel, dns detour
+Paths and leak notes: `docs/dns-resolution-paths.md`.
 
 **Tunnel-side Query**:
 A DNS query whose name the Effective Rules and Routing Mode place inside the tunnel. Answered by the Tunnel DNS Servers. The connection that follows goes through the tunnel.
