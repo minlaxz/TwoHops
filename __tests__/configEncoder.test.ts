@@ -1,4 +1,5 @@
 import { encodeConfig } from '../src/services/configEncoder';
+import { DEFAULT_ADVANCED_SETTINGS } from '../src/services/setupProfile';
 
 test('exclusions line uses expanded Routing Rules (addresses first, then domains + wildcards)', () => {
   const config = encodeConfig({
@@ -17,7 +18,10 @@ test('exclusions line uses expanded Routing Rules (addresses first, then domains
       mode: 'general',
       rules: ['example.com', '10.0.0.0/8', ' ', 'example.com'],
     },
-    excludedRoutes: ['192.168.0.0/16'],
+    advanced: {
+      ...DEFAULT_ADVANCED_SETTINGS,
+      excludedRoutes: ['192.168.0.0/16'],
+    },
   });
 
   expect(config).toContain(
@@ -40,21 +44,52 @@ const baseInput = {
     bypassDnsRoute: 'direct' as const,
   },
   routing: { mode: 'general' as const, rules: [] },
+  advanced: DEFAULT_ADVANCED_SETTINGS,
 };
 
-test.each([
-  ['omitted', {}],
-  ['empty array', { excludedRoutes: [] }],
-])('excluded_routes falls back to default LAN ranges when %s', (_, extra) => {
-  const config = encodeConfig({ ...baseInput, ...extra });
+const withAdvanced = (patch: Partial<typeof DEFAULT_ADVANCED_SETTINGS>) =>
+  encodeConfig({
+    ...baseInput,
+    advanced: { ...DEFAULT_ADVANCED_SETTINGS, ...patch },
+  });
+
+test('default Advanced Settings encode exactly the old constants (#132)', () => {
+  const config = encodeConfig(baseInput);
+  expect(config).toContain('killswitch_enabled = true');
+  expect(config).toContain('anti_dpi = false');
+  expect(config).toContain('mtu_size = 1500');
+  expect(config).toContain('upstream_fallback_protocol = ""');
   expect(config).toContain(
     'excluded_routes = ["10.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.168.0.0/16", "255.255.255.255/32"]',
   );
 });
 
-test('explicit excluded routes override the default', () => {
-  const config = encodeConfig({ ...baseInput, excludedRoutes: ['1.1.1.0/24'] });
-  expect(config).toContain('excluded_routes = ["1.1.1.0/24"]');
+test.each([
+  ['killSwitch', { killSwitch: false }, 'killswitch_enabled = false'],
+  ['antiDpi', { antiDpi: true }, 'anti_dpi = true'],
+  ['mtu', { mtu: 1280 }, 'mtu_size = 1280'],
+  [
+    'fallbackProtocol QUIC',
+    { fallbackProtocol: 'QUIC' as const },
+    'upstream_fallback_protocol = "http3"',
+  ],
+  [
+    'fallbackProtocol Http/2',
+    { fallbackProtocol: 'Http/2' as const },
+    'upstream_fallback_protocol = "http2"',
+  ],
+  [
+    'excludedRoutes',
+    { excludedRoutes: ['1.1.1.0/24'] },
+    'excluded_routes = ["1.1.1.0/24"]',
+  ],
+])('%s changes its core config line (#132)', (_, patch, line) => {
+  expect(withAdvanced(patch)).toContain(line);
+});
+
+test('empty excluded routes stay empty; no hidden default (#132)', () => {
+  const config = withAdvanced({ excludedRoutes: [] });
+  expect(config).toContain('excluded_routes = []');
   expect(config).not.toContain('10.0.0.0/8');
 });
 

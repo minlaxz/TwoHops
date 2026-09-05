@@ -4,7 +4,10 @@ import {
   SetupProfileProvider,
   useSetupProfile,
 } from '../src/context/SetupProfileContext';
-import { type ProfileStorage } from '../src/services/setupProfile';
+import {
+  DEFAULT_ADVANCED_SETTINGS,
+  type ProfileStorage,
+} from '../src/services/setupProfile';
 import {
   PROFILES_STORAGE_KEY,
   type ProfileList,
@@ -204,7 +207,7 @@ test('selectProfile switches the Selected Profile and persists', async () => {
 
 function defaultsProfile(name: string) {
   return {
-    version: 3 as const,
+    version: 4 as const,
     server: {
       name,
       ipAddress: '',
@@ -222,6 +225,7 @@ function defaultsProfile(name: string) {
     remoteRulesURL: '',
     importedRules: [],
     importedAt: null,
+    advanced: DEFAULT_ADVANCED_SETTINGS,
   };
 }
 

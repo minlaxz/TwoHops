@@ -39,11 +39,21 @@ export interface RoutingConfig {
   rules: string[];
 }
 
+/** Advanced Settings (#132, ADR 0008): core knobs the Profile Form never shows. */
+export interface AdvancedSettings {
+  killSwitch: boolean;
+  antiDpi: boolean;
+  mtu: number;
+  /** `null` emits an empty `upstream_fallback_protocol`. */
+  fallbackProtocol: VpnProtocol | null;
+  /** Routes kept off the TUN device; stored explicitly, no hidden default. */
+  excludedRoutes: string[];
+}
+
 export interface VpnStartInput {
   server: ServerConfig;
   routing: RoutingConfig;
-  /** Omit or leave empty to use the encoder's default LAN exclusions. */
-  excludedRoutes?: string[];
+  advanced: AdvancedSettings;
 }
 
 export type QueryLogAction = 'bypass' | 'tunnel' | 'reject';

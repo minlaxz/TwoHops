@@ -20,6 +20,7 @@ import {
   updateServer,
   PROFILE_STORAGE_KEY,
   LEGACY_STORAGE_KEYS,
+  DEFAULT_ADVANCED_SETTINGS,
   type ProfileEnv,
   type ProfileStorage,
   type SetupProfile,
@@ -279,6 +280,7 @@ describe('saveProfileList / loadProfileList', () => {
           bypassDnsServers: _a,
           bypassDnsRoute: _b,
           bypassDnsSource: _c,
+          advanced: _d,
           ...entry
         }) => ({
           ...entry,
@@ -297,9 +299,10 @@ describe('saveProfileList / loadProfileList', () => {
         bypassDnsSource: 'custom',
         bypassDnsServers: [],
         bypassDnsRoute: 'direct',
+        advanced: DEFAULT_ADVANCED_SETTINGS,
       })),
     });
-    expect(loaded.profiles.every(entry => entry.version === 3)).toBe(true);
+    expect(loaded.profiles.every(entry => entry.version === 4)).toBe(true);
   });
 
   test('corrupt list document warns and yields defaults', async () => {

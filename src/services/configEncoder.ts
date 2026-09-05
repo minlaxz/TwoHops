@@ -2,26 +2,17 @@ import type { ServerConfig, VpnStartInput } from '../types';
 import { expandRules } from './routingRules';
 
 const DEFAULT_INCLUDED_ROUTES = ['0.0.0.0/0', '2000::/3'];
-const DEFAULT_EXCLUDED_ROUTES = [
-  '10.0.0.0/8',
-  '100.64.0.0/10',
-  '169.254.0.0/16',
-  '172.16.0.0/12',
-  '192.0.0.0/24',
-  '192.168.0.0/16',
-  '255.255.255.255/32',
-];
-const DEFAULT_TUN_MTU = 1500;
 
 export function encodeConfig(input: VpnStartInput): string {
-  const { server, routing, excludedRoutes } = input;
+  const { server, routing, advanced } = input;
 
   const logLevel = parseToConfigString('debug');
   const vpnMode = parseToConfigString(
     routing.mode === 'selective' ? 'selective' : 'general',
   );
 
-  const killSwitchEnabled = true;
+  // Advanced Settings (#132): the profile owns these, no constants here.
+  const killSwitchEnabled = advanced.killSwitch;
   const postQuantumGroupEnabled = false;
 
   const exclusions = parseToConfigList(expandRules(routing.rules));
@@ -42,15 +33,15 @@ export function encodeConfig(input: VpnStartInput): string {
   const certificate = parseCertificateToString('');
 
   const upstreamProtocol = parseToConfigString(mapProtocol(server.vpnProtocol));
-  const upstreamFallbackProtocol = parseToConfigString('');
+  const upstreamFallbackProtocol = parseToConfigString(
+    advanced.fallbackProtocol ? mapProtocol(advanced.fallbackProtocol) : '',
+  );
 
-  const antiDpi = false;
+  const antiDpi = advanced.antiDpi;
 
   const tunIncludedRoutes = parseToConfigList(DEFAULT_INCLUDED_ROUTES);
-  const tunExcludedRoutes = parseToConfigList(
-    excludedRoutes?.length ? excludedRoutes : DEFAULT_EXCLUDED_ROUTES,
-  );
-  const tunMtuSize = DEFAULT_TUN_MTU;
+  const tunExcludedRoutes = parseToConfigList(advanced.excludedRoutes);
+  const tunMtuSize = advanced.mtu;
 
   const socksAddress = parseToConfigString('127.0.0.1:1080');
   const socksUsername = parseToConfigString('');
