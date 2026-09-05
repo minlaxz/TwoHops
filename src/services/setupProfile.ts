@@ -44,8 +44,8 @@ export interface SetupProfile {
   advanced: AdvancedSettings;
 }
 
-/** What the app hard-coded before v4; seeds new and migrated profiles. */
-export const DEFAULT_ADVANCED_SETTINGS: AdvancedSettings = {
+/** What the app hard-coded before v4; seed via `seedAdvanced()`, never by reference. */
+export const DEFAULT_ADVANCED_SETTINGS: Readonly<AdvancedSettings> = {
   killSwitch: true,
   antiDpi: false,
   mtu: 1500,
@@ -60,6 +60,12 @@ export const DEFAULT_ADVANCED_SETTINGS: AdvancedSettings = {
     '255.255.255.255/32',
   ],
 };
+
+// Fresh copy per profile so no two documents share one routes array.
+const seedAdvanced = (): AdvancedSettings => ({
+  ...DEFAULT_ADVANCED_SETTINGS,
+  excludedRoutes: [...DEFAULT_ADVANCED_SETTINGS.excludedRoutes],
+});
 
 export type ProfileEnv = {
   ENV_SERVER_NAME?: string;
@@ -178,7 +184,7 @@ export function defaultProfile(env: ProfileEnv): SetupProfile {
     remoteRulesURL: '',
     importedRules: [],
     importedAt: null,
-    advanced: DEFAULT_ADVANCED_SETTINGS,
+    advanced: seedAdvanced(),
   };
 }
 
@@ -464,7 +470,7 @@ export function migrateProfileDocument(parsed: unknown): SetupProfile {
         bypassDnsSource: partial.bypassDnsSource ?? 'custom',
         bypassDnsServers: partial.bypassDnsServers ?? [],
         bypassDnsRoute: partial.bypassDnsRoute ?? 'direct',
-        advanced: partial.advanced ?? DEFAULT_ADVANCED_SETTINGS,
+        advanced: partial.advanced ?? seedAdvanced(),
         version: 4,
       } as SetupProfile;
     }

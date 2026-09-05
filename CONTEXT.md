@@ -3,7 +3,7 @@
 ## Language
 
 **Setup Profile**:
-One named, identified tunnel configuration: the user's Server Credentials, Tunnel DNS Servers, Bypass DNS Source, Bypass DNS Servers, Bypass DNS Route, Routing Mode, Local Rules, Remote Rules URL, plus the Imported Rules cache. The app keeps many; each is one document.
+One named, identified tunnel configuration: the user's Server Credentials, Tunnel DNS Servers, Bypass DNS Source, Bypass DNS Servers, Bypass DNS Route, Routing Mode, Local Rules, Remote Rules URL, Advanced Settings, plus the Imported Rules cache. The app keeps many; each is one document.
 _Avoid_: setup config, settings, saved profile
 
 **Profile List**:
@@ -101,7 +101,7 @@ Whether the Setup Profile has every field needed to start the tunnel: name, serv
 _Avoid_: is profile complete (boolean only)
 
 **Tunnel Start Input**:
-The value handed to the native tunnel, derived from the Setup Profile: Server Credentials, Tunnel DNS Servers, Bypass DNS Servers, Bypass DNS Route, Routing Mode and Effective Rules. Distinct from Profile Completeness — a profile can be complete yet unable to start.
+The value handed to the native tunnel, derived from the Setup Profile: Server Credentials, Tunnel DNS Servers, Bypass DNS Servers, Bypass DNS Route, Routing Mode, Effective Rules and Advanced Settings. Distinct from Profile Completeness — a profile can be complete yet unable to start.
 
 **Tunnel Session**:
 The one long-lived object that owns the tunnel's lifecycle: its current Session State, the last Session Error, and the connect / disconnect commands. Exists always; "disconnected" is one of its states, not its absence. Takes a Tunnel Start Input; knows nothing about the Setup Profile.
@@ -139,13 +139,17 @@ _Avoid_: query log (in UI copy), connection log
 Whether Traffic Logs are being captured. A persisted app setting, off by default, switched from the Settings screen. Off stops capture and hides the traffic tab on the Logs screen; already-captured rows are kept, not cleared.
 _Avoid_: traffic debug, traffic debug mode
 
-**DNS Logs**:
-One row per DNS query the native tunnel answered: the queried name, record type, which side answered it (Tunnel-side Query, Bypass-side Query, or the system resolvers while the tunnel is not yet connected), and the time. Distinct from Traffic Logs, which are per-connection; a DNS Log row says where a name was looked up, not where the connection then went. Same buffer rules as Traffic Logs: collected globally from tunnel start, capped, outside the Tunnel Session, cleared on each connect command and by hand from the Logs screen. Android only until iOS bundles a core.
-_Avoid_: DNS query log (in UI copy), resolver log, lookup log
+**Core Logs**:
+The native core's own log lines, as the bundled TrustTunnel library emits them: level (error, warn, info, debug, trace), a tag derived from the core component that wrote the line (`[dns]`, `[core]`, `[client]`, `[jni]`, `[other]`), the text, and the time. Raw text, not structured: a DNS query shows up here as a debug-level `[dns]` line saying where the name was sent. Same buffer rules as Traffic Logs: collected globally from tunnel start, capped, outside the Tunnel Session, cleared on each connect command and by hand from the Logs screen. Android only until iOS bundles a core.
+_Avoid_: native logs, sdk logs, dns logs
 
-**DNS Logging**:
-Whether DNS Logs are being captured. A persisted app setting, off by default, switched from the Settings screen, independent of Traffic Logging. Off stops capture and hides the DNS tab on the Logs screen; already-captured rows are kept, not cleared.
-_Avoid_: dns debug, query logging
+**Core Logging**:
+Whether Core Logs are being captured, and at which Core Log Level. A persisted app setting, off by default, switched from the Settings screen, independent of Traffic Logging and Debug Logging. Off stops capture and hides the core tab on the Logs screen; already-captured rows are kept, not cleared.
+_Avoid_: native logging, verbose mode
+
+**Core Log Level**:
+The single level that both tells the native core how much to emit and filters the core tab: one of error, warn, info, debug, trace; info by default. Debug is the lowest level at which DNS query lines appear. There is no critical level.
+_Avoid_: verbosity, log verbosity
 
 **Debug Logging**:
 Whether Debug Logs are being captured. A persisted app setting, off by default, switched from the Settings screen. Off stops capture and hides the debug tab on the Logs screen; already-captured rows are kept, not cleared.

@@ -11,7 +11,8 @@ export function encodeConfig(input: VpnStartInput): string {
     routing.mode === 'selective' ? 'selective' : 'general',
   );
 
-  // Advanced Settings (#132): the profile owns these, no constants here.
+  // Advanced Settings (#132, ADR 0008): kill switch, anti-DPI, fallback
+  // protocol, MTU and excluded routes come from the profile, not constants.
   const killSwitchEnabled = advanced.killSwitch;
   const postQuantumGroupEnabled = false;
 
