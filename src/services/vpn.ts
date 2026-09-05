@@ -2,11 +2,14 @@ import { NativeEventEmitter } from 'react-native';
 import NativeTrustTunnel from '../../specs/NativeTrustTunnel';
 import { encodeConfig } from './configEncoder';
 import { parseQueryLogRow } from './queryLog';
+import { parseCoreLogRow } from './coreLog';
+import type { CoreLogLevel, CoreLogRow } from './coreLog';
 import type { VpnStartInput, QueryLogRow } from '../types';
 import type { NativeStateReport } from './tunnelSession';
 
 const STATE_EVENT = 'vpn_state';
 const QUERY_LOG_EVENT = 'vpn_query_log';
+const CORE_LOG_EVENT = 'vpn_core_log';
 
 // const eventEmitter = new NativeEventEmitter(NativeTrustTunnel as never);
 // `new NativeEventEmitter()` was called with a non-null argument without the required `addListener` method.
@@ -46,6 +49,21 @@ export const VpnClient = {
     });
 
     return () => subscription.remove();
+  },
+
+  onCoreLog(listener: (row: CoreLogRow) => void): () => void {
+    const subscription = eventEmitter.addListener(CORE_LOG_EVENT, raw => {
+      try {
+        listener(parseCoreLogRow(String(raw)));
+      } catch (err) {
+        console.warn('Failed to parse core log entry', err);
+      }
+    });
+    return () => subscription.remove();
+  },
+
+  setCoreLogging(enabled: boolean, level: CoreLogLevel): Promise<void> {
+    return NativeTrustTunnel.setCoreLogging(enabled, level);
   },
 };
 

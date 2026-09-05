@@ -9,6 +9,9 @@ export interface Spec extends TurboModule {
     config: string | null,
   ): Promise<void>;
   getCurrentState(): Promise<number>;
+  /** Core Logging gate + Core Log Level (issue #136). Level is one of
+   * error/warn/info/debug/trace; OFF restores the native default (INFO). */
+  setCoreLogging(enabled: boolean, level: string): Promise<void>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('NativeTrustTunnel');

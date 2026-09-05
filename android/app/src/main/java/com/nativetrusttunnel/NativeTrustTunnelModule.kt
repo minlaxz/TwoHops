@@ -8,17 +8,37 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.adguard.trusttunnel.AppNotifier
+import com.adguard.trusttunnel.Logger
 import com.adguard.trusttunnel.VpnService
+import com.adguard.trusttunnel.log.NativeLogger
+import com.adguard.trusttunnel.log.NativeLoggerLevel
 import com.facebook.react.bridge.BaseActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.facebook.react.module.annotations.ReactModule
 import java.io.File
+import java.time.Instant
+import org.json.JSONObject
 
 private const val REQUEST_VPN_PERMISSION = 1001
 private const val EVENT_STATE = "vpn_state"
 private const val EVENT_QUERY_LOG = "vpn_query_log"
+private const val EVENT_CORE_LOG = "vpn_core_log"
+
+// Core Logging (issue #136): the gate lives here so the core's chatter never
+// crosses the bridge while OFF. Set from JS via setCoreLogging.
+private object CoreLogging {
+    @Volatile var enabled: Boolean = false
+}
+
+private fun coreLevel(level: String): NativeLoggerLevel = when (level.lowercase()) {
+    "error" -> NativeLoggerLevel.ERROR
+    "warn" -> NativeLoggerLevel.WARN
+    "debug" -> NativeLoggerLevel.DEBUG
+    "trace" -> NativeLoggerLevel.TRACE
+    else -> NativeLoggerLevel.INFO
+}
 
 @ReactModule(name = NativeTrustTunnelModule.NAME)
 class NativeTrustTunnelModule(reactContext: ReactApplicationContext) : NativeTrustTunnelSpec(reactContext) {
@@ -45,6 +65,21 @@ class NativeTrustTunnelModule(reactContext: ReactApplicationContext) : NativeTru
 
     init {
         reactContext.addActivityEventListener(activityEventListener)
+        // The AAR keeps one callback; re-registering on reload replaces it.
+        // Fires on core threads: keep it cheap, hand off to the main looper.
+        Logger.setCallback(object : Logger.Callback {
+            override fun log(level: Logger.LogLevel, message: String) {
+                if (!CoreLogging.enabled) {
+                    return
+                }
+                val payload = JSONObject()
+                    .put("level", level.name.lowercase())
+                    .put("message", message)
+                    .put("date", Instant.now().toString())
+                    .toString()
+                vpnImpl.emitEvent(EVENT_CORE_LOG, payload)
+            }
+        })
     }
 
     override fun start(serverName: String, config: String, promise: Promise) {
@@ -80,6 +115,13 @@ class NativeTrustTunnelModule(reactContext: ReactApplicationContext) : NativeTru
 
     override fun getCurrentState(promise: Promise) {
         promise.resolve(vpnImpl.getCurrentState())
+    }
+
+    override fun setCoreLogging(enabled: Boolean, level: String, promise: Promise) {
+        // OFF restores the library default (INFO, VpnClient.kt) for the file log.
+        NativeLogger.defaultLogLevel = if (enabled) coreLevel(level) else NativeLoggerLevel.INFO
+        CoreLogging.enabled = enabled
+        promise.resolve(null)
     }
 
     companion object {
@@ -120,7 +162,7 @@ class NativeTrustTunnelModule(reactContext: ReactApplicationContext) : NativeTru
             emitEvent(EVENT_QUERY_LOG, info)
         }
 
-        private fun emitEvent(name: String, payload: Any) {
+        fun emitEvent(name: String, payload: Any) {
             if (Looper.myLooper() == Looper.getMainLooper()) {
                 sendEvent(name, payload)
             } else {

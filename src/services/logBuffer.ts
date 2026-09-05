@@ -1,3 +1,4 @@
+import type { CoreLogLevel, CoreLogRow } from './coreLog';
 import type { QueryLogRow } from '../types';
 
 /** A capped, newest-first, in-memory log store with change notification. */
@@ -59,4 +60,49 @@ export function createTrafficLogBuffer(
   const buffer = createLogBuffer<QueryLogRow>({ cap });
   port.onQueryLog(row => buffer.append(row));
   return buffer;
+}
+
+/** The native operations the Core Log buffer depends on (issue #136). */
+export type CoreLogPort = {
+  onCoreLog(listener: (row: CoreLogRow) => void): () => void;
+  /** Gates the bridge and sets the native level; OFF restores INFO natively. */
+  setCoreLogging(enabled: boolean, level: CoreLogLevel): Promise<void>;
+};
+
+export const CORE_LOG_CAP = 500;
+
+export type CoreLogBuffer = LogBuffer<CoreLogRow> & {
+  /** Core Log Level: what the core emits and therefore what the tab shows. */
+  setLevel(level: CoreLogLevel): void;
+};
+
+/**
+ * Core Logs mirror Traffic Logs (app-lifetime, outside the Tunnel Session),
+ * but capture is gated natively too so the bridge is not flooded when OFF.
+ */
+export function createCoreLogBuffer(
+  port: CoreLogPort,
+  { cap = CORE_LOG_CAP }: { cap?: number } = {},
+): CoreLogBuffer {
+  const buffer = createLogBuffer<CoreLogRow>({ cap });
+  let enabled = false;
+  let level: CoreLogLevel = 'info';
+  const sync = () => {
+    port.setCoreLogging(enabled, level).catch(err => {
+      console.warn('Failed to set core logging', err);
+    });
+  };
+  port.onCoreLog(row => buffer.append(row));
+  return {
+    ...buffer,
+    setCaptureEnabled: next => {
+      buffer.setCaptureEnabled(next);
+      enabled = next;
+      sync();
+    },
+    setLevel: next => {
+      level = next;
+      sync();
+    },
+  };
 }

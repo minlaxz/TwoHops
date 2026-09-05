@@ -34,7 +34,7 @@ export default function DashboardScreen() {
     snapshot: { state, lastError },
     session,
   } = useTunnelSession();
-  const { trafficLogs, debugLogs } = useLogs();
+  const { trafficLogs, debugLogs, coreLogs } = useLogs();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -79,6 +79,7 @@ export default function DashboardScreen() {
     // A refused connect issues no command, so its refusal lines survive above.
     trafficLogs.clear();
     debugLogs.clear();
+    coreLogs.clear();
     appendDebugLog(`Setup config: ${setupSummary}`);
     // Haptic tick only when a command is actually issued (#79).
     hapticTick('impactLight');
