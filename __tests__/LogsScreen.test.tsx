@@ -369,8 +369,12 @@ describe('scroll to top (#103)', () => {
 });
 
 // Core Logs (#136)
-function coreRow(tag: 'dns' | 'core', message: string): CoreLogRow {
-  return { level: 'debug', tag, message, stamp: new Date(Date.now() - 1000) };
+function coreRow(
+  tag: 'dns' | 'core',
+  message: string,
+  level: CoreLogRow['level'] = 'info',
+): CoreLogRow {
+  return { level, tag, message, stamp: new Date(Date.now() - 1000) };
 }
 
 test('Core tab shows only while Core Logging is ON (#136)', async () => {
@@ -395,4 +399,15 @@ test('Core tab renders tagged rows and tag chips filter them (#136)', async () =
   expect(list()).toHaveLength(2);
   await press('logs-clear');
   expect(coreLogs.getRows()).toHaveLength(0);
+});
+
+test('Core tab hides rows noisier than the Core Log Level (#136)', async () => {
+  const coreLogs = fakeCoreBuffer();
+  coreLogs.append(coreRow('dns', 'debug line', 'debug'));
+  coreLogs.append(coreRow('core', 'info line'));
+  // Default level is info: the debug row stays buffered but out of view.
+  const { press, list } = await mount(undefined, undefined, coreLogs, true);
+  await press('logs-segment-core');
+  expect(list().map(r => r.message)).toEqual(['info line']);
+  expect(coreLogs.getRows()).toHaveLength(2);
 });

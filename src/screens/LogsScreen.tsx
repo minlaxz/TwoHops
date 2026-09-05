@@ -24,7 +24,7 @@ import { registrableDomain } from '../services/routingRules';
 import { probeDirect } from '../services/directProbe';
 import type { ProbeResult } from '../services/directProbe';
 import type { DebugEntry } from '../services/tunnelSession';
-import { CORE_LOG_TAGS } from '../services/coreLog';
+import { CORE_LOG_LEVELS, CORE_LOG_TAGS } from '../services/coreLog';
 import type { CoreLogRow } from '../services/coreLog';
 import type { QueryLogRow } from '../types';
 import type { AppTheme } from '../theme/colors';
@@ -451,10 +451,19 @@ type TagFilter = (typeof TAG_FILTERS)[number];
 
 function CoreRows(props: RowsProps<CoreLogRow>) {
   const { styles, logs } = props;
+  const { coreLogLevel } = useLogSettings();
   const [tagFilter, setTagFilter] = useState<TagFilter>('all');
+  // The Core Log Level also filters the tab (CONTEXT.md): after lowering the
+  // level, rows captured at a noisier level drop out of view but stay buffered.
+  const maxRank = CORE_LOG_LEVELS.indexOf(coreLogLevel);
   const shown = useMemo(
-    () => (tagFilter === 'all' ? logs : logs.filter(l => l.tag === tagFilter)),
-    [logs, tagFilter],
+    () =>
+      logs.filter(
+        l =>
+          CORE_LOG_LEVELS.indexOf(l.level) <= maxRank &&
+          (tagFilter === 'all' || l.tag === tagFilter),
+      ),
+    [logs, tagFilter, maxRank],
   );
   return (
     <>
@@ -487,14 +496,17 @@ function CoreRows(props: RowsProps<CoreLogRow>) {
         stampOf={log => log.stamp}
         renderBody={log => (
           <>
-            <Text style={styles.logTitle}>
-              [{log.tag}]{' '}
+            <View style={styles.badgeRow}>
+              <Text style={styles.tagChip}>[{log.tag}]</Text>
               <Text
-                style={log.level === 'error' ? styles.levelError : undefined}
+                style={[
+                  styles.levelBadge,
+                  log.level === 'error' && styles.levelError,
+                ]}
               >
                 {log.level.toUpperCase()}
               </Text>
-            </Text>
+            </View>
             <Text style={styles.logLine}>{log.message}</Text>
             <Text style={styles.logTime}>{log.stamp.toISOString()}</Text>
           </>
@@ -639,6 +651,24 @@ function createStyles(theme: AppTheme) {
     },
     chipLabelActive: {
       color: colors.buttonPrimaryText,
+    },
+    badgeRow: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+      marginBottom: spacing.xs,
+    },
+    tagChip: {
+      ...typography.caption,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      paddingHorizontal: spacing.xs,
+      borderRadius: radius.sm,
+      backgroundColor: colors.inputBackground,
+    },
+    levelBadge: {
+      ...typography.caption,
+      fontWeight: '600',
+      color: colors.textSecondary,
     },
     levelError: {
       color: colors.danger,

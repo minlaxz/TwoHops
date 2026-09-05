@@ -1,5 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Linking, Text, StyleSheet, Switch, View } from 'react-native';
+import {
+  Linking,
+  Platform,
+  Text,
+  StyleSheet,
+  Switch,
+  View,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Config from 'react-native-config';
 import MainScreen from '../components/views';
@@ -170,16 +177,19 @@ export default function SettingsScreen() {
             {...switchColors(trafficLoggingEnabled)}
           />
         </View>
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Core Logging</Text>
-          <Switch
-            testID="settings-core-logging"
-            value={coreLoggingEnabled}
-            onValueChange={setCoreLoggingEnabled}
-            {...switchColors(coreLoggingEnabled)}
-          />
-        </View>
-        {coreLoggingEnabled ? (
+        {/* Android only until iOS bundles a core (CONTEXT.md, Core Logs). */}
+        {Platform.OS === 'android' ? (
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Core Logging</Text>
+            <Switch
+              testID="settings-core-logging"
+              value={coreLoggingEnabled}
+              onValueChange={setCoreLoggingEnabled}
+              {...switchColors(coreLoggingEnabled)}
+            />
+          </View>
+        ) : null}
+        {Platform.OS === 'android' && coreLoggingEnabled ? (
           <>
             <View style={styles.row}>
               <Text style={styles.rowLabel}>Core Log Level</Text>
