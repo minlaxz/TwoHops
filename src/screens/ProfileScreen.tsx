@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Text, StyleSheet, View, TextInput } from 'react-native';
+import { Linking, Text, StyleSheet, View, TextInput } from 'react-native';
 import Animated, {
   LinearTransition,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { CollapsibleBody } from '../components/CollapsibleSection';
+import { Ionicons } from '@react-native-vector-icons/ionicons/static';
 import PressableScale from '../components/PressableScale';
 import SegmentedControl from '../components/SegmentedControl';
 import {
@@ -19,17 +19,19 @@ import { useAppAlert } from '../components/AppAlert';
 import { useAppToast } from '../components/AppToast';
 import { useSetupProfile } from '../context/SetupProfileContext';
 import { useTunnelSession } from '../context/TunnelSessionContext';
-import { parseRules } from '../services/routingRules';
 import {
   applyProfileLink,
   defaultProfile,
   effectiveRules,
   importRemoteRules,
+  joinHostPort,
   missingFields,
   resolvedBypassDnsServers,
   profileLinkErrorMessage,
+  splitHostPort,
   updateProfile as updateProfileIntent,
   updateServer as updateServerIntent,
+  type MissingField,
   type ProfileEnv,
   type SetupProfile,
 } from '../services/setupProfile';
@@ -50,6 +52,19 @@ const routingOptions: { value: RoutingMode; label: string }[] = [
   { value: 'general', label: 'General' },
   { value: 'selective', label: 'Selective' },
 ];
+// How a missing field reads beside the disabled Save (#126).
+const missingLabels: Record<MissingField, string> = {
+  name: 'name',
+  ipAddress: 'address',
+  port: 'port',
+  domain: 'TLS domain',
+  login: 'username',
+  password: 'password',
+};
+const DNS_DOC_URL =
+  'https://github.com/minlaxz/TwoHops/blob/main/docs/dns-resolution-paths.md';
+// Rows added by hand stop at three; a longer stored list still shows whole.
+const MAX_DNS_ROWS = 3;
 
 // Shared with DashboardScreen's RootStackParamList so the two cannot drift.
 export type ProfileScreenParams = {
@@ -59,17 +74,22 @@ export type ProfileScreenParams = {
   focus?: 'link';
 };
 
-// A comma-separated text field is only a display of its list (Tunnel DNS
-// Servers, Bypass DNS Servers); local state keeps the user's in-progress
-// punctuation while the list stays the source of truth.
-function useListText(list: string[] | undefined) {
-  const joined = (list ?? []).join(',');
-  const [text, setText] = useState(joined);
+// DNS rows are UI over a string list: one row per entry, empty rows kept
+// locally while typing and dropped from the list (#126). The list stays the
+// source of truth; rows resync when it changes underneath (link apply).
+function useDnsRows(list: string[]) {
+  const joined = list.join(',');
+  const [rows, setRows] = useState<string[]>(() => (list.length ? list : ['']));
   useEffect(() => {
-    setText(prev => (parseRules(prev).join(',') === joined ? prev : joined));
+    setRows(prev =>
+      nonEmpty(prev).join(',') === joined ? prev : joined ? list : [''],
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [joined]);
-  return [text, setText] as const;
+  return [rows, setRows] as const;
 }
+const nonEmpty = (rows: string[]) =>
+  rows.map(row => row.trim()).filter(Boolean);
 
 export default function ServerScreen() {
   const { profiles, selectedId, createProfile, saveProfile, deleteProfile } =
@@ -85,14 +105,13 @@ export default function ServerScreen() {
   // screen edits a Profile Draft instead of a Profile List entry (ADR 0005).
   const params = route.params as ProfileScreenParams | undefined;
   const isCreateMode = params?.mode === 'create';
+  // ponytail: "Paste profile link" shows the link input above the Form until
+  // Link Mode (#127) replaces it with its own face.
+  const showLink = isCreateMode && params?.focus === 'link';
   const entry = profiles.find(candidate => candidate.id === params?.profileId);
   const [url, setURL] = useState<string>('');
-  // Create mode collapses Advanced (the link is the expected path); edit
-  // mode opens it (the fields are what the pencil came for).
-  const [advancedOpen, setAdvancedOpen] = useState(!isCreateMode);
-  // The Profile Draft: in-memory until Create (blank) or Save (loaded from
-  // the entry) commits it. Its only name is the server name (#89). Edit mode
-  // never writes through; the entry is only a seed.
+  // The Profile Draft: in-memory until Save commits it (blank for create,
+  // seeded from the entry for edit). Its only name is the server name (#89).
   const [draft, setDraft] = useState<SetupProfile>(() =>
     entry && !isCreateMode ? entry : defaultProfile(Config as ProfileEnv),
   );
@@ -101,14 +120,14 @@ export default function ServerScreen() {
 
   const profile = isCreateMode || entry ? draft : undefined;
 
-  const [dnsText, setDnsText] = useListText(profile?.dnsServers);
-  const [bypassDnsText, setBypassDnsText] = useListText(
-    profile?.bypassDnsServers,
+  const [dnsRows, setDnsRows] = useDnsRows(profile?.dnsServers ?? []);
+  const [bypassRows, setBypassRows] = useDnsRows(
+    profile?.bypassDnsServers ?? [],
   );
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const reduceMotion = useReducedMotion();
-  // The card and the action row below it ease when Advanced opens (#80).
+  // The card and the action row ease when rows or the route control appear.
   const layout = reduceMotion
     ? undefined
     : LinearTransition.duration(theme.motion.duration.base);
@@ -156,12 +175,14 @@ export default function ServerScreen() {
     patchDraft(prev => updateProfileIntent(prev, patch));
   const updateServer = (patch: Parameters<typeof updateServerIntent>[1]) =>
     patchDraft(prev => updateServerIntent(prev, patch));
+  const { host, port } = splitHostPort(server.ipAddress);
+  const sameAsTunnel = profile.bypassDnsSource === 'same-as-tunnel';
 
-  // The Completeness gate: Create/Save can never mint an incomplete profile.
-  // Save is additionally gated on the touched flag (issue #71): an untouched
-  // edit draft has nothing to save, however complete it is.
-  const canCommit =
-    missingFields(profile).length === 0 && (isCreateMode || isTouched);
+  // The Completeness gate: Save can never mint an incomplete profile. Save
+  // is additionally gated on the touched flag (issue #71): an untouched edit
+  // draft has nothing to save, however complete it is.
+  const missing = missingFields(profile);
+  const canCommit = missing.length === 0 && (isCreateMode || isTouched);
   const handleCommit = () => {
     if (committedRef.current) {
       return; // a second tap before the pop lands must not commit twice
@@ -208,237 +229,332 @@ export default function ServerScreen() {
     );
   };
 
+  const renderDnsRows = (
+    idPrefix: string,
+    rows: string[],
+    setRows: (update: (prev: string[]) => string[]) => void,
+    write: (list: string[]) => void,
+  ) => {
+    const commit = (next: string[]) => {
+      setRows(() => next);
+      write(nonEmpty(next));
+    };
+    return (
+      <>
+        {rows.map((row, index) => (
+          <View key={index} style={styles.dnsRow}>
+            <TextInput
+              testID={`${idPrefix}-row-${index}`}
+              style={[styles.input, styles.dnsInput]}
+              placeholder="DNS server"
+              placeholderTextColor={placeholderTextColor}
+              value={row}
+              onChangeText={value =>
+                commit(rows.map((r, i) => (i === index ? value : r)))
+              }
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <PressableScale
+              testID={`${idPrefix}-remove-${index}`}
+              accessibilityRole="button"
+              accessibilityLabel="Remove DNS server"
+              style={styles.iconButton}
+              onPress={() => {
+                const next = rows.filter((_, i) => i !== index);
+                commit(next.length ? next : ['']);
+              }}
+            >
+              <Ionicons
+                name="remove-circle-outline"
+                size={22}
+                color={theme.colors.textSecondary}
+              />
+            </PressableScale>
+          </View>
+        ))}
+        {rows.length < MAX_DNS_ROWS ? (
+          <PressableScale
+            testID={`${idPrefix}-add`}
+            accessibilityRole="button"
+            accessibilityLabel="Add DNS server"
+            style={styles.addRow}
+            onPress={() => setRows(prev => [...prev, ''])}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={22}
+              color={theme.colors.link}
+            />
+            <Text style={styles.addRowLabel}>Add server</Text>
+          </PressableScale>
+        ) : null}
+      </>
+    );
+  };
+
   return (
     <MainScreen>
       <Text style={styles.title}>Configurations</Text>
+      {showLink ? (
+        <View style={styles.section}>
+          <TextInput
+            testID="profile-link-input"
+            autoFocus
+            style={styles.input}
+            placeholder="twohops://..."
+            placeholderTextColor={placeholderTextColor}
+            value={url}
+            onChangeText={setURL}
+            autoCapitalize="none"
+          />
+          <Text style={styles.inputDescription}>
+            Paste a Profile Link to fill this profile's details in
+            automatically.
+          </Text>
+          <TouchableOpacityButton
+            touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
+            textStyles={styles.modeButtonText}
+            title="Apply Link"
+            testID="profile-link-apply"
+            onPress={() => {
+              // ADR 0005: the link patches the Profile Draft in place —
+              // nothing reaches the Profile List until Save.
+              const result = applyProfileLink(profile, url);
+              if (!result.ok) {
+                alert(
+                  'Profile Link failed',
+                  profileLinkErrorMessage(result.error),
+                );
+                return;
+              }
+              patchDraft(() => result.value);
+              setURL('');
+            }}
+          />
+        </View>
+      ) : null}
       <Animated.View style={styles.section} layout={layout}>
-        {isCreateMode ? (
-          <>
-            <TextInput
-              testID="profile-link-input"
-              autoFocus={params?.focus === 'link'}
-              style={styles.input}
-              placeholder="twohops://..."
-              placeholderTextColor={placeholderTextColor}
-              value={url}
-              onChangeText={setURL}
-              autoCapitalize="none"
-            />
-            <Text style={styles.inputDescription}>
-              Paste a Profile Link to fill this profile's details in
-              automatically.
-            </Text>
-            <TouchableOpacityButton
-              touchableOpacityStyles={[
-                styles.modeButton,
-                styles.modeButtonWide,
-              ]}
-              textStyles={styles.modeButtonText}
-              title="Apply Link"
-              testID="profile-link-apply"
-              onPress={() => {
-                // ADR 0005: the link patches the Profile Draft in place —
-                // nothing reaches the Profile List until Create.
-                const result = applyProfileLink(profile, url);
-                if (!result.ok) {
-                  alert(
-                    'Profile Link failed',
-                    profileLinkErrorMessage(result.error),
-                  );
-                  return;
-                }
-                patchDraft(() => result.value);
-                setURL('');
-                setAdvancedOpen(true);
-              }}
-            />
-            <View style={styles.line} />
-          </>
-        ) : null}
-        <PressableScale
-          testID="profile-advanced-toggle"
-          accessibilityRole="button"
-          accessibilityState={{ expanded: advancedOpen }}
-          style={styles.advancedHeader}
-          onPress={() => setAdvancedOpen(open => !open)}
-        >
-          <Text style={styles.sectionTitle}>Advanced</Text>
-          <Text style={styles.advancedChevron}>{advancedOpen ? '▾' : '▸'}</Text>
-        </PressableScale>
-        <CollapsibleBody expanded={advancedOpen}>
-          <TextInput
-            testID="server-name-input"
-            style={styles.input}
-            placeholder="Name"
-            placeholderTextColor={placeholderTextColor}
-            value={server.name}
-            onChangeText={value => updateServer({ name: value })}
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Server IP Address"
-            placeholderTextColor={placeholderTextColor}
-            value={server.ipAddress}
-            onChangeText={value => updateServer({ ipAddress: value })}
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="TLS Domain Name"
-            placeholderTextColor={placeholderTextColor}
-            value={server.domain}
-            onChangeText={value => updateServer({ domain: value })}
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Username"
-            placeholderTextColor={placeholderTextColor}
-            value={server.login}
-            onChangeText={value => updateServer({ login: value })}
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={[styles.input, styles.passwordInput]}
-            placeholder="Password"
-            placeholderTextColor={placeholderTextColor}
-            value={server.password}
-            onChangeText={value => updateServer({ password: value })}
-            secureTextEntry
-          />
-          <Text style={styles.inputLabel}>Tunnel DNS Servers:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Tunnel DNS Servers (comma-separated)"
-            placeholderTextColor={placeholderTextColor}
-            value={dnsText}
-            onChangeText={value => {
-              setDnsText(value);
-              updateProfile({ dnsServers: parseRules(value) });
-            }}
-            autoCapitalize="none"
-          />
-          <Text style={styles.inputLabel}>Bypass DNS Servers:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Bypass DNS Servers (comma-separated)"
-            placeholderTextColor={placeholderTextColor}
-            value={bypassDnsText}
-            onChangeText={value => {
-              setBypassDnsText(value);
-              // Typing here edits the custom list and selects it as the
-              // source (ADR 0007). The route is kept; it is simply hidden
-              // while the resolved list is empty.
-              updateProfile({
-                bypassDnsSource: 'custom',
-                bypassDnsServers: parseRules(value),
-              });
-            }}
-            autoCapitalize="none"
-          />
-          {resolvedBypassDnsServers(profile).length > 0 && (
-            <>
-              <View style={styles.row}>
-                <Text style={styles.rowLabel}>Bypass DNS Route</Text>
-              </View>
-              <SegmentedControl
-                testID="profile-bypass-route"
-                options={bypassRouteOptions}
-                value={profile.bypassDnsRoute}
-                onChange={bypassDnsRoute => updateProfile({ bypassDnsRoute })}
-              />
-            </>
-          )}
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Protocol</Text>
-          </View>
-          <SegmentedControl
-            testID="profile-protocol"
-            options={protocolOptions}
-            value={server.vpnProtocol}
-            onChange={vpnProtocol => updateServer({ vpnProtocol })}
-          />
-          <Text style={styles.sectionTitle}>Routing</Text>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Mode</Text>
-          </View>
-          <SegmentedControl
-            testID="profile-routing"
-            options={routingOptions}
-            value={routingMode}
-            onChange={mode => updateProfile({ routingMode: mode })}
-          />
-          <Text style={styles.inputDescription}>
-            In most cases, "Selective" mode is recommended for better
-            performance and battery life.
-          </Text>
-          <View style={styles.line} />
-          <Text style={styles.inputLabel}>Remote Rules URL:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="https://..."
-            placeholderTextColor={placeholderTextColor}
-            value={remoteRulesURL}
-            onChangeText={value => updateProfile({ remoteRulesURL: value })}
-            autoCapitalize="none"
-          />
-          <Text style={styles.inputDescription}>
-            * URL should point to a plain text file containing domain rules,
-            separated by new lines.
-          </Text>
-          <View style={styles.line} />
-          <Text style={styles.inputLabel}>Local Rules (one per line):</Text>
-          <TextInput
-            style={styles.multilineInput}
-            placeholder="example.com, facebook.com"
-            placeholderTextColor={placeholderTextColor}
-            value={localRulesText}
-            onChangeText={value => updateProfile({ localRulesText: value })}
-            autoCapitalize="none"
-            multiline
-            textAlignVertical="top"
-          />
-          <Text style={styles.inputDescription}>
-            * Domains listed here are merged with the Imported Rules (if any)
-            when you connect. Press Import to refresh the Imported Rules.
-          </Text>
-          <View style={styles.line} />
+        <TextInput
+          testID="server-name-input"
+          style={styles.input}
+          placeholder="Name"
+          placeholderTextColor={placeholderTextColor}
+          value={server.name}
+          onChangeText={value => updateServer({ name: value })}
+          autoCapitalize="none"
+        />
 
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>
-              * Effective rules: {effectiveRules(profile).length}
-              {'\n'}* Imported:{' '}
-              {importedAt ? new Date(importedAt).toLocaleString() : 'never'}
-            </Text>
-            <View style={styles.rowSpacer} />
-            <TouchableOpacityButton
-              touchableOpacityStyles={[
-                styles.modeButton,
-                styles.modeButtonWide,
-              ]}
-              textStyles={styles.modeButtonText}
-              title="Import"
-              onPress={async () => {
-                const result = await importRemoteRules(profile);
-                if (!result.ok) {
-                  alert(
-                    'Import failed',
-                    result.error.kind === 'noURL'
-                      ? 'Enter a Remote Rules URL to import.'
-                      : result.error.message,
-                  );
-                  return;
-                }
-                // Patch only the imported fields so edits made during the fetch
-                // are not reverted by the pre-await profile snapshot.
-                const { importedRules, importedAt: at } = result.value;
-                updateProfile({ importedRules, importedAt: at });
-              }}
+        <Text style={styles.groupTitle}>Server</Text>
+        <View style={styles.dnsRow}>
+          <TextInput
+            testID="server-address-input"
+            style={[styles.input, styles.dnsInput]}
+            placeholder="Server address"
+            placeholderTextColor={placeholderTextColor}
+            value={host}
+            onChangeText={value =>
+              updateServer({ ipAddress: joinHostPort(value, port) })
+            }
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextInput
+            testID="server-port-input"
+            style={[styles.input, styles.portInput]}
+            placeholder="443"
+            placeholderTextColor={placeholderTextColor}
+            value={port}
+            onChangeText={value =>
+              updateServer({ ipAddress: joinHostPort(host, value.trim()) })
+            }
+            keyboardType="number-pad"
+          />
+        </View>
+        <TextInput
+          testID="server-domain-input"
+          style={styles.input}
+          placeholder="TLS Domain Name"
+          placeholderTextColor={placeholderTextColor}
+          value={server.domain}
+          onChangeText={value => updateServer({ domain: value })}
+          autoCapitalize="none"
+        />
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Protocol</Text>
+        </View>
+        <SegmentedControl
+          testID="profile-protocol"
+          options={protocolOptions}
+          value={server.vpnProtocol}
+          onChange={vpnProtocol => updateServer({ vpnProtocol })}
+        />
+
+        <Text style={styles.groupTitle}>User</Text>
+        <TextInput
+          testID="server-login-input"
+          style={styles.input}
+          placeholder="Username"
+          placeholderTextColor={placeholderTextColor}
+          value={server.login}
+          onChangeText={value => updateServer({ login: value })}
+          autoCapitalize="none"
+        />
+        <TextInput
+          testID="server-password-input"
+          style={[styles.input, styles.passwordInput]}
+          placeholder="Password"
+          placeholderTextColor={placeholderTextColor}
+          value={server.password}
+          onChangeText={value => updateServer({ password: value })}
+          secureTextEntry
+        />
+
+        <Text style={styles.groupTitle}>DNS</Text>
+        <Text style={styles.inputLabel}>Tunnel DNS Servers:</Text>
+        {renderDnsRows('dns', dnsRows, setDnsRows, dnsServers =>
+          updateProfile({ dnsServers }),
+        )}
+        <Text style={styles.inputLabel}>Bypass DNS Servers:</Text>
+        <PressableScale
+          testID="bypass-same-as-tunnel"
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: sameAsTunnel }}
+          style={styles.checkboxRow}
+          onPress={() =>
+            // Rechecking returns to `same-as-tunnel`; the custom list is
+            // kept in the document but unread (ADR 0007).
+            updateProfile({
+              bypassDnsSource: sameAsTunnel ? 'custom' : 'same-as-tunnel',
+            })
+          }
+        >
+          <Ionicons
+            name={sameAsTunnel ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={
+              sameAsTunnel ? theme.colors.accent : theme.colors.textSecondary
+            }
+          />
+          <Text style={styles.rowLabel}>Same as above</Text>
+        </PressableScale>
+        {!sameAsTunnel
+          ? renderDnsRows('bypass-dns', bypassRows, setBypassRows, list =>
+              updateProfile({ bypassDnsServers: list }),
+            )
+          : null}
+        {resolvedBypassDnsServers(profile).length > 0 && (
+          <>
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>Bypass DNS Route</Text>
+            </View>
+            <SegmentedControl
+              testID="profile-bypass-route"
+              options={bypassRouteOptions}
+              value={profile.bypassDnsRoute}
+              onChange={bypassDnsRoute => updateProfile({ bypassDnsRoute })}
             />
-          </View>
-        </CollapsibleBody>
+            {profile.bypassDnsRoute === 'direct' ? (
+              <Text style={[styles.inputDescription, styles.warning]}>
+                DNS server could be exposed, Tunnel mode is recommended.
+              </Text>
+            ) : (
+              <View style={styles.rowGap} />
+            )}
+          </>
+        )}
+        <Text style={styles.inputDescription}>
+          Plain DNS (IP), DoT (tls://) and DoH (https://) servers are supported.{' '}
+          <Text
+            testID="dns-doc-link"
+            style={styles.linkText}
+            onPress={() => Linking.openURL(DNS_DOC_URL).catch(() => {})}
+          >
+            DNS resolution paths
+          </Text>
+        </Text>
+
+        <Text style={styles.groupTitle}>Routing</Text>
+        <Text style={styles.inputLabel}>Remote Rules URL:</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="https://..."
+          placeholderTextColor={placeholderTextColor}
+          value={remoteRulesURL}
+          onChangeText={value => updateProfile({ remoteRulesURL: value })}
+          autoCapitalize="none"
+        />
+        <Text style={styles.inputDescription}>
+          * URL should point to a plain text file containing domain rules,
+          separated by new lines.
+        </Text>
+        <View style={styles.line} />
+        <Text style={styles.inputLabel}>Local Rules (one per line):</Text>
+        <TextInput
+          style={styles.multilineInput}
+          placeholder="example.com, facebook.com"
+          placeholderTextColor={placeholderTextColor}
+          value={localRulesText}
+          onChangeText={value => updateProfile({ localRulesText: value })}
+          autoCapitalize="none"
+          multiline
+          textAlignVertical="top"
+        />
+        <Text style={styles.inputDescription}>
+          * Domains listed here are merged with the Imported Rules (if any) when
+          you connect. Press Import to refresh the Imported Rules.
+        </Text>
+        <View style={styles.line} />
+
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>
+            * Effective rules: {effectiveRules(profile).length}
+            {'\n'}* Imported:{' '}
+            {importedAt ? new Date(importedAt).toLocaleString() : 'never'}
+          </Text>
+          <View style={styles.rowSpacer} />
+          <TouchableOpacityButton
+            touchableOpacityStyles={[styles.modeButton, styles.modeButtonWide]}
+            textStyles={styles.modeButtonText}
+            title="Import"
+            onPress={async () => {
+              const result = await importRemoteRules(profile);
+              if (!result.ok) {
+                alert(
+                  'Import failed',
+                  result.error.kind === 'noURL'
+                    ? 'Enter a Remote Rules URL to import.'
+                    : result.error.message,
+                );
+                return;
+              }
+              // Patch only the imported fields so edits made during the fetch
+              // are not reverted by the pre-await profile snapshot.
+              const { importedRules, importedAt: at } = result.value;
+              updateProfile({ importedRules, importedAt: at });
+            }}
+          />
+        </View>
+        <View style={styles.line} />
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Mode</Text>
+        </View>
+        <SegmentedControl
+          testID="profile-routing"
+          options={routingOptions}
+          value={routingMode}
+          onChange={mode => updateProfile({ routingMode: mode })}
+        />
+        <Text style={styles.inputDescription}>
+          In most cases, "Selective" mode is recommended for better performance
+          and battery life.
+        </Text>
       </Animated.View>
+      {missing.length > 0 ? (
+        <Text testID="profile-missing" style={styles.missing}>
+          {`Missing: ${missing.map(field => missingLabels[field]).join(', ')}`}
+        </Text>
+      ) : null}
       <Animated.View style={styles.actionRow} layout={layout}>
         {!isCreateMode ? (
           <TouchableOpacityButton
@@ -456,8 +572,8 @@ export default function ServerScreen() {
             styles.actionButton,
             !canCommit && styles.actionButtonDisabled,
           ]}
-          title={isCreateMode ? 'Create' : 'Save'}
-          testID={isCreateMode ? 'profile-create' : 'profile-save'}
+          title="Save"
+          testID="profile-save"
           disabled={!canCommit}
           onPress={handleCommit}
         />
@@ -486,20 +602,11 @@ function createStyles(theme: AppTheme) {
       borderRadius: radius.md,
       ...card,
     },
-    sectionTitle: {
+    groupTitle: {
       ...typography.title,
+      marginTop: spacing.sm,
       marginBottom: spacing.md,
       color: colors.textPrimary,
-    },
-    advancedHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    advancedChevron: {
-      ...typography.body,
-      color: colors.textSecondary,
-      marginBottom: spacing.md,
     },
     title: {
       ...typography.title,
@@ -519,6 +626,13 @@ function createStyles(theme: AppTheme) {
       marginBottom: spacing.md,
       textAlign: 'justify',
     },
+    warning: {
+      color: colors.danger,
+    },
+    linkText: {
+      color: colors.link,
+      textDecorationLine: 'underline',
+    },
     passwordInput: {
       backgroundColor: colors.inputBackgroundStrong,
       color: colors.textPrimary,
@@ -527,11 +641,47 @@ function createStyles(theme: AppTheme) {
       ...input,
       minHeight: 100,
     },
+    dnsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    dnsInput: {
+      flex: 1,
+    },
+    portInput: {
+      width: 84,
+      textAlign: 'center',
+    },
+    iconButton: {
+      marginBottom: spacing.md,
+      padding: spacing.xs,
+    },
+    addRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginBottom: spacing.md,
+      paddingVertical: spacing.xs,
+    },
+    addRowLabel: {
+      ...typography.caption,
+      fontWeight: '600',
+      color: colors.link,
+    },
+    checkboxRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginBottom: spacing.md,
+      paddingVertical: spacing.xs,
+    },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       marginBottom: spacing.md,
     },
+    rowGap: { height: spacing.md },
     rowLabel: {
       ...typography.body,
       flex: 1,
@@ -550,6 +700,11 @@ function createStyles(theme: AppTheme) {
     },
     modeButtonWide: {
       width: 80,
+    },
+    missing: {
+      ...typography.caption,
+      color: colors.textSecondary,
+      marginBottom: spacing.sm,
     },
     actionRow: {
       flexDirection: 'row',

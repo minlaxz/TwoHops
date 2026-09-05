@@ -1,5 +1,6 @@
 ---
 status: accepted
+amended-by: '#126 — the create-mode button reads Save, not Create (see CONTEXT.md Profile Form)'
 supersedes: 0004
 ---
 

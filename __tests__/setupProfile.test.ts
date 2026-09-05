@@ -11,6 +11,8 @@ import {
   offerableLocalRule,
   importRemoteRules,
   missingFields,
+  splitHostPort,
+  joinHostPort,
   tunnelStartInput,
   loadProfile,
   saveProfile,
@@ -234,6 +236,28 @@ describe('missingFields', () => {
     expect(withPort('10.0.0.1:65536')).toEqual(['port']);
     expect(withPort('10.0.0.1:abc')).toEqual(['port']);
     expect(withPort('10.0.0.1:4.4')).toEqual(['port']);
+  });
+});
+
+describe('splitHostPort / joinHostPort', () => {
+  test('splits the one-colon form and round-trips through join (#126)', () => {
+    expect(splitHostPort('10.0.0.1:8443')).toEqual({
+      host: '10.0.0.1',
+      port: '8443',
+    });
+    expect(splitHostPort('10.0.0.1')).toEqual({ host: '10.0.0.1', port: '' });
+    expect(splitHostPort('10.0.0.1:')).toEqual({ host: '10.0.0.1', port: '' });
+    // Not the one-colon form: shown whole, no port (IPv6 out of scope).
+    expect(splitHostPort('::1')).toEqual({ host: '::1', port: '' });
+    // Port typed before the host (#126): the port survives, the address is
+    // what is missing.
+    expect(splitHostPort(':443')).toEqual({ host: '', port: '443' });
+    expect(
+      missingFields(updateServer(completeProfile(), { ipAddress: ':443' })),
+    ).toEqual(['ipAddress']);
+    expect(joinHostPort('10.0.0.1', '8443')).toBe('10.0.0.1:8443');
+    expect(joinHostPort('10.0.0.1', '')).toBe('10.0.0.1');
+    expect(joinHostPort('10.0.0.1', 'abc')).toBe('10.0.0.1:abc');
   });
 });
 

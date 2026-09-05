@@ -104,7 +104,7 @@ const pick = <T extends string>(
 const COMPLETENESS_CHECKS: [MissingField, (s: ServerCredentials) => boolean][] =
   [
     ['name', s => isBlank(s.name)],
-    ['ipAddress', s => isBlank(s.ipAddress)],
+    ['ipAddress', s => isBlank(splitHostPort(s.ipAddress).host)],
     ['port', s => hasInvalidPort(s.ipAddress)],
     ['domain', s => isBlank(s.domain)],
     ['login', s => isBlank(s.login)],
@@ -114,11 +114,26 @@ const isBlank = (value: string) => value.trim().length === 0;
 // A port present in the server address (`host[:port]`) must be an integer
 // 1–65535; `host:` is 443.
 // ponytail: one-colon form only; bracketed IPv6 is out of scope (#124)
-const PORT_RE = /^[^:]+:([^:]*)$/;
+const PORT_RE = /^([^:]*):([^:]*)$/;
 function hasInvalidPort(ipAddress: string): boolean {
-  const port = ipAddress.trim().match(PORT_RE)?.[1];
-  if (port === undefined || port === '') return false;
+  const port = splitHostPort(ipAddress.trim()).port;
+  if (port === '') return false;
   return !/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535;
+}
+
+/** The Profile Form's two boxes over the one stored `host[:port]` (#126). */
+export function splitHostPort(ipAddress: string): {
+  host: string;
+  port: string;
+} {
+  const match = ipAddress.match(PORT_RE);
+  return match
+    ? { host: match[1], port: match[2] }
+    : { host: ipAddress, port: '' };
+}
+
+export function joinHostPort(host: string, port: string): string {
+  return port ? `${host}:${port}` : host;
 }
 
 // --- intents ---------------------------------------------------------------

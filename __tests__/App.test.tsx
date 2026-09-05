@@ -111,6 +111,9 @@ function emitNativeState(state: string) {
 
 beforeEach(async () => {
   await AsyncStorage.clear();
+  // The RN Linking mock is already a jest.fn, so a deep-link test's
+  // mockReturnValue would otherwise leak into every later test.
+  (Linking.getInitialURL as jest.Mock).mockReset().mockResolvedValue(null);
   VpnClient.start.mockClear();
   VpnClient.stop.mockClear();
   emitNativeState('disconnected');
@@ -454,13 +457,23 @@ test('"+" opens a sheet; "New profile" routes to the create editor (issue #81)',
   expect(text).toContain('Paste profile link');
 
   await press(renderer, 'profile-add-new');
-  // Sheet dismissed, editor pushed in create mode with the link input
-  // present but not focused — the blank Draft is the point.
+  // Sheet dismissed, editor pushed as the Profile Form (#126): no link
+  // input, no Advanced toggle, all four groups visible, Save disabled with
+  // the missing list beside it.
   expect(pressableByTestID(renderer, 'profile-add-new')).toBeNull();
-  expect(renderedText(renderer)).toContain('Configurations');
-  expect(
-    textInputByTestID(renderer, 'profile-link-input').props.autoFocus,
-  ).toBeFalsy();
+  const form = renderedText(renderer);
+  expect(form).toContain('Configurations');
+  expect(textInputByTestID(renderer, 'profile-link-input')).toBeUndefined();
+  expect(pressableByTestID(renderer, 'profile-advanced-toggle')).toBeNull();
+  expect(form).not.toContain('Advanced');
+  for (const group of ['Server', 'User', 'DNS', 'Routing']) {
+    expect(form).toContain(group);
+  }
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
+  );
+  // Name comes from env; everything else is listed.
+  expect(form).toContain('Missing: address, TLS domain, username, password');
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
@@ -495,9 +508,9 @@ test('"+" opens the editor above the tabs in create mode', async () => {
 
   const text = renderedText(renderer);
   expect(text).toContain('Configurations');
-  // Create mode leads with the link input; Advanced starts collapsed.
-  expect(textInputByTestID(renderer, 'profile-link-input')).toBeDefined();
-  expect(textInputByTestID(renderer, 'server-name-input')).toBeUndefined();
+  // The Profile Form: name on top, no link input (#126).
+  expect(textInputByTestID(renderer, 'profile-link-input')).toBeUndefined();
+  expect(textInputByTestID(renderer, 'server-name-input')).toBeDefined();
   // The tab bar stays mounted beneath the pushed Profile screen.
   expect(tabButtons(renderer).length).toBe(3);
 
@@ -1077,6 +1090,41 @@ async function openCreateEditor(renderer: ReactTestRenderer.ReactTestRenderer) {
   await press(renderer, 'profile-add-new');
 }
 
+// "Paste profile link" is the only route that still shows the link input
+// (above the Profile Form, until Link Mode lands in #127).
+async function openLinkEditor(renderer: ReactTestRenderer.ReactTestRenderer) {
+  await press(renderer, 'profile-add');
+  await press(renderer, 'profile-add-link');
+}
+
+// DNS rows carry `${prefix}-row-${i}` testIDs (#126). TextInput forwards
+// testID to its host node; keep one value per row.
+function dnsRowValues(
+  renderer: ReactTestRenderer.ReactTestRenderer,
+  prefix: string,
+) {
+  const byId = new Map<string, string>();
+  for (const input of renderer.root.findAll(
+    node =>
+      typeof node.props.testID === 'string' &&
+      node.props.testID.startsWith(`${prefix}-row-`) &&
+      typeof node.props.onChangeText === 'function',
+  )) {
+    byId.set(input.props.testID, input.props.value as string);
+  }
+  return [...byId.values()];
+}
+
+async function typeInto(
+  renderer: ReactTestRenderer.ReactTestRenderer,
+  testID: string,
+  value: string,
+) {
+  await ReactTestRenderer.act(async () => {
+    textInputByTestID(renderer, testID).props.onChangeText(value);
+  });
+}
+
 // Android hardware back / header back: both run the same navigation pop,
 // which is what raises the Profile Draft discard confirmation.
 async function pressBack() {
@@ -1092,9 +1140,7 @@ test('"+" opens a blank Profile Draft without touching the Profile List', async 
 
   await openCreateEditor(renderer);
 
-  // Editor pushed in create mode; expand Advanced to reach the fields.
   expect(renderedText(renderer)).toContain('Configurations');
-  await press(renderer, 'profile-advanced-toggle');
   // Name is the server name (#89): seeded from env, no generated "Profile n".
   expect(textInputByTestID(renderer, 'server-name-input').props.value).toBe(
     'env-server',
@@ -1114,7 +1160,7 @@ test('Apply Link patches the Profile Draft; the Profile List is untouched', asyn
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await openCreateEditor(renderer);
+  await openLinkEditor(renderer);
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
       'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com',
@@ -1122,13 +1168,10 @@ test('Apply Link patches the Profile Draft; the Profile List is untouched', asyn
   });
   await press(renderer, 'profile-link-apply');
 
-  // Success auto-expands Advanced with the link's fields applied to the draft.
-  const username = renderer.root.findAll(
-    node =>
-      node.props.placeholder === 'Username' &&
-      typeof node.props.onChangeText === 'function',
-  )[0];
-  expect(username.props.value).toBe('bob');
+  // The link's fields land in the Form's draft.
+  expect(textInputByTestID(renderer, 'server-login-input').props.value).toBe(
+    'bob',
+  );
   // The draft is not a Profile List entry: still just the two seeded rows.
   expect(await openPicker(renderer)).toHaveLength(2);
 
@@ -1137,13 +1180,13 @@ test('Apply Link patches the Profile Draft; the Profile List is untouched', asyn
   });
 });
 
-test('Create is gated on Profile Completeness and commits exactly one profile', async () => {
+test('Save is gated on Profile Completeness and commits exactly one profile', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await openCreateEditor(renderer);
-  // Blank draft: Create renders (outside Advanced) but stays disabled.
-  expect(pressableByTestID(renderer, 'profile-create')!.props.disabled).toBe(
+  await openLinkEditor(renderer);
+  // Blank draft: Save renders but stays disabled.
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
     true,
   );
 
@@ -1155,16 +1198,17 @@ test('Create is gated on Profile Completeness and commits exactly one profile', 
   await press(renderer, 'profile-link-apply');
 
   // Env server name + the link's fields satisfy the Completeness gate.
-  expect(pressableByTestID(renderer, 'profile-create')!.props.disabled).toBe(
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
     false,
   );
+  expect(renderedText(renderer)).not.toContain('Missing:');
 
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'server-name-input').props.onChangeText(
       'My VPN',
     );
   });
-  await press(renderer, 'profile-create');
+  await press(renderer, 'profile-save');
 
   // Editor closed; the committed profile is on the card, unselected, persisted.
   expect(renderedText(renderer)).not.toContain('Configurations');
@@ -1188,13 +1232,13 @@ test('Create is gated on Profile Completeness and commits exactly one profile', 
   });
 });
 
-test('back on an untouched create draft exits silently; footer is Create only', async () => {
+test('back on an untouched create draft exits silently; footer is Save only', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await openCreateEditor(renderer);
-  // Create mode footer: Create only — no Cancel, no Delete (issue #71).
-  expect(pressableByTestID(renderer, 'profile-create')).toBeTruthy();
+  // Create mode footer: Save only — no Cancel, no Delete (issue #71).
+  expect(pressableByTestID(renderer, 'profile-save')).toBeTruthy();
   expect(pressableByTestID(renderer, 'profile-cancel')).toBeNull();
   expect(pressableByTestID(renderer, 'profile-delete')).toBeNull();
   await pressBack();
@@ -1213,7 +1257,6 @@ test('back on a dirty draft asks; Keep Editing stays, Discard drops it', async (
   const renderer = await renderApp();
 
   await openCreateEditor(renderer);
-  await press(renderer, 'profile-advanced-toggle');
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'server-name-input').props.onChangeText(
       'Half-typed',
@@ -1248,7 +1291,7 @@ test('a bad link in create mode shows the alert modal and touches nothing', asyn
   await seedTwoProfiles();
   const renderer = await renderApp();
 
-  await openCreateEditor(renderer);
+  await openLinkEditor(renderer);
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
       'https://not-a-profile-link',
@@ -1260,8 +1303,10 @@ test('a bad link in create mode shows the alert modal and touches nothing', asyn
   expect(renderedText(renderer)).toContain('Profile Link failed');
   await press(renderer, 'alert-button-OK');
   expect(renderedText(renderer)).not.toContain('Profile Link failed');
-  // Advanced stays collapsed and the Profile List is untouched.
-  expect(textInputByTestID(renderer, 'server-name-input')).toBeUndefined();
+  // The Draft and the Profile List are untouched.
+  expect(textInputByTestID(renderer, 'server-name-input').props.value).toBe(
+    'env-server',
+  );
   expect(await openPicker(renderer)).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
@@ -1269,15 +1314,23 @@ test('a bad link in create mode shows the alert modal and touches nothing', asyn
   });
 });
 
-test('edit mode has no link input and opens Advanced expanded', async () => {
+test('edit mode shows the Form seeded from the stored profile, Delete present, no link input', async () => {
   await seedTwoProfiles('b');
   const renderer = await renderApp();
 
   await press(renderer, 'profile-edit');
 
   expect(textInputByTestID(renderer, 'profile-link-input')).toBeUndefined();
+  expect(pressableByTestID(renderer, 'profile-advanced-toggle')).toBeNull();
   expect(textInputByTestID(renderer, 'server-name-input').props.value).toBe(
     'Beta',
+  );
+  expect(textInputByTestID(renderer, 'server-login-input').props.value).toBe(
+    'user',
+  );
+  expect(pressableByTestID(renderer, 'profile-delete')).toBeTruthy();
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
   );
 
   await ReactTestRenderer.act(async () => {
@@ -1285,7 +1338,7 @@ test('edit mode has no link input and opens Advanced expanded', async () => {
   });
 });
 
-test('Profile screen labels Tunnel DNS Servers and offers Bypass DNS Servers; v1 entries load empty and Save persists the list (#116)', async () => {
+test('Bypass DNS rows on a stored custom profile: v1 entries load empty and Save persists the list (#116, #126)', async () => {
   await seedTwoProfiles('b'); // seeded entries are v1: no bypassDnsServers
   const renderer = await renderApp();
 
@@ -1294,40 +1347,46 @@ test('Profile screen labels Tunnel DNS Servers and offers Bypass DNS Servers; v1
   const text = renderedText(renderer);
   expect(text).toContain('Tunnel DNS Servers:');
   expect(text).toContain('Bypass DNS Servers:');
-  const bypass = renderer.root.findAll(
-    node =>
-      node.props.placeholder === 'Bypass DNS Servers (comma-separated)' &&
-      typeof node.props.onChangeText === 'function',
-  )[0];
-  expect(bypass.props.value).toBe('');
+  // A migrated entry is `custom`: Same as above is off and the (empty) row
+  // list shows.
+  expect(
+    pressableByTestID(renderer, 'bypass-same-as-tunnel')!.props
+      .accessibilityState.checked,
+  ).toBe(false);
+  expect(dnsRowValues(renderer, 'bypass-dns')).toEqual(['']);
   // Bypass DNS Route is absent while the list is empty (#117).
   expect(pressableByTestID(renderer, 'profile-bypass-route-direct')).toBeNull();
 
-  await ReactTestRenderer.act(async () => {
-    bypass.props.onChangeText('https://dns.adguard.com/dns-query, 9.9.9.9');
-  });
+  await typeInto(
+    renderer,
+    'bypass-dns-row-0',
+    'https://dns.adguard.com/dns-query',
+  );
+  await press(renderer, 'bypass-dns-add');
+  await typeInto(renderer, 'bypass-dns-row-1', '9.9.9.9');
   expect(
     pressableByTestID(renderer, 'profile-bypass-route-direct')!.props
       .accessibilityState.checked,
   ).toBe(true);
   await press(renderer, 'profile-bypass-route-tunnel');
   // Clearing the list hides the control; the route is kept (#125).
-  await ReactTestRenderer.act(async () => {
-    bypass.props.onChangeText('');
-  });
+  await typeInto(renderer, 'bypass-dns-row-0', '');
+  await typeInto(renderer, 'bypass-dns-row-1', '');
   expect(pressableByTestID(renderer, 'profile-bypass-route-tunnel')).toBeNull();
-  await ReactTestRenderer.act(async () => {
-    bypass.props.onChangeText('https://dns.adguard.com/dns-query, 9.9.9.9');
-  });
+  await typeInto(
+    renderer,
+    'bypass-dns-row-0',
+    'https://dns.adguard.com/dns-query',
+  );
+  await typeInto(renderer, 'bypass-dns-row-1', '9.9.9.9');
   expect(
     pressableByTestID(renderer, 'profile-bypass-route-tunnel')!.props
       .accessibilityState.checked,
   ).toBe(true);
   await press(renderer, 'profile-save');
 
-  const saved = JSON.parse(
-    (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
-  ).profiles[1];
+  const saved = JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!)
+    .profiles[1];
   expect(saved.bypassDnsSource).toBe('custom');
   expect(saved.bypassDnsServers).toEqual([
     'https://dns.adguard.com/dns-query',
@@ -1347,7 +1406,7 @@ test('new profile defaults to same-as-tunnel: Share omits bypassDns and the core
   } as never);
   const renderer = await renderApp();
 
-  await openCreateEditor(renderer);
+  await openLinkEditor(renderer);
   await ReactTestRenderer.act(async () => {
     textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
       'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com&dns=1.1.1.1',
@@ -1360,11 +1419,10 @@ test('new profile defaults to same-as-tunnel: Share omits bypassDns and the core
     pressableByTestID(renderer, 'profile-bypass-route-tunnel')!.props
       .accessibilityState.checked,
   ).toBe(true);
-  await press(renderer, 'profile-create');
+  await press(renderer, 'profile-save');
 
-  const stored = JSON.parse(
-    (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
-  ).profiles[2];
+  const stored = JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!)
+    .profiles[2];
   expect(stored).toMatchObject({
     version: 3,
     bypassDnsSource: 'same-as-tunnel',
@@ -1430,7 +1488,6 @@ test('edit mode holds a draft: rename reaches the card and storage only on Save'
   ).toBe('Beta');
 
   // Delete and Save sit outside Advanced: collapsing it keeps them around.
-  await press(renderer, 'profile-advanced-toggle');
   expect(pressableByTestID(renderer, 'profile-save')).toBeTruthy();
   expect(pressableByTestID(renderer, 'profile-delete')).toBeTruthy();
   expect(pressableByTestID(renderer, 'profile-cancel')).toBeNull();
@@ -1501,11 +1558,7 @@ test('Save is disabled while the edit draft violates Profile Completeness', asyn
   const renderer = await renderApp();
 
   await press(renderer, 'profile-edit');
-  const ipInput = renderer.root.findAll(
-    node =>
-      node.props.placeholder === 'Server IP Address' &&
-      typeof node.props.onChangeText === 'function',
-  )[0];
+  const ipInput = textInputByTestID(renderer, 'server-address-input');
   await ReactTestRenderer.act(async () => {
     ipInput.props.onChangeText('');
   });
@@ -1870,7 +1923,6 @@ test('Profile editor: protocol and routing mode are segmented controls (#104)', 
   const renderer = await renderApp();
 
   await openCreateEditor(renderer);
-  await press(renderer, 'profile-advanced-toggle');
 
   // Draft seeded from env: QUIC, selective.
   const checked = (testID: string) =>
@@ -1887,6 +1939,192 @@ test('Profile editor: protocol and routing mode are segmented controls (#104)', 
   expect(checked('profile-protocol-QUIC')).toBe(false);
   expect(checked('profile-routing-general')).toBe(true);
   expect(checked('profile-routing-selective')).toBe(false);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('port box round-trips through the stored host[:port] address (#126)', async () => {
+  await AsyncStorage.setItem(
+    PROFILES_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      profiles: [profileEntry('a', 'Alpha', '10.0.0.1:8443')],
+      selectedId: 'a',
+    }),
+  );
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-edit');
+  const address = textInputByTestID(renderer, 'server-address-input');
+  const portBox = textInputByTestID(renderer, 'server-port-input');
+  expect(address.props.value).toBe('10.0.0.1');
+  expect(portBox.props.value).toBe('8443');
+  expect(portBox.props.placeholder).toBe('443');
+
+  // Out of range: Save disabled and "port" named in the missing list.
+  await typeInto(renderer, 'server-port-input', '70000');
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
+  );
+  expect(renderedText(renderer)).toContain('Missing: port');
+
+  await typeInto(renderer, 'server-port-input', '9000');
+  await typeInto(renderer, 'server-address-input', '10.0.0.2');
+  expect(renderedText(renderer)).not.toContain('Missing:');
+  await press(renderer, 'profile-save');
+  const stored = JSON.parse(
+    (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
+  );
+  expect(stored.profiles[0].server.ipAddress).toBe('10.0.0.2:9000');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('clearing the port box stores a bare host (#126)', async () => {
+  await AsyncStorage.setItem(
+    PROFILES_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      profiles: [profileEntry('a', 'Alpha', '10.0.0.1:8443')],
+      selectedId: 'a',
+    }),
+  );
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-edit');
+  await typeInto(renderer, 'server-port-input', '');
+  await press(renderer, 'profile-save');
+  expect(
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[0]
+      .server.ipAddress,
+  ).toBe('10.0.0.1');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Tunnel DNS rows: plus adds, remove drops, plus hides at three, empties dropped on Save (#126)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await openCreateEditor(renderer);
+  // Env seeds one resolver: one row.
+  expect(dnsRowValues(renderer, 'dns')).toEqual(['1.1.1.1']);
+  await press(renderer, 'dns-add');
+  await typeInto(renderer, 'dns-row-1', '8.8.8.8');
+  await press(renderer, 'dns-add');
+  expect(dnsRowValues(renderer, 'dns')).toEqual(['1.1.1.1', '8.8.8.8', '']);
+  expect(pressableByTestID(renderer, 'dns-add')).toBeNull();
+
+  await press(renderer, 'dns-remove-0');
+  expect(dnsRowValues(renderer, 'dns')).toEqual(['8.8.8.8', '']);
+  expect(pressableByTestID(renderer, 'dns-add')).toBeTruthy();
+
+  // Complete the draft through the Form and Save: the empty row is dropped.
+  await typeInto(renderer, 'server-address-input', '10.9.9.9');
+  await typeInto(renderer, 'server-domain-input', 'd.example.com');
+  await typeInto(renderer, 'server-login-input', 'bob');
+  await typeInto(renderer, 'server-password-input', 'pw');
+  await press(renderer, 'profile-save');
+  const stored = JSON.parse(
+    (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
+  );
+  expect(stored.profiles[2].dnsServers).toEqual(['8.8.8.8']);
+  expect(stored.profiles[2].server.ipAddress).toBe('10.9.9.9');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('a stored list longer than three still shows every row, without plus (#126)', async () => {
+  await AsyncStorage.setItem(
+    PROFILES_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      profiles: [
+        {
+          ...profileEntry('a', 'Alpha'),
+          dnsServers: ['1.1.1.1', '8.8.8.8', '9.9.9.9', '1.0.0.1'],
+        },
+      ],
+      selectedId: 'a',
+    }),
+  );
+  const renderer = await renderApp();
+
+  await press(renderer, 'profile-edit');
+  expect(dnsRowValues(renderer, 'dns')).toEqual([
+    '1.1.1.1',
+    '8.8.8.8',
+    '9.9.9.9',
+    '1.0.0.1',
+  ]);
+  expect(pressableByTestID(renderer, 'dns-add')).toBeNull();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Same as above: on by default, unchecking reveals rows, Direct shows the exposure note (#126)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await openCreateEditor(renderer);
+  const checkbox = () =>
+    pressableByTestID(renderer, 'bypass-same-as-tunnel')!.props
+      .accessibilityState.checked;
+  expect(checkbox()).toBe(true);
+  expect(dnsRowValues(renderer, 'bypass-dns')).toEqual([]);
+  // Tunnel DNS from env resolves a non-empty Bypass list: the route control
+  // shows, Tunnel preselected, no note.
+  expect(
+    pressableByTestID(renderer, 'profile-bypass-route-tunnel')!.props
+      .accessibilityState.checked,
+  ).toBe(true);
+  expect(renderedText(renderer)).not.toContain('DNS server could be exposed');
+  await press(renderer, 'profile-bypass-route-direct');
+  expect(renderedText(renderer)).toContain(
+    'DNS server could be exposed, Tunnel mode is recommended.',
+  );
+  // The DNS note names the three transports and links to the doc.
+  const note = renderedText(renderer);
+  expect(note).toContain('Plain DNS');
+  expect(note).toContain('DoT');
+  expect(note).toContain('DoH');
+  expect(pressableByTestID(renderer, 'dns-doc-link')).toBeTruthy();
+
+  await press(renderer, 'bypass-same-as-tunnel');
+  expect(checkbox()).toBe(false);
+  expect(dnsRowValues(renderer, 'bypass-dns')).toEqual(['']);
+  // Custom list empty: nothing to route, control hidden.
+  expect(pressableByTestID(renderer, 'profile-bypass-route-direct')).toBeNull();
+  await typeInto(renderer, 'bypass-dns-row-0', '9.9.9.9');
+  expect(
+    pressableByTestID(renderer, 'profile-bypass-route-direct'),
+  ).toBeTruthy();
+
+  await press(renderer, 'bypass-same-as-tunnel');
+  expect(checkbox()).toBe(true);
+  expect(dnsRowValues(renderer, 'bypass-dns')).toEqual([]);
+
+  await typeInto(renderer, 'server-address-input', '10.9.9.9');
+  await typeInto(renderer, 'server-domain-input', 'd.example.com');
+  await typeInto(renderer, 'server-login-input', 'bob');
+  await typeInto(renderer, 'server-password-input', 'pw');
+  await press(renderer, 'profile-save');
+  expect(
+    JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!).profiles[2],
+  ).toMatchObject({
+    bypassDnsSource: 'same-as-tunnel',
+    bypassDnsRoute: 'direct',
+  });
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
