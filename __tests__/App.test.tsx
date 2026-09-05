@@ -480,7 +480,7 @@ test('"+" opens a sheet; "New profile" routes to the create editor (issue #81)',
   });
 });
 
-test('"Paste profile link" routes to the create editor with the link input focused (issue #81)', async () => {
+test('"Paste profile link" opens Link Mode: link input focused, no form groups, Save disabled, no Modify (#127)', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
@@ -488,10 +488,21 @@ test('"Paste profile link" routes to the create editor with the link input focus
   await press(renderer, 'profile-add-link');
 
   expect(pressableByTestID(renderer, 'profile-add-link')).toBeNull();
-  expect(renderedText(renderer)).toContain('Configurations');
+  const text = renderedText(renderer);
+  expect(text).toContain('Configurations');
   expect(
     textInputByTestID(renderer, 'profile-link-input').props.autoFocus,
   ).toBe(true);
+  // Only the link input: no name, no groups, nothing listed as missing yet.
+  expect(textInputByTestID(renderer, 'server-name-input')).toBeUndefined();
+  for (const group of ['Server', 'User', 'DNS', 'Routing']) {
+    expect(text).not.toContain(group);
+  }
+  expect(text).not.toContain('Missing:');
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
+  );
+  expect(pressableByTestID(renderer, 'profile-modify')).toBeNull();
   // Still a Draft: the Profile List is untouched.
   expect(await openPicker(renderer)).toHaveLength(2);
 
@@ -1090,8 +1101,8 @@ async function openCreateEditor(renderer: ReactTestRenderer.ReactTestRenderer) {
   await press(renderer, 'profile-add-new');
 }
 
-// "Paste profile link" is the only route that still shows the link input
-// (above the Profile Form, until Link Mode lands in #127).
+// "Paste profile link" opens Link Mode (#127): only the link input until a
+// link applies; Modify flips the same screen to the Profile Form.
 async function openLinkEditor(renderer: ReactTestRenderer.ReactTestRenderer) {
   await press(renderer, 'profile-add');
   await press(renderer, 'profile-add-link');
@@ -1156,21 +1167,103 @@ test('"+" opens a blank Profile Draft without touching the Profile List', async 
   });
 });
 
-test('Apply Link patches the Profile Draft; the Profile List is untouched', async () => {
+async function applyLink(
+  renderer: ReactTestRenderer.ReactTestRenderer,
+  link: string,
+) {
+  await typeInto(renderer, 'profile-link-input', link);
+  await press(renderer, 'profile-link-apply');
+}
+
+const COMPLETE_LINK =
+  'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com';
+
+test('Link Mode: an incomplete link lists the missing fields and shows Modify; Save stays disabled (#127)', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await openLinkEditor(renderer);
-  await ReactTestRenderer.act(async () => {
-    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
-      'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com',
-    );
-  });
-  await press(renderer, 'profile-link-apply');
+  await applyLink(renderer, 'twohops://x?login=bob&domain=d.example.com');
 
-  // The link's fields land in the Form's draft.
+  const text = renderedText(renderer);
+  expect(text).toContain('Missing: address, password');
+  expect(text).not.toContain('Link must start');
+  expect(pressableByTestID(renderer, 'profile-modify')).toBeTruthy();
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
+  );
+  // Still Link Mode: no form groups.
+  expect(textInputByTestID(renderer, 'server-login-input')).toBeUndefined();
+
+  // A bad paste after an applied link shows its reason but keeps the applied
+  // Draft's status: Modify and the missing list stay.
+  await applyLink(renderer, 'https://not-a-profile-link');
+  const after = renderedText(renderer);
+  expect(after).toContain('Link must start with twohops://');
+  expect(after).toContain('Missing: address, password');
+  expect(pressableByTestID(renderer, 'profile-modify')).toBeTruthy();
+  expect(await openPicker(renderer)).toHaveLength(2);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Link Mode: a complete link enables Save; Save commits one profile and leaves Link Mode (#127)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await openLinkEditor(renderer);
+  await applyLink(renderer, COMPLETE_LINK);
+
+  expect(renderedText(renderer)).not.toContain('Missing:');
+  expect(pressableByTestID(renderer, 'profile-modify')).toBeTruthy();
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    false,
+  );
+  await press(renderer, 'profile-save');
+
+  expect(renderedText(renderer)).not.toContain('Configurations');
+  expect(textInputByTestID(renderer, 'profile-link-input')).toBeUndefined();
+  const rows = await openPicker(renderer);
+  expect(rows).toHaveLength(3);
+  // The name field was never shown: env seeds it (a blank one would default
+  // from the link's domain).
+  expect(renderedText(renderer)).toContain('env-server');
+  const stored = JSON.parse((await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!)
+    .profiles[2];
+  expect(stored.server).toMatchObject({ login: 'bob', ipAddress: '10.9.9.9' });
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('Link Mode: Modify shows the Profile Form pre-filled from the link, link input gone, Save gating continues (#127)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+
+  await openLinkEditor(renderer);
+  await applyLink(renderer, 'twohops://x?login=bob&domain=d.example.com');
+  await press(renderer, 'profile-modify');
+
+  expect(textInputByTestID(renderer, 'profile-link-input')).toBeUndefined();
+  expect(pressableByTestID(renderer, 'profile-modify')).toBeNull();
   expect(textInputByTestID(renderer, 'server-login-input').props.value).toBe(
     'bob',
+  );
+  expect(textInputByTestID(renderer, 'server-domain-input').props.value).toBe(
+    'd.example.com',
+  );
+  expect(renderedText(renderer)).toContain('Missing: address, password');
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
+  );
+  await typeInto(renderer, 'server-address-input', '10.9.9.9');
+  await typeInto(renderer, 'server-password-input', 'pw');
+  expect(renderedText(renderer)).not.toContain('Missing:');
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    false,
   );
   // The draft is not a Profile List entry: still just the two seeded rows.
   expect(await openPicker(renderer)).toHaveLength(2);
@@ -1190,24 +1283,23 @@ test('Save is gated on Profile Completeness and commits exactly one profile', as
     true,
   );
 
-  await ReactTestRenderer.act(async () => {
-    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
-      'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com',
-    );
-  });
-  await press(renderer, 'profile-link-apply');
+  await applyLink(renderer, COMPLETE_LINK);
 
-  // Env server name + the link's fields satisfy the Completeness gate.
+  // Env server name + the link's fields satisfy the Completeness gate, still
+  // in Link Mode (#127).
   expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
     false,
   );
   expect(renderedText(renderer)).not.toContain('Missing:');
+  expect(textInputByTestID(renderer, 'server-name-input')).toBeUndefined();
 
-  await ReactTestRenderer.act(async () => {
-    textInputByTestID(renderer, 'server-name-input').props.onChangeText(
-      'My VPN',
-    );
-  });
+  // An applied link is a touched Draft: back asks in Link Mode too.
+  await pressBack();
+  expect(renderedText(renderer)).toContain('Discard changes?');
+  await press(renderer, 'alert-button-Keep Editing');
+
+  await press(renderer, 'profile-modify');
+  await typeInto(renderer, 'server-name-input', 'My VPN');
   await press(renderer, 'profile-save');
 
   // Editor closed; the committed profile is on the card, unselected, persisted.
@@ -1287,26 +1379,33 @@ test('back on a dirty draft asks; Keep Editing stays, Discard drops it', async (
   });
 });
 
-test('a bad link in create mode shows the alert modal and touches nothing', async () => {
+test('Link Mode: a bad link shows the parse reason inline, no alert, Draft untouched (#127)', async () => {
   await seedTwoProfiles();
   const renderer = await renderApp();
 
   await openLinkEditor(renderer);
-  await ReactTestRenderer.act(async () => {
-    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
-      'https://not-a-profile-link',
-    );
-  });
-  await press(renderer, 'profile-link-apply');
+  await applyLink(renderer, 'https://not-a-profile-link');
 
-  // The custom modal renders in the tree — no Alert.alert anywhere.
-  expect(renderedText(renderer)).toContain('Profile Link failed');
-  await press(renderer, 'alert-button-OK');
-  expect(renderedText(renderer)).not.toContain('Profile Link failed');
-  // The Draft and the Profile List are untouched.
-  expect(textInputByTestID(renderer, 'server-name-input').props.value).toBe(
-    'env-server',
+  let text = renderedText(renderer);
+  expect(text).toContain('Link must start with twohops://');
+  expect(text).not.toContain('Profile Link failed');
+  expect(pressableByTestID(renderer, 'alert-button-OK')).toBeNull();
+  // Nothing applied: no Modify, Save disabled, no missing list.
+  expect(pressableByTestID(renderer, 'profile-modify')).toBeNull();
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
   );
+  expect(text).not.toContain('Missing:');
+
+  await applyLink(renderer, 'not a url at all');
+  text = renderedText(renderer);
+  expect(text).toContain('Link is not a valid URL.');
+  expect(text).not.toContain('Link must start');
+
+  // Untouched Draft: back exits silently; the Profile List is unchanged.
+  await pressBack();
+  expect(renderedText(renderer)).not.toContain('Discard changes?');
+  expect(renderedText(renderer)).not.toContain('Configurations');
   expect(await openPicker(renderer)).toHaveLength(2);
 
   await ReactTestRenderer.act(async () => {
@@ -1407,12 +1506,8 @@ test('new profile defaults to same-as-tunnel: Share omits bypassDns and the core
   const renderer = await renderApp();
 
   await openLinkEditor(renderer);
-  await ReactTestRenderer.act(async () => {
-    textInputByTestID(renderer, 'profile-link-input').props.onChangeText(
-      'twohops://x?login=bob&password=pw&ip=10.9.9.9&domain=d.example.com&dns=1.1.1.1',
-    );
-  });
-  await press(renderer, 'profile-link-apply');
+  await applyLink(renderer, `${COMPLETE_LINK}&dns=1.1.1.1`);
+  await press(renderer, 'profile-modify');
   // Tunnel DNS non-empty, so the resolved Bypass list is non-empty: the
   // route control shows, at its new default Tunnel.
   expect(
