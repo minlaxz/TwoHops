@@ -2227,3 +2227,185 @@ test('Same as above: on by default, unchecking reveals rows, Direct shows the ex
     renderer.unmount();
   });
 });
+
+// --- JSON Mode (#133) ------------------------------------------------------
+
+const { Text } = require('react-native');
+
+function jsonEditor(renderer: ReactTestRenderer.ReactTestRenderer) {
+  return textInputByTestID(renderer, 'profile-json-input');
+}
+function jsonError(renderer: ReactTestRenderer.ReactTestRenderer) {
+  const node = renderer.root.findAll(
+    n => n.props.testID === 'profile-json-error' && n.type === Text,
+  )[0];
+  return node ? String(node.props.children) : null;
+}
+
+test('JSON Mode: header { } toggles Form <-> editor; edits flow both ways through the one Draft (#133)', async () => {
+  await seedTwoProfiles('b');
+  const renderer = await renderApp();
+  await press(renderer, 'profile-edit');
+
+  expect(jsonEditor(renderer)).toBeUndefined();
+  await press(renderer, 'profile-json-toggle');
+  expect(textInputByTestID(renderer, 'server-name-input')).toBeUndefined();
+  const doc = JSON.parse(jsonEditor(renderer).props.value);
+  expect(doc.server.name).toBe('Beta');
+  expect(doc.server.password).toBe('pw');
+  expect(doc).not.toHaveProperty('version');
+  expect(doc).not.toHaveProperty('importedRules');
+  expect(doc).not.toHaveProperty('importedAt');
+  expect(Object.keys(doc.advanced)).toHaveLength(5);
+
+  // JSON -> Form
+  doc.server.name = 'Gamma';
+  await typeInto(renderer, 'profile-json-input', JSON.stringify(doc));
+  await press(renderer, 'profile-json-toggle');
+  expect(jsonEditor(renderer)).toBeUndefined();
+  expect(textInputByTestID(renderer, 'server-name-input').props.value).toBe(
+    'Gamma',
+  );
+  // Form -> JSON
+  await typeInto(renderer, 'server-name-input', 'Delta');
+  await press(renderer, 'profile-json-toggle');
+  expect(JSON.parse(jsonEditor(renderer).props.value).server.name).toBe(
+    'Delta',
+  );
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('JSON Mode: { } absent in Link Mode, present after Modify (#133)', async () => {
+  await seedTwoProfiles();
+  const renderer = await renderApp();
+  await openLinkEditor(renderer);
+
+  expect(pressableByTestID(renderer, 'profile-json-toggle')).toBeNull();
+  await applyLink(renderer, COMPLETE_LINK);
+  expect(pressableByTestID(renderer, 'profile-json-toggle')).toBeNull();
+  await press(renderer, 'profile-modify');
+  expect(pressableByTestID(renderer, 'profile-json-toggle')).toBeTruthy();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('JSON Mode: syntax and schema errors show inline, disable Save, and pin the editor (#133)', async () => {
+  await seedTwoProfiles('b');
+  const renderer = await renderApp();
+  await press(renderer, 'profile-edit');
+  await press(renderer, 'profile-json-toggle');
+
+  await typeInto(renderer, 'profile-json-input', '{ "server": ');
+  expect(jsonError(renderer)).toMatch(/^Invalid JSON/);
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
+  );
+  await press(renderer, 'profile-json-toggle');
+  expect(jsonEditor(renderer)).toBeDefined();
+  // Format is a no-op on invalid JSON; the error stays.
+  await press(renderer, 'profile-json-format');
+  expect(jsonEditor(renderer).props.value).toBe('{ "server": ');
+  expect(jsonError(renderer)).toMatch(/^Invalid JSON/);
+
+  for (const [text, path] of [
+    ['{"nope": 1}', 'nope'],
+    ['{"server": {"name": 1}}', 'server.name'],
+    ['{"routingMode": "x"}', 'routingMode'],
+    ['{"advanced": {"mtu": 100}}', 'advanced.mtu'],
+  ]) {
+    await typeInto(renderer, 'profile-json-input', text);
+    expect(jsonError(renderer)).toContain(path);
+    expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+      true,
+    );
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('JSON Mode: valid JSON missing the domain hits the Completeness gate, not the parser; Format pretty-prints (#133)', async () => {
+  await seedTwoProfiles('b');
+  const renderer = await renderApp();
+  await press(renderer, 'profile-edit');
+  await press(renderer, 'profile-json-toggle');
+
+  const doc = JSON.parse(jsonEditor(renderer).props.value);
+  delete doc.server.domain;
+  await typeInto(renderer, 'profile-json-input', JSON.stringify(doc));
+  expect(jsonError(renderer)).toBeNull();
+  expect(renderedText(renderer)).toContain('Missing: TLS domain');
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    true,
+  );
+
+  await press(renderer, 'profile-json-format');
+  const formatted = jsonEditor(renderer).props.value as string;
+  expect(formatted).toContain('\n  "server": {\n');
+  expect(JSON.parse(formatted).server.domain).toBe('');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('JSON Mode: back asks only when the editor text differs from the Draft (#133)', async () => {
+  await seedTwoProfiles('b');
+  const renderer = await renderApp();
+  await press(renderer, 'profile-edit');
+  await press(renderer, 'profile-json-toggle');
+
+  await pressBack();
+  expect(renderedText(renderer)).not.toContain('Discard changes?');
+  expect(renderedText(renderer)).not.toContain('Configurations');
+
+  await press(renderer, 'profile-edit');
+  await press(renderer, 'profile-json-toggle');
+  await typeInto(renderer, 'profile-json-input', '{"server": {"name": "x"}}');
+  await pressBack();
+  expect(renderedText(renderer)).toContain('Discard changes?');
+  await press(renderer, 'alert-button-Discard');
+  expect(renderedText(renderer)).not.toContain('Configurations');
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+test('JSON Mode: Save commits exactly one profile including advanced (#133)', async () => {
+  await seedTwoProfiles('b');
+  const renderer = await renderApp();
+  await press(renderer, 'profile-edit');
+  await press(renderer, 'profile-json-toggle');
+
+  const doc = JSON.parse(jsonEditor(renderer).props.value);
+  doc.server.name = 'Nerd';
+  doc.advanced.mtu = 1400;
+  doc.advanced.antiDpi = true;
+  await typeInto(renderer, 'profile-json-input', JSON.stringify(doc));
+  expect(pressableByTestID(renderer, 'profile-save')!.props.disabled).toBe(
+    false,
+  );
+  await press(renderer, 'profile-save');
+
+  expect(renderedText(renderer)).not.toContain('Configurations');
+  const stored = JSON.parse(
+    (await AsyncStorage.getItem(PROFILES_STORAGE_KEY))!,
+  );
+  expect(stored.profiles).toHaveLength(2);
+  expect(stored.profiles[1]).toMatchObject({
+    name: 'Nerd',
+    version: 4,
+    advanced: expect.objectContaining({ mtu: 1400, antiDpi: true }),
+  });
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});

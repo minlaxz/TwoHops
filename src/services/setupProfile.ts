@@ -326,6 +326,206 @@ export async function importRemoteRules(
   }
 }
 
+// --- JSON Mode (#133, ADR 0008) --------------------------------------------
+
+/** The JSON Mode document: the Draft minus storage version and Imported Rules cache. */
+export type ProfileJson = Omit<
+  SetupProfile,
+  'version' | 'importedRules' | 'importedAt'
+>;
+
+export type ProfileJsonError =
+  | { kind: 'syntax'; message: string }
+  | { kind: 'schema'; path: string; message: string };
+
+export function profileJsonErrorMessage(error: ProfileJsonError): string {
+  if (error.kind === 'syntax') return `Invalid JSON: ${error.message}`;
+  return error.path ? `${error.path}: ${error.message}` : error.message;
+}
+
+// One key list feeds both the serialiser's pick and the parser's allow-list
+// so the two cannot drift. A Profile List entry also carries `id`/`name`
+// (ADR 0003), which is why the serialiser picks rather than spreads.
+const PROFILE_JSON_KEYS: (keyof ProfileJson)[] = [
+  'server',
+  'dnsServers',
+  'bypassDnsSource',
+  'bypassDnsServers',
+  'bypassDnsRoute',
+  'routingMode',
+  'localRulesText',
+  'remoteRulesURL',
+  'advanced',
+];
+const SERVER_KEYS: (keyof ServerCredentials)[] = [
+  'name',
+  'ipAddress',
+  'domain',
+  'login',
+  'password',
+  'vpnProtocol',
+];
+const ADVANCED_KEYS: (keyof AdvancedSettings)[] = [
+  'killSwitch',
+  'antiDpi',
+  'mtu',
+  'fallbackProtocol',
+  'excludedRoutes',
+];
+
+export function serializeProfileJson(profile: SetupProfile): string {
+  const json: Partial<ProfileJson> = {};
+  for (const key of PROFILE_JSON_KEYS) {
+    (json as Record<string, unknown>)[key] = profile[key];
+  }
+  return JSON.stringify(json, null, 2);
+}
+
+// Hand-written schema (ADR 0008: no schema library). Missing keys read as
+// blank so Profile Completeness, not the parser, reports them; the checks
+// throw SchemaFail with the field path and parseProfileJson turns that into
+// the Result.
+class SchemaFail extends Error {
+  constructor(public path: string, message: string) {
+    super(message);
+  }
+}
+const fail = (path: string, message: string): never => {
+  throw new SchemaFail(path, message);
+};
+const str = (v: unknown, path: string) =>
+  v === undefined ? '' : typeof v === 'string' ? v : fail(path, 'must be text');
+const bool = (v: unknown, path: string, d: boolean) =>
+  v === undefined
+    ? d
+    : typeof v === 'boolean'
+    ? v
+    : fail(path, 'must be true or false');
+const strList = (v: unknown, path: string, d: string[] = []) =>
+  v === undefined
+    ? d
+    : Array.isArray(v) && v.every(x => typeof x === 'string')
+    ? (v as string[])
+    : fail(path, 'must be a list of text');
+const oneOf =
+  <T extends string>(allowed: T[]) =>
+  (v: unknown, path: string, d: T): T =>
+    v === undefined
+      ? d
+      : allowed.includes(v as T)
+      ? (v as T)
+      : fail(path, `must be one of ${allowed.join(', ')}`);
+const obj = (v: unknown, path: string, keys: string[]) => {
+  if (v === undefined) return {} as Record<string, unknown>;
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) {
+    fail(path, 'must be an object');
+  }
+  for (const key of Object.keys(v as object)) {
+    if (!keys.includes(key)) fail(path ? `${path}.${key}` : key, 'unknown key');
+  }
+  return v as Record<string, unknown>;
+};
+const MTU_MIN = 576;
+const MTU_MAX = 9000;
+const mtu = (v: unknown, path: string) =>
+  v === undefined
+    ? DEFAULT_ADVANCED_SETTINGS.mtu
+    : typeof v === 'number' &&
+      Number.isInteger(v) &&
+      v >= MTU_MIN &&
+      v <= MTU_MAX
+    ? v
+    : fail(path, `must be a whole number from ${MTU_MIN} to ${MTU_MAX}`);
+const BYPASS_DNS_SOURCES: BypassDnsSource[] = ['same-as-tunnel', 'custom'];
+
+export function parseProfileJson(
+  text: string,
+): Result<ProfileJson, ProfileJsonError> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    return {
+      ok: false,
+      error: { kind: 'syntax', message: (error as Error).message },
+    };
+  }
+  try {
+    const root = obj(raw, '', PROFILE_JSON_KEYS);
+    const server = obj(root.server, 'server', SERVER_KEYS);
+    const advanced = obj(root.advanced, 'advanced', ADVANCED_KEYS);
+    // Missing keys read as what a new Profile gets, by reference not by literal.
+    const base = defaultProfile({});
+    const d = DEFAULT_ADVANCED_SETTINGS;
+    return {
+      ok: true,
+      value: {
+        server: {
+          name: str(server.name, 'server.name'),
+          ipAddress: str(server.ipAddress, 'server.ipAddress'),
+          domain: str(server.domain, 'server.domain'),
+          login: str(server.login, 'server.login'),
+          password: str(server.password, 'server.password'),
+          vpnProtocol: oneOf(PROTOCOLS)(
+            server.vpnProtocol,
+            'server.vpnProtocol',
+            base.server.vpnProtocol,
+          ),
+        },
+        dnsServers: strList(root.dnsServers, 'dnsServers'),
+        bypassDnsSource: oneOf(BYPASS_DNS_SOURCES)(
+          root.bypassDnsSource,
+          'bypassDnsSource',
+          base.bypassDnsSource,
+        ),
+        bypassDnsServers: strList(root.bypassDnsServers, 'bypassDnsServers'),
+        bypassDnsRoute: oneOf(BYPASS_DNS_ROUTES)(
+          root.bypassDnsRoute,
+          'bypassDnsRoute',
+          base.bypassDnsRoute,
+        ),
+        routingMode: oneOf(ROUTING_MODES)(
+          root.routingMode,
+          'routingMode',
+          base.routingMode,
+        ),
+        localRulesText: str(root.localRulesText, 'localRulesText'),
+        remoteRulesURL: str(root.remoteRulesURL, 'remoteRulesURL'),
+        advanced: {
+          killSwitch: bool(
+            advanced.killSwitch,
+            'advanced.killSwitch',
+            d.killSwitch,
+          ),
+          antiDpi: bool(advanced.antiDpi, 'advanced.antiDpi', d.antiDpi),
+          mtu: mtu(advanced.mtu, 'advanced.mtu'),
+          fallbackProtocol:
+            advanced.fallbackProtocol == null
+              ? null
+              : oneOf<VpnProtocol>(PROTOCOLS)(
+                  advanced.fallbackProtocol,
+                  'advanced.fallbackProtocol',
+                  'QUIC',
+                ),
+          excludedRoutes: strList(
+            advanced.excludedRoutes,
+            'advanced.excludedRoutes',
+            [...d.excludedRoutes],
+          ),
+        },
+      },
+    };
+  } catch (error) {
+    if (error instanceof SchemaFail) {
+      return {
+        ok: false,
+        error: { kind: 'schema', path: error.path, message: error.message },
+      };
+    }
+    throw error;
+  }
+}
+
 // --- derivations -----------------------------------------------------------
 
 export function effectiveRules(profile: SetupProfile): string[] {

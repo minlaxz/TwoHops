@@ -799,3 +799,91 @@ describe('importRemoteRules', () => {
     });
   });
 });
+
+// --- JSON Mode (#133) ------------------------------------------------------
+
+describe('serializeProfileJson / parseProfileJson', () => {
+  const {
+    serializeProfileJson,
+    parseProfileJson,
+    profileJsonErrorMessage,
+  } = require('../src/services/setupProfile');
+
+  it('omits version, importedRules and importedAt; keeps the password and all five advanced fields', () => {
+    const parsed = JSON.parse(serializeProfileJson(completeProfile()));
+    expect(parsed).not.toHaveProperty('version');
+    expect(parsed).not.toHaveProperty('importedRules');
+    expect(parsed).not.toHaveProperty('importedAt');
+    expect(parsed.server.password).toBe('pw');
+    expect(Object.keys(parsed.advanced).sort()).toEqual([
+      'antiDpi',
+      'excludedRoutes',
+      'fallbackProtocol',
+      'killSwitch',
+      'mtu',
+    ]);
+    expect(serializeProfileJson(completeProfile())).toContain('\n  "server"');
+  });
+
+  it('round-trips defaultProfile to an identical document', () => {
+    const profile = defaultProfile(env);
+    const result = parseProfileJson(serializeProfileJson(profile));
+    expect(result.ok).toBe(true);
+    expect(updateProfile(profile, result.value)).toEqual(profile);
+  });
+
+  it('reports a syntax error', () => {
+    const result = parseProfileJson('{ "server": ');
+    expect(result.ok).toBe(false);
+    expect(result.error.kind).toBe('syntax');
+    expect(profileJsonErrorMessage(result.error)).toMatch(/^Invalid JSON/);
+  });
+
+  it.each([
+    ['unknown root key', '{"foo": 1}', 'foo'],
+    ['unknown nested key', '{"server": {"nope": 1}}', 'server.nope'],
+    ['wrong type', '{"server": {"name": 3}}', 'server.name'],
+    ['wrong list type', '{"dnsServers": "1.1.1.1"}', 'dnsServers'],
+    [
+      'bad vpnProtocol',
+      '{"server": {"vpnProtocol": "tcp"}}',
+      'server.vpnProtocol',
+    ],
+    ['bad bypassDnsSource', '{"bypassDnsSource": "x"}', 'bypassDnsSource'],
+    ['bad bypassDnsRoute', '{"bypassDnsRoute": "x"}', 'bypassDnsRoute'],
+    ['bad routingMode', '{"routingMode": "x"}', 'routingMode'],
+    [
+      'bad fallbackProtocol',
+      '{"advanced": {"fallbackProtocol": "x"}}',
+      'advanced.fallbackProtocol',
+    ],
+    ['mtu too small', '{"advanced": {"mtu": 100}}', 'advanced.mtu'],
+    ['mtu too large', '{"advanced": {"mtu": 9001}}', 'advanced.mtu'],
+    ['mtu not a number', '{"advanced": {"mtu": "1500"}}', 'advanced.mtu'],
+    ['root not an object', '[]', ''],
+  ])('rejects %s with the field path', (_label, text, path) => {
+    const result = parseProfileJson(text);
+    expect(result.ok).toBe(false);
+    expect(result.error.kind).toBe('schema');
+    expect(result.error.path).toBe(path);
+    if (path) expect(profileJsonErrorMessage(result.error)).toContain(path);
+  });
+
+  it('accepts a null fallbackProtocol and fills missing keys with blanks so Completeness reports them', () => {
+    const result = parseProfileJson(
+      '{"server": {"login": "u"}, "advanced": {"fallbackProtocol": null}}',
+    );
+    expect(result.ok).toBe(true);
+    const profile = updateProfile(defaultProfile(env), result.value);
+    expect(profile.server.login).toBe('u');
+    expect(profile.server.domain).toBe('');
+    expect(profile.advanced).toEqual(DEFAULT_ADVANCED_SETTINGS);
+    expect(parseProfileJson('{}').value.advanced.fallbackProtocol).toBeNull();
+    expect(missingFields(profile)).toEqual([
+      'name',
+      'ipAddress',
+      'domain',
+      'password',
+    ]);
+  });
+});
