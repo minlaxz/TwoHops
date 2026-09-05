@@ -17,6 +17,7 @@ import {
   effectiveRules,
   profileLink,
   profileSubtitle,
+  resolvedBypassDnsServers,
   tunnelStartInput,
 } from '../services/setupProfile';
 import { displayState, type SessionState } from '../services/tunnelSession';
@@ -48,7 +49,8 @@ export default function DashboardScreen() {
   const pickerRef = useRef<BottomSheetModal>(null);
 
   const setupSummary = useMemo(() => {
-    const { server, routingMode, dnsServers, bypassDnsServers } = profile;
+    const { server, routingMode, dnsServers } = profile;
+    const bypassDnsServers = resolvedBypassDnsServers(profile);
     return `server=${server.ipAddress} domain=${server.domain} user=${
       server.login
     } protocol=${server.vpnProtocol}; dns=${

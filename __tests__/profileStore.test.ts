@@ -270,12 +270,17 @@ describe('saveProfileList / loadProfileList', () => {
     expect(map.size).toBe(0);
   });
 
-  test('v1 entries gain empty Bypass DNS Servers on load (#116)', async () => {
+  test('v1 entries load as custom source, empty list, direct route (#116, #125)', async () => {
     const list = twoProfileList();
     const stored = {
       ...list,
       profiles: list.profiles.map(
-        ({ bypassDnsServers: _a, bypassDnsRoute: _b, ...entry }) => ({
+        ({
+          bypassDnsServers: _a,
+          bypassDnsRoute: _b,
+          bypassDnsSource: _c,
+          ...entry
+        }) => ({
           ...entry,
           version: 1,
         }),
@@ -285,8 +290,16 @@ describe('saveProfileList / loadProfileList', () => {
       [PROFILES_STORAGE_KEY]: JSON.stringify(stored),
     });
     const loaded = await loadProfileList(storage, env);
-    expect(loaded).toEqual(list);
-    expect(loaded.profiles.every(entry => entry.version === 2)).toBe(true);
+    expect(loaded).toEqual({
+      ...list,
+      profiles: list.profiles.map(entry => ({
+        ...entry,
+        bypassDnsSource: 'custom',
+        bypassDnsServers: [],
+        bypassDnsRoute: 'direct',
+      })),
+    });
+    expect(loaded.profiles.every(entry => entry.version === 3)).toBe(true);
   });
 
   test('corrupt list document warns and yields defaults', async () => {
